@@ -1,0 +1,167 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>EtiquetadorZPL - Dashboard</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: #f5f5f5; }
+        .container { max-width: 1200px; margin: 0 auto; padding: 20px; }
+        .header { background: #2c3e50; color: white; padding: 20px; border-radius: 8px; margin-bottom: 20px; }
+        .card { background: white; border-radius: 8px; padding: 20px; margin-bottom: 20px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+        .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 20px; }
+        .btn { background: #3498db; color: white; border: none; padding: 10px 20px; border-radius: 4px; cursor: pointer; }
+        .btn:hover { background: #2980b9; }
+        .status { padding: 4px 8px; border-radius: 4px; font-size: 12px; }
+        .status.completed { background: #d4edda; color: #155724; }
+        .status.processing { background: #fff3cd; color: #856404; }
+        .status.failed { background: #f8d7da; color: #721c24; }
+        table { width: 100%; border-collapse: collapse; }
+        th, td { padding: 12px; text-align: left; border-bottom: 1px solid #ddd; }
+        th { background: #f8f9fa; }
+        .stats { display: flex; justify-content: space-around; text-align: center; }
+        .stat-item h3 { color: #3498db; font-size: 2em; margin-bottom: 5px; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🏷️ EtiquetadorZPL Dashboard</h1>
+            <p>Sistema de gestión de etiquetas ZPL</p>
+            <div style="margin-top: 10px;">
+                <a href="config.html" class="btn">⚙️ Configuración</a>
+            </div>
+        </div>
+
+        <div class="grid">
+            <div class="card">
+                <h2>📊 Estadísticas</h2>
+                <div class="stats" id="stats">
+                    <div class="stat-item">
+                        <h3 id="total-jobs">-</h3>
+                        <p>Total Trabajos</p>
+                    </div>
+                    <div class="stat-item">
+                        <h3 id="completed-jobs">-</h3>
+                        <p>Completados</p>
+                    </div>
+                    <div class="stat-item">
+                        <h3 id="failed-jobs">-</h3>
+                        <p>Fallidos</p>
+                    </div>
+                </div>
+            </div>
+
+            <div class="card">
+                <h2>🖨️ Impresoras</h2>
+                <div id="printers">Cargando...</div>
+                <button class="btn" onclick="refreshPrinters()">🔄 Actualizar</button>
+            </div>
+        </div>
+
+        <div class="card">
+            <h2>📋 Trabajos Recientes</h2>
+            <table id="jobs-table">
+                <thead>
+                    <tr>
+                        <th>ID</th>
+                        <th>Archivo</th>
+                        <th>Impresora</th>
+                        <th>Estado</th>
+                        <th>Error</th>
+                        <th>Creado</th>
+                        <th>Tiempo</th>
+                    </tr>
+                </thead>
+                <tbody id="jobs-body">
+                    <tr><td colspan="7">Cargando...</td></tr>
+                </tbody>
+            </table>
+            <button class="btn" onclick="refreshJobs()">🔄 Actualizar</button>
+        </div>
+    </div>
+
+    <script src="config.js"></script>
+    <script>
+        
+        async function fetchAPI(endpoint) {
+            try {
+                // Asegurar que tenemos el puerto correcto
+                if (!API_BASE || API_BASE.includes('8003')) {
+                    const port = await getApiPort();
+                    API_BASE = `http://localhost:${port}`;
+                }
+                
+                const response = await fetch(`${API_BASE}${endpoint}`);
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}`);
+                }
+                return await response.json();
+            } catch (error) {
+                console.error('Error:', error);
+                return null;
+            }
+        }
+
+        async function loadStatistics() {
+            const stats = await fetchAPI('/api/statistics');
+            if (stats) {
+                document.getElementById('total-jobs').textContent = stats.total_jobs || 0;
+                document.getElementById('completed-jobs').textContent = stats.completed || 0;
+                document.getElementById('failed-jobs').textContent = stats.failed || 0;
+            }
+        }
+
+        async function loadPrinters() {
+            const data = await fetchAPI('/api/printers');
+            const printersDiv = document.getElementById('printers');
+            
+            if (data && data.printers) {
+                printersDiv.innerHTML = data.printers.map(printer => 
+                    `<div style="padding: 5px; border-left: 3px solid #3498db; margin: 5px 0; background: #f8f9fa;">
+                        ${printer}
+                    </div>`
+                ).join('');
+            } else {
+                printersDiv.innerHTML = '<p>No se pudieron cargar las impresoras</p>';
+            }
+        }
+
+        async function loadJobs() {
+            const data = await fetchAPI('/api/jobs');
+            const tbody = document.getElementById('jobs-body');
+            
+            if (data && data.jobs) {
+                tbody.innerHTML = data.jobs.map(job => `
+                    <tr>
+                        <td>${job.id}</td>
+                        <td>${job.filename}</td>
+                        <td>${job.printer}</td>
+                        <td><span class="status ${job.status}">${job.status}</span></td>
+                        <td>${job.error_message || '-'}</td>
+                        <td>${new Date(job.created_at).toLocaleString()}</td>
+                        <td>${job.processing_time ? job.processing_time.toFixed(2) + 's' : '-'}</td>
+                    </tr>
+                `).join('');
+            } else {
+                tbody.innerHTML = '<tr><td colspan="7">No se pudieron cargar los trabajos</td></tr>';
+            }
+        }
+
+        function refreshPrinters() { loadPrinters(); }
+        function refreshJobs() { loadJobs(); }
+
+        // Cargar datos iniciales
+        loadStatistics();
+        loadPrinters();
+        loadJobs();
+
+        // Auto-refresh cada 30 segundos
+        setInterval(() => {
+            loadStatistics();
+            loadJobs();
+        }, 30000);
+    </script>
+</body>
+</html>

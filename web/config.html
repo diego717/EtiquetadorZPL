@@ -1,0 +1,450 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>EtiquetadorZPL - Configuración</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: #f5f5f5; }
+        .container { max-width: 1000px; margin: 0 auto; padding: 20px; }
+        .header { background: #2c3e50; color: white; padding: 20px; border-radius: 8px; margin-bottom: 20px; }
+        .nav { display: flex; gap: 10px; margin-bottom: 20px; }
+        .nav a { padding: 10px 20px; background: #3498db; color: white; text-decoration: none; border-radius: 4px; }
+        .nav a.active { background: #2980b9; }
+        .card { background: white; border-radius: 8px; padding: 20px; margin-bottom: 20px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+        .form-group { margin-bottom: 15px; }
+        .form-group label { display: block; margin-bottom: 5px; font-weight: bold; }
+        .form-group input, .form-group select, .form-group textarea { 
+            width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px; 
+        }
+        .btn { background: #3498db; color: white; border: none; padding: 10px 20px; border-radius: 4px; cursor: pointer; }
+        .btn:hover { background: #2980b9; }
+        .btn.danger { background: #e74c3c; }
+        .btn.danger:hover { background: #c0392b; }
+        .btn.success { background: #27ae60; }
+        .btn.success:hover { background: #229954; }
+        .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+        .status { padding: 4px 8px; border-radius: 4px; font-size: 12px; }
+        .status.enabled { background: #d4edda; color: #155724; }
+        .status.disabled { background: #f8d7da; color: #721c24; }
+        .backup-item { display: flex; justify-content: space-between; align-items: center; padding: 10px; border: 1px solid #ddd; margin-bottom: 5px; border-radius: 4px; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>⚙️ Configuración EtiquetadorZPL</h1>
+            <p>Panel de administración del sistema</p>
+        </div>
+
+        <div class="nav">
+            <a href="index.html">📊 Dashboard</a>
+            <a href="config.html" class="active">⚙️ Configuración</a>
+        </div>
+
+        <div class="grid">
+            <!-- Notificaciones -->
+            <div class="card">
+                <h2>🔔 Notificaciones</h2>
+                <div class="form-group">
+                    <label>
+                        <input type="checkbox" id="desktop-notifications"> Notificaciones de escritorio
+                    </label>
+                </div>
+                <div class="form-group">
+                    <label>
+                        <input type="checkbox" id="error-notifications"> Notificar errores
+                    </label>
+                </div>
+                <div class="form-group">
+                    <label>
+                        <input type="checkbox" id="success-notifications"> Notificar éxitos
+                    </label>
+                </div>
+                
+                <h3>📧 Email</h3>
+                <div class="form-group">
+                    <label>
+                        <input type="checkbox" id="email-enabled"> Habilitar email
+                    </label>
+                </div>
+                <div class="form-group">
+                    <label>Servidor SMTP:</label>
+                    <input type="text" id="smtp-server" placeholder="smtp.gmail.com">
+                </div>
+                <div class="form-group">
+                    <label>Puerto:</label>
+                    <input type="number" id="smtp-port" value="587">
+                </div>
+                <div class="form-group">
+                    <label>Usuario:</label>
+                    <input type="email" id="smtp-user" placeholder="usuario@gmail.com">
+                </div>
+                <div class="form-group">
+                    <label>Contraseña:</label>
+                    <input type="password" id="smtp-password">
+                </div>
+                <div class="form-group">
+                    <label>Emails destino (separados por coma):</label>
+                    <textarea id="to-emails" placeholder="admin@empresa.com, soporte@empresa.com"></textarea>
+                </div>
+                
+                <button class="btn" onclick="saveNotificationConfig()">💾 Guardar Notificaciones</button>
+            </div>
+
+            <!-- Backup -->
+            <div class="card">
+                <h2>💾 Backup</h2>
+                <div class="form-group">
+                    <label>
+                        <input type="checkbox" id="backup-enabled"> Habilitar backup automático
+                    </label>
+                </div>
+                <div class="form-group">
+                    <label>
+                        <input type="checkbox" id="daily-backup"> Backup diario (2:00 AM)
+                    </label>
+                </div>
+                <div class="form-group">
+                    <label>
+                        <input type="checkbox" id="weekly-backup"> Backup semanal (Domingo 3:00 AM)
+                    </label>
+                </div>
+                <div class="form-group">
+                    <label>Mantener backups diarios:</label>
+                    <input type="number" id="keep-daily" value="7" min="1" max="30">
+                </div>
+                <div class="form-group">
+                    <label>Mantener backups semanales:</label>
+                    <input type="number" id="keep-weekly" value="4" min="1" max="12">
+                </div>
+                
+                <div style="display: flex; gap: 10px; margin-top: 15px;">
+                    <button class="btn" onclick="saveBackupConfig()">💾 Guardar Config</button>
+                    <button class="btn success" onclick="createManualBackup()">📦 Backup Manual</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Lista de Backups -->
+        <div class="card">
+            <h2>📦 Backups Disponibles</h2>
+            <div id="backup-list">Cargando...</div>
+            <button class="btn" onclick="loadBackups()">🔄 Actualizar</button>
+        </div>
+
+        <!-- Sistema -->
+        <div class="card">
+            <h2>🖥️ Sistema</h2>
+            <div class="grid">
+                <div>
+                    <h3>Estado del Sistema</h3>
+                    <p>API: <span class="status enabled">Activa</span></p>
+                    <p>Base de datos: <span class="status enabled">Conectada</span></p>
+                    <p>Notificaciones: <span class="status" id="notification-status">-</span></p>
+                    <p>Backup: <span class="status" id="backup-status">-</span></p>
+                </div>
+                <div>
+                    <h3>Acciones</h3>
+                    <button class="btn" onclick="testNotification()">🔔 Probar Notificación</button>
+                    <button class="btn danger" onclick="clearDatabase()">🗑️ Limpiar BD</button>
+                    <button class="btn" onclick="exportLogs()">📄 Exportar Logs</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="config.js"></script>
+    <script>
+        let notificationConfig = {};
+        let backupConfig = {};
+        
+        // Función fetchAPI local
+        async function fetchAPI(endpoint) {
+            try {
+                // Asegurar que tenemos el puerto correcto
+                if (!API_BASE || API_BASE.includes('8003')) {
+                    const port = await getApiPort();
+                    API_BASE = `http://localhost:${port}`;
+                }
+                
+                const response = await fetch(`${API_BASE}${endpoint}`);
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}`);
+                }
+                return await response.json();
+            } catch (error) {
+                console.error('Error:', error);
+                return null;
+            }
+        }
+
+        async function loadConfigs() {
+            try {
+                // Asegurar que tenemos el puerto correcto
+                if (!API_BASE || API_BASE.includes('8003')) {
+                    const port = await getApiPort();
+                    API_BASE = `http://localhost:${port}`;
+                }
+                
+                // Cargar configuración de notificaciones
+                const notifResponse = await fetchAPI('/api/config/notifications');
+                if (notifResponse && !notifResponse.error) {
+                    notificationConfig = notifResponse;
+                    console.log('Config notificaciones cargada:', notificationConfig);
+                } else {
+                    // Usar configuración por defecto
+                    notificationConfig = {
+                        desktop_enabled: true,
+                        notify_on_error: true,
+                        notify_on_success: false,
+                        email_enabled: false,
+                        email_config: {}
+                    };
+                    console.log('Usando config por defecto notificaciones');
+                }
+                updateNotificationForm();
+
+                // Cargar configuración de backup
+                const backupResponse = await fetchAPI('/api/config/backup');
+                if (backupResponse && !backupResponse.error) {
+                    backupConfig = backupResponse;
+                    console.log('Config backup cargada:', backupConfig);
+                } else {
+                    // Usar configuración por defecto
+                    backupConfig = {
+                        enabled: true,
+                        daily_backup: true,
+                        weekly_backup: true,
+                        keep_daily: 7,
+                        keep_weekly: 4
+                    };
+                    console.log('Usando config por defecto backup');
+                }
+                updateBackupForm();
+
+                loadBackups();
+            } catch (error) {
+                console.error('Error cargando configuraciones:', error);
+                // Cargar valores por defecto si hay error
+                updateNotificationForm();
+                updateBackupForm();
+            }
+        }
+
+        function updateNotificationForm() {
+            const config = notificationConfig || {};
+            console.log('Actualizando form notificaciones con:', config);
+            
+            document.getElementById('desktop-notifications').checked = config.desktop_enabled === true;
+            document.getElementById('error-notifications').checked = config.notify_on_error === true;
+            document.getElementById('success-notifications').checked = config.notify_on_success === true;
+            document.getElementById('email-enabled').checked = config.email_enabled === true;
+            
+            const emailConfig = config.email_config || {};
+            document.getElementById('smtp-server').value = emailConfig.smtp_server || '';
+            document.getElementById('smtp-port').value = emailConfig.smtp_port || 587;
+            document.getElementById('smtp-user').value = emailConfig.username || '';
+            document.getElementById('to-emails').value = (emailConfig.to_emails || []).join(', ');
+            
+            const statusElement = document.getElementById('notification-status');
+            if (statusElement) {
+                const enabled = config.desktop_enabled === true;
+                statusElement.textContent = enabled ? 'Habilitadas' : 'Deshabilitadas';
+                statusElement.className = `status ${enabled ? 'enabled' : 'disabled'}`;
+            }
+        }
+
+        function updateBackupForm() {
+            const config = backupConfig || {};
+            console.log('Actualizando form backup con:', config);
+            
+            document.getElementById('backup-enabled').checked = config.enabled === true;
+            document.getElementById('daily-backup').checked = config.daily_backup === true;
+            document.getElementById('weekly-backup').checked = config.weekly_backup === true;
+            document.getElementById('keep-daily').value = config.keep_daily || 7;
+            document.getElementById('keep-weekly').value = config.keep_weekly || 4;
+            
+            const statusElement = document.getElementById('backup-status');
+            if (statusElement) {
+                const enabled = config.enabled === true;
+                statusElement.textContent = enabled ? 'Habilitado' : 'Deshabilitado';
+                statusElement.className = `status ${enabled ? 'enabled' : 'disabled'}`;
+            }
+        }
+
+        async function saveNotificationConfig() {
+            const config = {
+                desktop_enabled: document.getElementById('desktop-notifications').checked,
+                notify_on_error: document.getElementById('error-notifications').checked,
+                notify_on_success: document.getElementById('success-notifications').checked,
+                email_enabled: document.getElementById('email-enabled').checked,
+                email_config: {
+                    smtp_server: document.getElementById('smtp-server').value,
+                    smtp_port: parseInt(document.getElementById('smtp-port').value),
+                    username: document.getElementById('smtp-user').value,
+                    password: document.getElementById('smtp-password').value,
+                    to_emails: document.getElementById('to-emails').value.split(',').map(e => e.trim()).filter(e => e)
+                }
+            };
+
+            try {
+                const apiBase = await ensureApiPort();
+                console.log('Guardando notificaciones en:', `${apiBase}/api/config/notifications`);
+                
+                const response = await fetch(`${apiBase}/api/config/notifications`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(config)
+                });
+
+                if (response.ok) {
+                    const result = await response.json();
+                    alert('OK: Configuración de notificaciones guardada');
+                    console.log('Guardado en:', result.path);
+                    notificationConfig = config;
+                    updateNotificationForm();
+                } else {
+                    const error = await response.text();
+                    alert(`Error guardando configuración: ${response.status}`);
+                    console.error('Error response:', error);
+                }
+            } catch (error) {
+                alert(`Error de conexión: ${error.message}`);
+                console.error('Connection error:', error);
+            }
+        }
+
+        async function saveBackupConfig() {
+            const config = {
+                enabled: document.getElementById('backup-enabled').checked,
+                daily_backup: document.getElementById('daily-backup').checked,
+                weekly_backup: document.getElementById('weekly-backup').checked,
+                keep_daily: parseInt(document.getElementById('keep-daily').value),
+                keep_weekly: parseInt(document.getElementById('keep-weekly').value)
+            };
+
+            try {
+                const apiBase = await ensureApiPort();
+                console.log('Guardando backup en:', `${apiBase}/api/config/backup`);
+                
+                const response = await fetch(`${apiBase}/api/config/backup`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(config)
+                });
+
+                if (response.ok) {
+                    const result = await response.json();
+                    alert('OK: Configuración de backup guardada');
+                    console.log('Guardado en:', result.path);
+                    backupConfig = config;
+                    updateBackupForm();
+                } else {
+                    const error = await response.text();
+                    alert(`Error guardando configuración: ${response.status}`);
+                    console.error('Error response:', error);
+                }
+            } catch (error) {
+                alert(`Error de conexión: ${error.message}`);
+                console.error('Connection error:', error);
+            }
+        }
+
+        async function createManualBackup() {
+            try {
+                const response = await fetch(`${API_BASE}/api/backup/create`, { method: 'POST' });
+                if (response.ok) {
+                    alert('✅ Backup manual creado');
+                    loadBackups();
+                } else {
+                    alert('❌ Error creando backup');
+                }
+            } catch (error) {
+                alert('❌ Error de conexión');
+            }
+        }
+
+        async function loadBackups() {
+            try {
+                const backups = await fetchAPI('/api/backups');
+                const backupList = document.getElementById('backup-list');
+                
+                if (backups && backups.length > 0) {
+                    backupList.innerHTML = backups.map(backup => `
+                        <div class="backup-item">
+                            <div>
+                                <strong>${backup.name}</strong><br>
+                                <small>${backup.type} - ${new Date(backup.created_at).toLocaleString()}</small>
+                            </div>
+                            <div>
+                                <button class="btn" onclick="restoreBackup('${backup.name}')">🔄 Restaurar</button>
+                            </div>
+                        </div>
+                    `).join('');
+                } else {
+                    backupList.innerHTML = '<p>No hay backups disponibles</p>';
+                }
+            } catch (error) {
+                document.getElementById('backup-list').innerHTML = '<p>Error cargando backups</p>';
+            }
+        }
+
+        async function restoreBackup(backupName) {
+            if (!confirm(`¿Restaurar backup "${backupName}"? Esto sobrescribirá la configuración actual.`)) {
+                return;
+            }
+
+            try {
+                const response = await fetch(`${API_BASE}/api/backup/restore`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ backup_name: backupName })
+                });
+
+                if (response.ok) {
+                    alert('✅ Backup restaurado. Reinicia la aplicación.');
+                } else {
+                    alert('❌ Error restaurando backup');
+                }
+            } catch (error) {
+                alert('❌ Error de conexión');
+            }
+        }
+
+        async function testNotification() {
+            try {
+                const response = await fetch(`${API_BASE}/api/test-notification`, { method: 'POST' });
+                if (response.ok) {
+                    alert('✅ Notificación de prueba enviada');
+                } else {
+                    alert('❌ Error enviando notificación');
+                }
+            } catch (error) {
+                alert('❌ Error de conexión');
+            }
+        }
+
+        async function clearDatabase() {
+            if (!confirm('¿Limpiar toda la base de datos? Esta acción no se puede deshacer.')) {
+                return;
+            }
+
+            try {
+                const response = await fetch(`${API_BASE}/api/database/clear`, { method: 'POST' });
+                if (response.ok) {
+                    alert('✅ Base de datos limpiada');
+                } else {
+                    alert('❌ Error limpiando base de datos');
+                }
+            } catch (error) {
+                alert('❌ Error de conexión');
+            }
+        }
+
+        // Cargar configuraciones al iniciar
+        loadConfigs();
+    </script>
+</body>
+</html>

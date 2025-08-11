@@ -1,0 +1,665 @@
+2025-08-08 15:54:21 | INFO     | EtiquetadorZPL | __init__:44 | === Aplicación iniciada ===
+2025-08-08 15:56:49 | INFO     | EtiquetadorZPL | __init__:44 | === Aplicación iniciada ===
+2025-08-08 16:03:05 | INFO     | EtiquetadorZPL | __init__:44 | === Aplicación iniciada ===
+2025-08-08 16:03:07 | INFO     | EtiquetadorZPL | load_config:277 | ✅ Configuración cargada
+2025-08-08 16:03:50 | INFO     | EtiquetadorZPL | __init__:44 | === Aplicación iniciada ===
+2025-08-08 16:03:51 | INFO     | EtiquetadorZPL | load_config:277 | ✅ Configuración cargada
+2025-08-08 16:05:18 | INFO     | EtiquetadorZPL | __init__:44 | === Aplicación iniciada ===
+2025-08-08 16:05:19 | INFO     | EtiquetadorZPL | load_config:279 | ✅ Configuración cargada
+2025-08-08 16:07:08 | INFO     | EtiquetadorZPL | start_monitoring:330 | Iniciando validación de configuración...
+2025-08-08 16:07:08 | INFO     | EtiquetadorZPL | validar_configuracion_completa:20 | Validando carpeta 1...
+2025-08-08 16:07:08 | DEBUG    | EtiquetadorZPL | _validar_ruta:64 | Carpeta 1: Ruta válida - C:/EtiquetasFlex
+2025-08-08 16:07:08 | DEBUG    | EtiquetadorZPL | _validar_impresora:91 | Carpeta 1: Impresora válida - Godex GE300
+2025-08-08 16:07:08 | DEBUG    | EtiquetadorZPL | _validar_historial:105 | Carpeta 1: Carpeta de historial creada/verificada - C:/EtiquetasHistorial
+2025-08-08 16:07:08 | INFO     | EtiquetadorZPL | validar_configuracion_completa:20 | Validando carpeta 2...
+2025-08-08 16:07:08 | DEBUG    | EtiquetadorZPL | _validar_ruta:64 | Carpeta 2: Ruta válida - C:/Users/Usuario/Desktop/Facturas
+2025-08-08 16:07:08 | DEBUG    | EtiquetadorZPL | _validar_impresora:91 | Carpeta 2: Impresora válida - WF-C5790 Series(Network)
+2025-08-08 16:07:08 | DEBUG    | EtiquetadorZPL | _validar_historial:105 | Carpeta 2: Carpeta de historial creada/verificada - C:/Users/Usuario/Desktop/Facturas/historial
+2025-08-08 16:07:08 | INFO     | EtiquetadorZPL | start_monitoring:351 | Validación exitosa. Iniciando monitoreo...
+2025-08-08 16:07:09 | INFO     | EtiquetadorZPL | _start_monitoring_thread:426 | 📁 Monitoreando: C:/EtiquetasFlex -> Godex GE300
+2025-08-08 16:07:09 | INFO     | EtiquetadorZPL | _start_monitoring_thread:426 | 📁 Monitoreando: C:/Users/Usuario/Desktop/Facturas -> WF-C5790 Series(Network)
+2025-08-08 16:07:09 | INFO     | EtiquetadorZPL | _update_ui_monitoring_started:445 | 📡 Monitoreo iniciado en 2 carpetas
+2025-08-08 16:09:47 | INFO     | EtiquetadorZPL | stop_monitoring:483 | ⏹️ Monitoreo detenido en todas las carpetas
+2025-08-08 16:10:32 | INFO     | EtiquetadorZPL | __init__:44 | === Aplicación iniciada ===
+2025-08-08 16:10:32 | INFO     | EtiquetadorZPL | load_config:280 | ✅ Configuración cargada
+2025-08-08 16:10:42 | INFO     | EtiquetadorZPL | __init__:44 | === Aplicación iniciada ===
+2025-08-08 16:10:42 | INFO     | EtiquetadorZPL | load_config:280 | ✅ Configuración cargada
+2025-08-08 16:13:25 | INFO     | EtiquetadorZPL | __init__:44 | === Aplicación iniciada ===
+2025-08-08 16:15:28 | INFO     | EtiquetadorZPL | __init__:44 | === Aplicación iniciada ===
+2025-08-08 16:15:38 | INFO     | EtiquetadorZPL | __init__:44 | === Aplicación iniciada ===
+2025-08-08 16:18:56 | INFO     | EtiquetadorZPL | __init__:44 | === Aplicación iniciada ===
+2025-08-08 16:19:08 | INFO     | EtiquetadorZPL | __init__:44 | === Aplicación iniciada ===
+2025-08-08 16:23:44 | INFO     | EtiquetadorZPL | __init__:44 | === Aplicación iniciada ===
+2025-08-08 16:25:02 | INFO     | EtiquetadorZPL | __init__:44 | === Aplicación iniciada ===
+2025-08-08 16:27:09 | INFO     | EtiquetadorZPL | __init__:28 | Creando ventana principal...
+2025-08-08 16:27:09 | INFO     | EtiquetadorZPL | __init__:39 | Ventana principal creada
+2025-08-08 16:27:09 | INFO     | EtiquetadorZPL | __init__:52 | === Aplicación iniciada ===
+2025-08-08 16:27:09 | INFO     | EtiquetadorZPL | create_widgets:84 | Creando widgets de la interfaz...
+2025-08-08 16:27:11 | INFO     | EtiquetadorZPL | create_widgets:216 | Interfaz creada completamente
+2025-08-08 16:28:35 | INFO     | EtiquetadorZPL | <module>:567 | Creando aplicación...
+2025-08-08 16:28:35 | INFO     | EtiquetadorZPL | __init__:28 | Creando ventana principal...
+2025-08-08 16:28:35 | INFO     | EtiquetadorZPL | __init__:39 | Ventana principal creada
+2025-08-08 16:28:35 | INFO     | EtiquetadorZPL | __init__:52 | === Aplicación iniciada ===
+2025-08-08 16:28:35 | INFO     | EtiquetadorZPL | create_widgets:90 | Creando widgets de la interfaz...
+2025-08-08 16:28:36 | INFO     | EtiquetadorZPL | create_widgets:222 | Interfaz creada completamente
+2025-08-08 16:28:36 | INFO     | EtiquetadorZPL | load_config:269 | Iniciando carga de configuración...
+2025-08-08 16:28:36 | INFO     | EtiquetadorZPL | load_config:271 | Llamando a cargar_configuracion()...
+2025-08-08 16:28:36 | INFO     | EtiquetadorZPL | load_config:273 | Configuración cargada: True
+2025-08-08 16:28:36 | ERROR    | EtiquetadorZPL | __init__:62 | Error al cargar configuración: 'EtiquetadorGUI' object has no attribute 'log_message'
+2025-08-08 16:28:36 | ERROR    | EtiquetadorZPL | __init__:64 | Traceback (most recent call last):
+  File "C:\Programa\EtiquetadorZPL\main_gui.py", line 295, in load_config
+    self.log_message("✅ Configuración cargada")
+AttributeError: 'EtiquetadorGUI' object has no attribute 'log_message'
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "C:\Programa\EtiquetadorZPL\main_gui.py", line 59, in __init__
+    self.load_config()
+  File "C:\Programa\EtiquetadorZPL\main_gui.py", line 299, in load_config
+    self.log_message(f"❌ Error al cargar configuración: {e}")
+AttributeError: 'EtiquetadorGUI' object has no attribute 'log_message'
+
+2025-08-08 16:28:36 | INFO     | EtiquetadorZPL | <module>:569 | Aplicación creada, iniciando run()...
+2025-08-08 16:28:36 | INFO     | EtiquetadorZPL | run:561 | Iniciando mainloop...
+2025-08-08 16:31:33 | INFO     | EtiquetadorZPL | <module>:567 | Creando aplicación...
+2025-08-08 16:31:33 | INFO     | EtiquetadorZPL | __init__:28 | Creando ventana principal...
+2025-08-08 16:31:33 | INFO     | EtiquetadorZPL | __init__:39 | Ventana principal creada
+2025-08-08 16:31:33 | INFO     | EtiquetadorZPL | __init__:52 | === Aplicación iniciada ===
+2025-08-08 16:31:33 | INFO     | EtiquetadorZPL | create_widgets:90 | Creando widgets de la interfaz...
+2025-08-08 16:31:35 | INFO     | EtiquetadorZPL | create_widgets:222 | Interfaz creada completamente
+2025-08-08 16:31:35 | INFO     | EtiquetadorZPL | load_config:269 | Iniciando carga de configuración...
+2025-08-08 16:31:35 | INFO     | EtiquetadorZPL | load_config:271 | Llamando a cargar_configuracion()...
+2025-08-08 16:31:35 | INFO     | EtiquetadorZPL | load_config:273 | Configuración cargada: True
+2025-08-08 16:31:35 | INFO     | EtiquetadorZPL | load_config:295 | ✅ Configuración cargada
+2025-08-08 16:31:35 | INFO     | EtiquetadorZPL | __init__:60 | Configuración cargada exitosamente
+2025-08-08 16:31:35 | INFO     | EtiquetadorZPL | <module>:569 | Aplicación creada, iniciando run()...
+2025-08-08 16:31:35 | INFO     | EtiquetadorZPL | run:561 | Iniciando mainloop...
+2025-08-08 16:33:02 | INFO     | EtiquetadorZPL | <module>:569 | Creando aplicación...
+2025-08-08 16:33:02 | INFO     | EtiquetadorZPL | __init__:28 | Creando ventana principal...
+2025-08-08 16:33:02 | INFO     | EtiquetadorZPL | __init__:39 | Ventana principal creada
+2025-08-08 16:33:02 | INFO     | EtiquetadorZPL | __init__:52 | === Aplicación iniciada ===
+2025-08-08 16:33:02 | INFO     | EtiquetadorZPL | create_widgets:90 | Creando widgets de la interfaz...
+2025-08-08 16:33:03 | INFO     | EtiquetadorZPL | create_widgets:224 | Interfaz creada completamente
+2025-08-08 16:33:03 | INFO     | EtiquetadorZPL | load_config:271 | Iniciando carga de configuración...
+2025-08-08 16:33:03 | INFO     | EtiquetadorZPL | load_config:273 | Llamando a cargar_configuracion()...
+2025-08-08 16:33:03 | INFO     | EtiquetadorZPL | load_config:275 | Configuración cargada: True
+2025-08-08 16:33:03 | INFO     | EtiquetadorZPL | load_config:297 | ✅ Configuración cargada
+2025-08-08 16:33:03 | INFO     | EtiquetadorZPL | __init__:60 | Configuración cargada exitosamente
+2025-08-08 16:33:03 | INFO     | EtiquetadorZPL | <module>:571 | Aplicación creada, iniciando run()...
+2025-08-08 16:33:03 | INFO     | EtiquetadorZPL | run:563 | Iniciando mainloop...
+2025-08-08 16:33:15 | INFO     | EtiquetadorZPL | save_config:335 | 💾 Configuración guardada
+2025-08-08 16:33:17 | INFO     | EtiquetadorZPL | start_monitoring:348 | Iniciando validación de configuración...
+2025-08-08 16:33:17 | INFO     | EtiquetadorZPL | validar_configuracion_completa:20 | Validando carpeta 1...
+2025-08-08 16:33:17 | DEBUG    | EtiquetadorZPL | _validar_ruta:64 | Carpeta 1: Ruta válida - C:/EtiquetasFlex
+2025-08-08 16:33:17 | WARNING  | EtiquetadorZPL | _validar_impresora:83 | No se pudo verificar impresora Godex GE300: (1722, 'EnumPrinters', 'El servidor RPC no está disponible.')
+2025-08-08 16:33:17 | DEBUG    | EtiquetadorZPL | _validar_impresora:91 | Carpeta 1: Impresora válida - Godex GE300
+2025-08-08 16:33:17 | DEBUG    | EtiquetadorZPL | _validar_historial:105 | Carpeta 1: Carpeta de historial creada/verificada - C:/EtiquetasHistorial
+2025-08-08 16:33:17 | INFO     | EtiquetadorZPL | validar_configuracion_completa:20 | Validando carpeta 2...
+2025-08-08 16:33:17 | DEBUG    | EtiquetadorZPL | _validar_ruta:64 | Carpeta 2: Ruta válida - C:/Users/Usuario/Desktop/Facturas
+2025-08-08 16:33:17 | WARNING  | EtiquetadorZPL | _validar_impresora:83 | No se pudo verificar impresora WF-C5790 Series(Network): (1722, 'EnumPrinters', 'El servidor RPC no está disponible.')
+2025-08-08 16:33:17 | DEBUG    | EtiquetadorZPL | _validar_impresora:91 | Carpeta 2: Impresora válida - WF-C5790 Series(Network)
+2025-08-08 16:33:17 | DEBUG    | EtiquetadorZPL | _validar_historial:105 | Carpeta 2: Carpeta de historial creada/verificada - C:/Users/Usuario/Desktop/Facturas/historial
+2025-08-08 16:33:17 | INFO     | EtiquetadorZPL | start_monitoring:369 | Validación exitosa. Iniciando monitoreo...
+2025-08-08 16:36:20 | INFO     | EtiquetadorZPL | __init__:44 | === Aplicación iniciada ===
+2025-08-08 16:36:41 | INFO     | EtiquetadorZPL | __init__:44 | === Aplicación iniciada ===
+2025-08-08 16:37:52 | INFO     | EtiquetadorZPL | __init__:44 | === Aplicación iniciada ===
+2025-08-08 16:40:05 | INFO     | EtiquetadorZPL | <module>:559 | Creando aplicación...
+2025-08-08 16:40:05 | INFO     | EtiquetadorZPL | __init__:28 | Creando ventana principal...
+2025-08-08 16:40:05 | INFO     | EtiquetadorZPL | __init__:39 | Ventana principal creada
+2025-08-08 16:40:05 | INFO     | EtiquetadorZPL | apply_theme:72 | Tema moderno aplicado
+2025-08-08 16:40:05 | INFO     | EtiquetadorZPL | __init__:52 | === Aplicación iniciada ===
+2025-08-08 16:40:05 | INFO     | EtiquetadorZPL | create_widgets:86 | Creando widgets de la interfaz...
+2025-08-08 16:40:06 | INFO     | EtiquetadorZPL | create_widgets:220 | Interfaz creada completamente
+2025-08-08 16:40:06 | INFO     | EtiquetadorZPL | load_config:267 | Iniciando carga de configuración...
+2025-08-08 16:40:06 | INFO     | EtiquetadorZPL | load_config:269 | Llamando a cargar_configuracion()...
+2025-08-08 16:40:06 | INFO     | EtiquetadorZPL | load_config:271 | Configuración cargada: True
+2025-08-08 16:40:06 | INFO     | EtiquetadorZPL | load_config:293 | ✅ Configuración cargada
+2025-08-08 16:40:06 | INFO     | EtiquetadorZPL | __init__:60 | Configuración cargada exitosamente
+2025-08-08 16:40:06 | INFO     | EtiquetadorZPL | <module>:561 | Aplicación creada, iniciando run()...
+2025-08-08 16:40:06 | INFO     | EtiquetadorZPL | run:553 | Iniciando mainloop...
+2025-08-08 16:40:17 | INFO     | EtiquetadorZPL | start_monitoring:344 | Iniciando validación de configuración...
+2025-08-08 16:40:17 | INFO     | EtiquetadorZPL | validar_configuracion_completa:20 | Validando carpeta 1...
+2025-08-08 16:40:17 | DEBUG    | EtiquetadorZPL | _validar_ruta:64 | Carpeta 1: Ruta válida - C:/EtiquetasFlex
+2025-08-08 16:40:17 | WARNING  | EtiquetadorZPL | _validar_impresora:83 | No se pudo verificar impresora Godex GE300: (1722, 'EnumPrinters', 'El servidor RPC no está disponible.')
+2025-08-08 16:40:17 | DEBUG    | EtiquetadorZPL | _validar_impresora:91 | Carpeta 1: Impresora válida - Godex GE300
+2025-08-08 16:40:17 | DEBUG    | EtiquetadorZPL | _validar_historial:105 | Carpeta 1: Carpeta de historial creada/verificada - C:/EtiquetasHistorial
+2025-08-08 16:40:17 | INFO     | EtiquetadorZPL | validar_configuracion_completa:20 | Validando carpeta 2...
+2025-08-08 16:40:17 | DEBUG    | EtiquetadorZPL | _validar_ruta:64 | Carpeta 2: Ruta válida - C:/Users/Usuario/Desktop/Facturas
+2025-08-08 16:40:17 | WARNING  | EtiquetadorZPL | _validar_impresora:83 | No se pudo verificar impresora WF-C5790 Series(Network): (1722, 'EnumPrinters', 'El servidor RPC no está disponible.')
+2025-08-08 16:40:17 | DEBUG    | EtiquetadorZPL | _validar_impresora:91 | Carpeta 2: Impresora válida - WF-C5790 Series(Network)
+2025-08-08 16:40:17 | DEBUG    | EtiquetadorZPL | _validar_historial:105 | Carpeta 2: Carpeta de historial creada/verificada - C:/Users/Usuario/Desktop/Facturas/historial
+2025-08-08 16:40:17 | INFO     | EtiquetadorZPL | start_monitoring:365 | Validación exitosa. Iniciando monitoreo...
+2025-08-08 16:42:37 | INFO     | EtiquetadorZPL | <module>:559 | Creando aplicación...
+2025-08-08 16:42:37 | INFO     | EtiquetadorZPL | __init__:28 | Creando ventana principal...
+2025-08-08 16:42:37 | INFO     | EtiquetadorZPL | __init__:39 | Ventana principal creada
+2025-08-08 16:42:37 | INFO     | EtiquetadorZPL | apply_theme:72 | Tema moderno aplicado
+2025-08-08 16:42:37 | INFO     | EtiquetadorZPL | __init__:52 | === Aplicación iniciada ===
+2025-08-08 16:42:37 | INFO     | EtiquetadorZPL | create_widgets:86 | Creando widgets de la interfaz...
+2025-08-08 16:42:38 | INFO     | EtiquetadorZPL | create_widgets:220 | Interfaz creada completamente
+2025-08-08 16:42:38 | INFO     | EtiquetadorZPL | load_config:267 | Iniciando carga de configuración...
+2025-08-08 16:42:38 | INFO     | EtiquetadorZPL | load_config:269 | Llamando a cargar_configuracion()...
+2025-08-08 16:42:38 | INFO     | EtiquetadorZPL | load_config:271 | Configuración cargada: True
+2025-08-08 16:42:38 | INFO     | EtiquetadorZPL | load_config:293 | ✅ Configuración cargada
+2025-08-08 16:42:38 | INFO     | EtiquetadorZPL | __init__:60 | Configuración cargada exitosamente
+2025-08-08 16:42:38 | INFO     | EtiquetadorZPL | <module>:561 | Aplicación creada, iniciando run()...
+2025-08-08 16:42:38 | INFO     | EtiquetadorZPL | run:553 | Iniciando mainloop...
+2025-08-08 16:42:43 | INFO     | EtiquetadorZPL | start_monitoring:344 | Iniciando validación de configuración...
+2025-08-08 16:42:43 | INFO     | EtiquetadorZPL | validar_configuracion_completa:20 | Validando carpeta 1...
+2025-08-08 16:42:43 | DEBUG    | EtiquetadorZPL | _validar_ruta:64 | Carpeta 1: Ruta válida - C:/EtiquetasFlex
+2025-08-08 16:42:43 | DEBUG    | EtiquetadorZPL | _validar_impresora:91 | Carpeta 1: Impresora válida - Godex GE300
+2025-08-08 16:42:43 | DEBUG    | EtiquetadorZPL | _validar_historial:105 | Carpeta 1: Carpeta de historial creada/verificada - C:/EtiquetasHistorial
+2025-08-08 16:42:43 | INFO     | EtiquetadorZPL | validar_configuracion_completa:20 | Validando carpeta 2...
+2025-08-08 16:42:43 | DEBUG    | EtiquetadorZPL | _validar_ruta:64 | Carpeta 2: Ruta válida - C:/Users/Usuario/Desktop/Facturas
+2025-08-08 16:42:43 | DEBUG    | EtiquetadorZPL | _validar_impresora:91 | Carpeta 2: Impresora válida - WF-C5790 Series(Network)
+2025-08-08 16:42:43 | DEBUG    | EtiquetadorZPL | _validar_historial:105 | Carpeta 2: Carpeta de historial creada/verificada - C:/Users/Usuario/Desktop/Facturas/historial
+2025-08-08 16:42:43 | INFO     | EtiquetadorZPL | start_monitoring:365 | Validación exitosa. Iniciando monitoreo...
+2025-08-08 16:42:43 | INFO     | EtiquetadorZPL | _start_monitoring_thread:440 | 📁 Monitoreando: C:/EtiquetasFlex -> Godex GE300
+2025-08-08 16:42:43 | INFO     | EtiquetadorZPL | _start_monitoring_thread:440 | 📁 Monitoreando: C:/Users/Usuario/Desktop/Facturas -> WF-C5790 Series(Network)
+2025-08-08 16:42:44 | INFO     | EtiquetadorZPL | _update_ui_monitoring_started:459 | 📡 Monitoreo iniciado en 2 carpetas
+2025-08-08 16:43:24 | INFO     | EtiquetadorZPL | stop_monitoring:497 | ⏹️ Monitoreo detenido en todas las carpetas
+2025-08-08 17:06:32 | INFO     | EtiquetadorZPL | __init__:45 | === Aplicación iniciada ===
+2025-08-08 17:06:38 | INFO     | EtiquetadorZPL | log_message:486 | ⚠️ No se pudo cargar la configuración
+2025-08-08 17:08:29 | INFO     | EtiquetadorZPL | __init__:45 | === Aplicación iniciada ===
+2025-08-08 17:08:30 | INFO     | EtiquetadorZPL | log_message:486 | ✅ Configuración cargada
+2025-08-08 17:08:41 | INFO     | EtiquetadorZPL | start_monitoring:329 | Iniciando validación de configuración...
+2025-08-08 17:08:41 | INFO     | EtiquetadorZPL | validar_configuracion_completa:20 | Validando carpeta 1...
+2025-08-08 17:08:41 | DEBUG    | EtiquetadorZPL | _validar_ruta:64 | Carpeta 1: Ruta válida - C:/EtiquetasFlex
+2025-08-08 17:08:41 | DEBUG    | EtiquetadorZPL | _validar_impresora:91 | Carpeta 1: Impresora válida - Godex GE300
+2025-08-08 17:08:41 | DEBUG    | EtiquetadorZPL | _validar_historial:105 | Carpeta 1: Carpeta de historial creada/verificada - C:/EtiquetasHistorial
+2025-08-08 17:08:41 | INFO     | EtiquetadorZPL | start_monitoring:350 | Validación exitosa. Iniciando monitoreo...
+2025-08-08 17:08:41 | INFO     | EtiquetadorZPL | log_message:486 | 📁 Monitoreando: C:/EtiquetasFlex -> Godex GE300
+2025-08-08 17:08:41 | INFO     | EtiquetadorZPL | log_message:486 | 📡 Monitoreo iniciado en 1 carpetas
+2025-08-08 17:08:57 | INFO     | EtiquetadorZPL | log_message:486 | ⏹️ Monitoreo detenido en todas las carpetas
+2025-08-08 17:10:33 | INFO     | EtiquetadorZPL | __init__:45 | === Aplicación iniciada ===
+2025-08-08 17:10:34 | INFO     | EtiquetadorZPL | log_message:486 | ✅ Configuración cargada
+2025-08-08 17:11:35 | INFO     | EtiquetadorZPL | start_monitoring:329 | Iniciando validación de configuración...
+2025-08-08 17:11:35 | INFO     | EtiquetadorZPL | validar_configuracion_completa:20 | Validando carpeta 1...
+2025-08-08 17:11:35 | DEBUG    | EtiquetadorZPL | _validar_ruta:64 | Carpeta 1: Ruta válida - C:/EtiquetasFlex
+2025-08-08 17:11:35 | DEBUG    | EtiquetadorZPL | _validar_impresora:91 | Carpeta 1: Impresora válida - Godex GE300
+2025-08-08 17:11:35 | DEBUG    | EtiquetadorZPL | _validar_historial:105 | Carpeta 1: Carpeta de historial creada/verificada - C:/EtiquetasHistorial
+2025-08-08 17:11:35 | INFO     | EtiquetadorZPL | validar_configuracion_completa:20 | Validando carpeta 2...
+2025-08-08 17:11:35 | DEBUG    | EtiquetadorZPL | _validar_ruta:64 | Carpeta 2: Ruta válida - C:/Users/Usuario/Desktop/Facturas
+2025-08-08 17:11:35 | DEBUG    | EtiquetadorZPL | _validar_impresora:91 | Carpeta 2: Impresora válida - WF-C5790 Series(Network)
+2025-08-08 17:11:35 | DEBUG    | EtiquetadorZPL | _validar_historial:105 | Carpeta 2: Carpeta de historial creada/verificada - C:/Users/Usuario/Desktop/Facturas/historial
+2025-08-08 17:11:35 | INFO     | EtiquetadorZPL | start_monitoring:350 | Validación exitosa. Iniciando monitoreo...
+2025-08-08 17:11:36 | INFO     | EtiquetadorZPL | log_message:486 | 📁 Monitoreando: C:/EtiquetasFlex -> Godex GE300
+2025-08-08 17:11:36 | INFO     | EtiquetadorZPL | log_message:486 | 📁 Monitoreando: C:/Users/Usuario/Desktop/Facturas -> WF-C5790 Series(Network)
+2025-08-08 17:11:36 | INFO     | EtiquetadorZPL | log_message:486 | 📡 Monitoreo iniciado en 2 carpetas
+2025-08-08 17:11:56 | INFO     | EtiquetadorZPL | log_message:486 | ⏹️ Monitoreo detenido en todas las carpetas
+2025-08-08 17:17:38 | INFO     | EtiquetadorZPL | __init__:45 | === Aplicación iniciada ===
+2025-08-08 17:17:40 | INFO     | EtiquetadorZPL | log_message:487 | ✅ Configuración cargada
+2025-08-08 17:18:22 | INFO     | EtiquetadorZPL | log_message:487 | 💾 Configuración guardada
+2025-08-08 17:18:24 | INFO     | EtiquetadorZPL | start_monitoring:330 | Iniciando validación de configuración...
+2025-08-08 17:18:24 | INFO     | EtiquetadorZPL | validar_configuracion_completa:20 | Validando carpeta 1...
+2025-08-08 17:18:24 | DEBUG    | EtiquetadorZPL | _validar_ruta:64 | Carpeta 1: Ruta válida - C:/EtiquetasFlex
+2025-08-08 17:18:24 | DEBUG    | EtiquetadorZPL | _validar_impresora:91 | Carpeta 1: Impresora válida - Godex GE300
+2025-08-08 17:18:24 | DEBUG    | EtiquetadorZPL | _validar_historial:105 | Carpeta 1: Carpeta de historial creada/verificada - C:/EtiquetasHistorial
+2025-08-08 17:18:24 | INFO     | EtiquetadorZPL | validar_configuracion_completa:20 | Validando carpeta 2...
+2025-08-08 17:18:24 | DEBUG    | EtiquetadorZPL | _validar_ruta:64 | Carpeta 2: Ruta válida - C:/Users/Usuario/Desktop/Facturas
+2025-08-08 17:18:24 | DEBUG    | EtiquetadorZPL | _validar_impresora:91 | Carpeta 2: Impresora válida - WF-C5790 Series(Network)
+2025-08-08 17:18:24 | DEBUG    | EtiquetadorZPL | _validar_historial:105 | Carpeta 2: Carpeta de historial creada/verificada - C:/Users/Usuario/Desktop/Facturas/historial
+2025-08-08 17:18:24 | INFO     | EtiquetadorZPL | start_monitoring:351 | Validación exitosa. Iniciando monitoreo...
+2025-08-08 17:18:25 | INFO     | EtiquetadorZPL | log_message:487 | 📁 Monitoreando: C:/EtiquetasFlex -> Godex GE300
+2025-08-08 17:18:25 | INFO     | EtiquetadorZPL | log_message:487 | 📁 Monitoreando: C:/Users/Usuario/Desktop/Facturas -> WF-C5790 Series(Network)
+2025-08-08 17:18:25 | INFO     | EtiquetadorZPL | log_message:487 | 📡 Monitoreo iniciado en 2 carpetas
+2025-08-08 17:18:29 | INFO     | EtiquetadorZPL | log_message:487 | 💾 Configuración guardada
+2025-08-08 17:20:09 | INFO     | EtiquetadorZPL | log_message:487 | ⏹️ Monitoreo detenido en todas las carpetas
+2025-08-08 17:21:50 | INFO     | EtiquetadorZPL | __init__:45 | === Aplicación iniciada ===
+2025-08-08 17:21:52 | INFO     | EtiquetadorZPL | log_message:487 | ✅ Configuración cargada
+2025-08-08 17:22:15 | INFO     | EtiquetadorZPL | start_monitoring:330 | Iniciando validación de configuración...
+2025-08-08 17:22:15 | INFO     | EtiquetadorZPL | validar_configuracion_completa:20 | Validando carpeta 1...
+2025-08-08 17:22:15 | DEBUG    | EtiquetadorZPL | _validar_ruta:64 | Carpeta 1: Ruta válida - C:/EtiquetasFlex
+2025-08-08 17:22:15 | DEBUG    | EtiquetadorZPL | _validar_impresora:91 | Carpeta 1: Impresora válida - Godex GE300
+2025-08-08 17:22:15 | DEBUG    | EtiquetadorZPL | _validar_historial:105 | Carpeta 1: Carpeta de historial creada/verificada - C:/EtiquetasHistorial
+2025-08-08 17:22:15 | INFO     | EtiquetadorZPL | validar_configuracion_completa:20 | Validando carpeta 2...
+2025-08-08 17:22:15 | DEBUG    | EtiquetadorZPL | _validar_ruta:64 | Carpeta 2: Ruta válida - C:/Users/Usuario/Desktop/Facturas
+2025-08-08 17:22:15 | DEBUG    | EtiquetadorZPL | _validar_impresora:91 | Carpeta 2: Impresora válida - WF-C5790 Series(Network)
+2025-08-08 17:22:15 | DEBUG    | EtiquetadorZPL | _validar_historial:105 | Carpeta 2: Carpeta de historial creada/verificada - C:/Users/Usuario/Desktop/Facturas/historial
+2025-08-08 17:22:15 | INFO     | EtiquetadorZPL | start_monitoring:351 | Validación exitosa. Iniciando monitoreo...
+2025-08-08 17:22:16 | INFO     | EtiquetadorZPL | log_message:487 | 📁 Monitoreando: C:/EtiquetasFlex -> Godex GE300
+2025-08-08 17:22:16 | INFO     | EtiquetadorZPL | log_message:487 | 📁 Monitoreando: C:/Users/Usuario/Desktop/Facturas -> WF-C5790 Series(Network)
+2025-08-08 17:22:16 | INFO     | EtiquetadorZPL | log_message:487 | 📡 Monitoreo iniciado en 2 carpetas
+2025-08-08 17:23:53 | INFO     | EtiquetadorZPL | log_message:487 | ⏹️ Monitoreo detenido en todas las carpetas
+2025-08-08 17:25:40 | INFO     | EtiquetadorZPL | __init__:45 | === Aplicación iniciada ===
+2025-08-08 17:25:41 | INFO     | EtiquetadorZPL | log_message:488 | ✅ Configuración cargada
+2025-08-08 17:25:52 | INFO     | EtiquetadorZPL | log_message:488 | 💾 Configuración guardada
+2025-08-08 17:25:54 | INFO     | EtiquetadorZPL | start_monitoring:330 | Iniciando validación de configuración...
+2025-08-08 17:25:54 | INFO     | EtiquetadorZPL | validar_configuracion_completa:20 | Validando carpeta 1...
+2025-08-08 17:25:54 | DEBUG    | EtiquetadorZPL | _validar_ruta:64 | Carpeta 1: Ruta válida - C:/EtiquetasFlex
+2025-08-08 17:25:54 | DEBUG    | EtiquetadorZPL | _validar_impresora:91 | Carpeta 1: Impresora válida - Godex GE300
+2025-08-08 17:25:54 | DEBUG    | EtiquetadorZPL | _validar_historial:105 | Carpeta 1: Carpeta de historial creada/verificada - C:/EtiquetasHistorial
+2025-08-08 17:25:54 | INFO     | EtiquetadorZPL | validar_configuracion_completa:20 | Validando carpeta 2...
+2025-08-08 17:25:54 | DEBUG    | EtiquetadorZPL | _validar_ruta:64 | Carpeta 2: Ruta válida - C:/Users/Usuario/Desktop/Facturas
+2025-08-08 17:25:54 | DEBUG    | EtiquetadorZPL | _validar_impresora:91 | Carpeta 2: Impresora válida - WF-C5790 Series(Network)
+2025-08-08 17:25:54 | DEBUG    | EtiquetadorZPL | _validar_historial:105 | Carpeta 2: Carpeta de historial creada/verificada - C:/Users/Usuario/Desktop/Facturas/historial
+2025-08-08 17:25:54 | INFO     | EtiquetadorZPL | start_monitoring:351 | Validación exitosa. Iniciando monitoreo...
+2025-08-08 17:25:55 | INFO     | EtiquetadorZPL | log_message:488 | 📁 Monitoreando: C:/EtiquetasFlex -> Godex GE300
+2025-08-08 17:25:55 | INFO     | EtiquetadorZPL | log_message:488 | 📁 Monitoreando: C:/Users/Usuario/Desktop/Facturas -> WF-C5790 Series(Network)
+2025-08-08 17:25:55 | INFO     | EtiquetadorZPL | log_message:488 | 📡 Monitoreo iniciado en 2 carpetas
+2025-08-08 17:27:44 | INFO     | EtiquetadorZPL | log_message:488 | ⏹️ Monitoreo detenido en todas las carpetas
+2025-08-08 17:39:23 | INFO     | EtiquetadorZPL | __init__:45 | === Aplicación iniciada ===
+2025-08-08 17:39:25 | INFO     | EtiquetadorZPL | log_message:488 | ✅ Configuración cargada
+2025-08-08 17:39:31 | INFO     | EtiquetadorZPL | start_monitoring:330 | Iniciando validación de configuración...
+2025-08-08 17:39:31 | INFO     | EtiquetadorZPL | validar_configuracion_completa:20 | Validando carpeta 1...
+2025-08-08 17:39:31 | DEBUG    | EtiquetadorZPL | _validar_ruta:64 | Carpeta 1: Ruta válida - C:/EtiquetasFlex
+2025-08-08 17:39:31 | DEBUG    | EtiquetadorZPL | _validar_impresora:91 | Carpeta 1: Impresora válida - Godex GE300
+2025-08-08 17:39:31 | DEBUG    | EtiquetadorZPL | _validar_historial:105 | Carpeta 1: Carpeta de historial creada/verificada - C:/EtiquetasHistorial
+2025-08-08 17:39:31 | INFO     | EtiquetadorZPL | validar_configuracion_completa:20 | Validando carpeta 2...
+2025-08-08 17:39:31 | DEBUG    | EtiquetadorZPL | _validar_ruta:64 | Carpeta 2: Ruta válida - C:/Users/Usuario/Desktop/Facturas
+2025-08-08 17:39:31 | DEBUG    | EtiquetadorZPL | _validar_impresora:91 | Carpeta 2: Impresora válida - WF-C5790 Series(Network)
+2025-08-08 17:39:31 | DEBUG    | EtiquetadorZPL | _validar_historial:105 | Carpeta 2: Carpeta de historial creada/verificada - C:/Users/Usuario/Desktop/Facturas/historial
+2025-08-08 17:39:31 | INFO     | EtiquetadorZPL | start_monitoring:351 | Validación exitosa. Iniciando monitoreo...
+2025-08-08 17:39:32 | INFO     | EtiquetadorZPL | log_message:488 | 📁 Monitoreando: C:/EtiquetasFlex -> Godex GE300
+2025-08-08 17:39:32 | INFO     | EtiquetadorZPL | log_message:488 | 📁 Monitoreando: C:/Users/Usuario/Desktop/Facturas -> WF-C5790 Series(Network)
+2025-08-08 17:39:32 | INFO     | EtiquetadorZPL | log_message:488 | 📡 Monitoreo iniciado en 2 carpetas
+2025-08-08 17:40:52 | INFO     | EtiquetadorZPL | log_message:488 | ⏹️ Monitoreo detenido en todas las carpetas
+2025-08-08 17:41:58 | INFO     | EtiquetadorZPL | __init__:45 | === Aplicación iniciada ===
+2025-08-08 17:41:59 | INFO     | EtiquetadorZPL | log_message:488 | ✅ Configuración cargada
+2025-08-08 17:42:13 | INFO     | EtiquetadorZPL | log_message:488 | 💾 Configuración guardada
+2025-08-08 17:42:15 | INFO     | EtiquetadorZPL | start_monitoring:330 | Iniciando validación de configuración...
+2025-08-08 17:42:15 | INFO     | EtiquetadorZPL | validar_configuracion_completa:20 | Validando carpeta 1...
+2025-08-08 17:42:15 | DEBUG    | EtiquetadorZPL | _validar_ruta:64 | Carpeta 1: Ruta válida - C:/EtiquetasFlex
+2025-08-08 17:42:15 | DEBUG    | EtiquetadorZPL | _validar_impresora:91 | Carpeta 1: Impresora válida - Godex GE300
+2025-08-08 17:42:15 | DEBUG    | EtiquetadorZPL | _validar_historial:105 | Carpeta 1: Carpeta de historial creada/verificada - C:/EtiquetasHistorial
+2025-08-08 17:42:15 | INFO     | EtiquetadorZPL | validar_configuracion_completa:20 | Validando carpeta 2...
+2025-08-08 17:42:15 | DEBUG    | EtiquetadorZPL | _validar_ruta:64 | Carpeta 2: Ruta válida - C:/Users/Usuario/Desktop/Facturas
+2025-08-08 17:42:15 | DEBUG    | EtiquetadorZPL | _validar_impresora:91 | Carpeta 2: Impresora válida - Magicard Enduro NEO (V2)
+2025-08-08 17:42:15 | DEBUG    | EtiquetadorZPL | _validar_historial:105 | Carpeta 2: Carpeta de historial creada/verificada - C:/Users/Usuario/Desktop/Facturas/historial
+2025-08-08 17:42:15 | INFO     | EtiquetadorZPL | start_monitoring:351 | Validación exitosa. Iniciando monitoreo...
+2025-08-08 17:42:16 | INFO     | EtiquetadorZPL | log_message:488 | 📁 Monitoreando: C:/EtiquetasFlex -> Godex GE300
+2025-08-08 17:42:16 | INFO     | EtiquetadorZPL | log_message:488 | 📁 Monitoreando: C:/Users/Usuario/Desktop/Facturas -> Magicard Enduro NEO (V2)
+2025-08-08 17:42:16 | INFO     | EtiquetadorZPL | log_message:488 | 📡 Monitoreo iniciado en 2 carpetas
+2025-08-08 17:43:25 | INFO     | EtiquetadorZPL | log_message:488 | ⏹️ Monitoreo detenido en todas las carpetas
+2025-08-08 17:44:05 | INFO     | EtiquetadorZPL | __init__:45 | === Aplicación iniciada ===
+2025-08-08 17:44:07 | INFO     | EtiquetadorZPL | log_message:489 | ✅ Configuración cargada
+2025-08-08 17:44:13 | INFO     | EtiquetadorZPL | start_monitoring:330 | Iniciando validación de configuración...
+2025-08-08 17:44:13 | INFO     | EtiquetadorZPL | validar_configuracion_completa:20 | Validando carpeta 1...
+2025-08-08 17:44:13 | DEBUG    | EtiquetadorZPL | _validar_ruta:64 | Carpeta 1: Ruta válida - C:/EtiquetasFlex
+2025-08-08 17:44:13 | DEBUG    | EtiquetadorZPL | _validar_impresora:91 | Carpeta 1: Impresora válida - Godex GE300
+2025-08-08 17:44:13 | DEBUG    | EtiquetadorZPL | _validar_historial:105 | Carpeta 1: Carpeta de historial creada/verificada - C:/EtiquetasHistorial
+2025-08-08 17:44:13 | INFO     | EtiquetadorZPL | validar_configuracion_completa:20 | Validando carpeta 2...
+2025-08-08 17:44:13 | DEBUG    | EtiquetadorZPL | _validar_ruta:64 | Carpeta 2: Ruta válida - C:/Users/Usuario/Desktop/Facturas
+2025-08-08 17:44:13 | DEBUG    | EtiquetadorZPL | _validar_impresora:91 | Carpeta 2: Impresora válida - Magicard Enduro NEO (V2)
+2025-08-08 17:44:13 | DEBUG    | EtiquetadorZPL | _validar_historial:105 | Carpeta 2: Carpeta de historial creada/verificada - C:/Users/Usuario/Desktop/Facturas/historial
+2025-08-08 17:44:13 | INFO     | EtiquetadorZPL | start_monitoring:351 | Validación exitosa. Iniciando monitoreo...
+2025-08-08 17:44:14 | INFO     | EtiquetadorZPL | log_message:489 | 📁 Monitoreando: C:/EtiquetasFlex -> Godex GE300
+2025-08-08 17:44:14 | INFO     | EtiquetadorZPL | log_message:489 | 📁 Monitoreando: C:/Users/Usuario/Desktop/Facturas -> Magicard Enduro NEO (V2)
+2025-08-08 17:44:14 | INFO     | EtiquetadorZPL | log_message:489 | 📡 Monitoreo iniciado en 2 carpetas
+2025-08-08 17:45:23 | INFO     | EtiquetadorZPL | log_message:489 | ⏹️ Monitoreo detenido en todas las carpetas
+2025-08-08 17:48:15 | INFO     | EtiquetadorZPL | __init__:45 | === Aplicación iniciada ===
+2025-08-08 17:48:16 | INFO     | EtiquetadorZPL | log_message:489 | ✅ Configuración cargada
+2025-08-08 17:48:25 | INFO     | EtiquetadorZPL | start_monitoring:330 | Iniciando validación de configuración...
+2025-08-08 17:48:25 | INFO     | EtiquetadorZPL | validar_configuracion_completa:20 | Validando carpeta 1...
+2025-08-08 17:48:25 | DEBUG    | EtiquetadorZPL | _validar_ruta:64 | Carpeta 1: Ruta válida - C:/EtiquetasFlex
+2025-08-08 17:48:25 | DEBUG    | EtiquetadorZPL | _validar_impresora:91 | Carpeta 1: Impresora válida - Godex GE300
+2025-08-08 17:48:25 | DEBUG    | EtiquetadorZPL | _validar_historial:105 | Carpeta 1: Carpeta de historial creada/verificada - C:/EtiquetasHistorial
+2025-08-08 17:48:25 | INFO     | EtiquetadorZPL | validar_configuracion_completa:20 | Validando carpeta 2...
+2025-08-08 17:48:25 | DEBUG    | EtiquetadorZPL | _validar_ruta:64 | Carpeta 2: Ruta válida - C:/Users/Usuario/Desktop/Facturas
+2025-08-08 17:48:25 | DEBUG    | EtiquetadorZPL | _validar_impresora:91 | Carpeta 2: Impresora válida - Magicard Enduro NEO (V2)
+2025-08-08 17:48:25 | DEBUG    | EtiquetadorZPL | _validar_historial:105 | Carpeta 2: Carpeta de historial creada/verificada - C:/Users/Usuario/Desktop/Facturas/historial
+2025-08-08 17:48:25 | INFO     | EtiquetadorZPL | start_monitoring:351 | Validación exitosa. Iniciando monitoreo...
+2025-08-08 17:48:26 | INFO     | EtiquetadorZPL | log_message:489 | 📁 Monitoreando: C:/EtiquetasFlex -> Godex GE300
+2025-08-08 17:48:26 | INFO     | EtiquetadorZPL | log_message:489 | 📁 Monitoreando: C:/Users/Usuario/Desktop/Facturas -> Magicard Enduro NEO (V2)
+2025-08-08 17:48:26 | INFO     | EtiquetadorZPL | log_message:489 | 📡 Monitoreo iniciado en 2 carpetas
+2025-08-08 17:51:17 | INFO     | EtiquetadorZPL | __init__:45 | === Aplicación iniciada ===
+2025-08-08 17:51:19 | INFO     | EtiquetadorZPL | log_message:489 | ✅ Configuración cargada
+2025-08-08 17:51:24 | INFO     | EtiquetadorZPL | start_monitoring:330 | Iniciando validación de configuración...
+2025-08-08 17:51:24 | INFO     | EtiquetadorZPL | validar_configuracion_completa:20 | Validando carpeta 1...
+2025-08-08 17:51:24 | DEBUG    | EtiquetadorZPL | _validar_ruta:64 | Carpeta 1: Ruta válida - C:/EtiquetasFlex
+2025-08-08 17:51:24 | DEBUG    | EtiquetadorZPL | _validar_impresora:91 | Carpeta 1: Impresora válida - Godex GE300
+2025-08-08 17:51:24 | DEBUG    | EtiquetadorZPL | _validar_historial:105 | Carpeta 1: Carpeta de historial creada/verificada - C:/EtiquetasHistorial
+2025-08-08 17:51:24 | INFO     | EtiquetadorZPL | validar_configuracion_completa:20 | Validando carpeta 2...
+2025-08-08 17:51:24 | DEBUG    | EtiquetadorZPL | _validar_ruta:64 | Carpeta 2: Ruta válida - C:/Users/Usuario/Desktop/Facturas
+2025-08-08 17:51:24 | DEBUG    | EtiquetadorZPL | _validar_impresora:91 | Carpeta 2: Impresora válida - Magicard Enduro NEO (V2)
+2025-08-08 17:51:24 | DEBUG    | EtiquetadorZPL | _validar_historial:105 | Carpeta 2: Carpeta de historial creada/verificada - C:/Users/Usuario/Desktop/Facturas/historial
+2025-08-08 17:51:24 | INFO     | EtiquetadorZPL | start_monitoring:351 | Validación exitosa. Iniciando monitoreo...
+2025-08-08 17:51:25 | INFO     | EtiquetadorZPL | log_message:489 | 📁 Monitoreando: C:/EtiquetasFlex -> Godex GE300
+2025-08-08 17:51:25 | INFO     | EtiquetadorZPL | log_message:489 | 📁 Monitoreando: C:/Users/Usuario/Desktop/Facturas -> Magicard Enduro NEO (V2)
+2025-08-08 17:51:25 | INFO     | EtiquetadorZPL | log_message:489 | 📡 Monitoreo iniciado en 2 carpetas
+2025-08-08 17:52:04 | INFO     | EtiquetadorZPL | log_message:489 | ⏹️ Monitoreo detenido en todas las carpetas
+2025-08-08 17:52:15 | INFO     | EtiquetadorZPL | log_message:489 | ⏹️ Monitoreo detenido en todas las carpetas
+2025-08-08 17:52:26 | INFO     | EtiquetadorZPL | __init__:45 | === Aplicación iniciada ===
+2025-08-08 17:52:28 | INFO     | EtiquetadorZPL | log_message:489 | ✅ Configuración cargada
+2025-08-08 17:52:31 | INFO     | EtiquetadorZPL | start_monitoring:330 | Iniciando validación de configuración...
+2025-08-08 17:52:31 | INFO     | EtiquetadorZPL | validar_configuracion_completa:20 | Validando carpeta 1...
+2025-08-08 17:52:31 | DEBUG    | EtiquetadorZPL | _validar_ruta:64 | Carpeta 1: Ruta válida - C:/EtiquetasFlex
+2025-08-08 17:52:31 | DEBUG    | EtiquetadorZPL | _validar_impresora:91 | Carpeta 1: Impresora válida - Godex GE300
+2025-08-08 17:52:31 | DEBUG    | EtiquetadorZPL | _validar_historial:105 | Carpeta 1: Carpeta de historial creada/verificada - C:/EtiquetasHistorial
+2025-08-08 17:52:31 | INFO     | EtiquetadorZPL | validar_configuracion_completa:20 | Validando carpeta 2...
+2025-08-08 17:52:31 | DEBUG    | EtiquetadorZPL | _validar_ruta:64 | Carpeta 2: Ruta válida - C:/Users/Usuario/Desktop/Facturas
+2025-08-08 17:52:31 | DEBUG    | EtiquetadorZPL | _validar_impresora:91 | Carpeta 2: Impresora válida - Magicard Enduro NEO (V2)
+2025-08-08 17:52:31 | DEBUG    | EtiquetadorZPL | _validar_historial:105 | Carpeta 2: Carpeta de historial creada/verificada - C:/Users/Usuario/Desktop/Facturas/historial
+2025-08-08 17:52:31 | INFO     | EtiquetadorZPL | start_monitoring:351 | Validación exitosa. Iniciando monitoreo...
+2025-08-08 17:52:32 | INFO     | EtiquetadorZPL | log_message:489 | 📁 Monitoreando: C:/EtiquetasFlex -> Godex GE300
+2025-08-08 17:52:32 | INFO     | EtiquetadorZPL | log_message:489 | 📁 Monitoreando: C:/Users/Usuario/Desktop/Facturas -> Magicard Enduro NEO (V2)
+2025-08-08 17:52:32 | INFO     | EtiquetadorZPL | log_message:489 | 📡 Monitoreo iniciado en 2 carpetas
+2025-08-08 17:54:03 | INFO     | EtiquetadorZPL | log_message:489 | ⏹️ Monitoreo detenido en todas las carpetas
+2025-08-08 17:54:13 | INFO     | EtiquetadorZPL | __init__:45 | === Aplicación iniciada ===
+2025-08-08 17:54:15 | INFO     | EtiquetadorZPL | log_message:489 | ✅ Configuración cargada
+2025-08-08 17:54:25 | INFO     | EtiquetadorZPL | start_monitoring:330 | Iniciando validación de configuración...
+2025-08-08 17:54:25 | INFO     | EtiquetadorZPL | validar_configuracion_completa:20 | Validando carpeta 1...
+2025-08-08 17:54:25 | DEBUG    | EtiquetadorZPL | _validar_ruta:64 | Carpeta 1: Ruta válida - C:/EtiquetasFlex
+2025-08-08 17:54:25 | DEBUG    | EtiquetadorZPL | _validar_impresora:91 | Carpeta 1: Impresora válida - Godex GE300
+2025-08-08 17:54:25 | DEBUG    | EtiquetadorZPL | _validar_historial:105 | Carpeta 1: Carpeta de historial creada/verificada - C:/EtiquetasHistorial
+2025-08-08 17:54:25 | INFO     | EtiquetadorZPL | validar_configuracion_completa:20 | Validando carpeta 2...
+2025-08-08 17:54:25 | DEBUG    | EtiquetadorZPL | _validar_ruta:64 | Carpeta 2: Ruta válida - C:/Users/Usuario/Desktop/Facturas
+2025-08-08 17:54:25 | DEBUG    | EtiquetadorZPL | _validar_impresora:91 | Carpeta 2: Impresora válida - Magicard Enduro NEO (V2)
+2025-08-08 17:54:25 | DEBUG    | EtiquetadorZPL | _validar_historial:105 | Carpeta 2: Carpeta de historial creada/verificada - C:/Users/Usuario/Desktop/Facturas/historial
+2025-08-08 17:54:25 | INFO     | EtiquetadorZPL | start_monitoring:351 | Validación exitosa. Iniciando monitoreo...
+2025-08-08 17:54:27 | INFO     | EtiquetadorZPL | log_message:489 | 📁 Monitoreando: C:/EtiquetasFlex -> Godex GE300
+2025-08-08 17:54:27 | INFO     | EtiquetadorZPL | log_message:489 | 📁 Monitoreando: C:/Users/Usuario/Desktop/Facturas -> Magicard Enduro NEO (V2)
+2025-08-08 17:54:27 | INFO     | EtiquetadorZPL | log_message:489 | 📡 Monitoreo iniciado en 2 carpetas
+2025-08-08 17:55:07 | INFO     | EtiquetadorZPL | log_message:489 | ⏹️ Monitoreo detenido en todas las carpetas
+2025-08-08 17:55:25 | INFO     | EtiquetadorZPL | __init__:45 | === Aplicación iniciada ===
+2025-08-08 17:55:26 | INFO     | EtiquetadorZPL | log_message:489 | ✅ Configuración cargada
+2025-08-08 17:55:29 | INFO     | EtiquetadorZPL | start_monitoring:330 | Iniciando validación de configuración...
+2025-08-08 17:55:29 | INFO     | EtiquetadorZPL | validar_configuracion_completa:20 | Validando carpeta 1...
+2025-08-08 17:55:29 | DEBUG    | EtiquetadorZPL | _validar_ruta:64 | Carpeta 1: Ruta válida - C:/EtiquetasFlex
+2025-08-08 17:55:29 | DEBUG    | EtiquetadorZPL | _validar_impresora:91 | Carpeta 1: Impresora válida - Godex GE300
+2025-08-08 17:55:29 | DEBUG    | EtiquetadorZPL | _validar_historial:105 | Carpeta 1: Carpeta de historial creada/verificada - C:/EtiquetasHistorial
+2025-08-08 17:55:29 | INFO     | EtiquetadorZPL | validar_configuracion_completa:20 | Validando carpeta 2...
+2025-08-08 17:55:29 | DEBUG    | EtiquetadorZPL | _validar_ruta:64 | Carpeta 2: Ruta válida - C:/Users/Usuario/Desktop/Facturas
+2025-08-08 17:55:29 | DEBUG    | EtiquetadorZPL | _validar_impresora:91 | Carpeta 2: Impresora válida - Magicard Enduro NEO (V2)
+2025-08-08 17:55:29 | DEBUG    | EtiquetadorZPL | _validar_historial:105 | Carpeta 2: Carpeta de historial creada/verificada - C:/Users/Usuario/Desktop/Facturas/historial
+2025-08-08 17:55:29 | INFO     | EtiquetadorZPL | start_monitoring:351 | Validación exitosa. Iniciando monitoreo...
+2025-08-08 17:55:30 | INFO     | EtiquetadorZPL | log_message:489 | 📁 Monitoreando: C:/EtiquetasFlex -> Godex GE300
+2025-08-08 17:55:30 | INFO     | EtiquetadorZPL | log_message:489 | 📁 Monitoreando: C:/Users/Usuario/Desktop/Facturas -> Magicard Enduro NEO (V2)
+2025-08-08 17:55:30 | INFO     | EtiquetadorZPL | log_message:489 | 📡 Monitoreo iniciado en 2 carpetas
+2025-08-08 17:56:00 | INFO     | EtiquetadorZPL | log_message:489 | ⏹️ Monitoreo detenido en todas las carpetas
+2025-08-08 17:57:25 | INFO     | EtiquetadorZPL | __init__:45 | === Aplicación iniciada ===
+2025-08-08 17:57:26 | INFO     | EtiquetadorZPL | log_message:490 | ✅ Configuración cargada
+2025-08-08 17:57:28 | INFO     | EtiquetadorZPL | start_monitoring:330 | Iniciando validación de configuración...
+2025-08-08 17:57:28 | INFO     | EtiquetadorZPL | validar_configuracion_completa:20 | Validando carpeta 1...
+2025-08-08 17:57:28 | DEBUG    | EtiquetadorZPL | _validar_ruta:64 | Carpeta 1: Ruta válida - C:/EtiquetasFlex
+2025-08-08 17:57:28 | DEBUG    | EtiquetadorZPL | _validar_impresora:91 | Carpeta 1: Impresora válida - Godex GE300
+2025-08-08 17:57:28 | DEBUG    | EtiquetadorZPL | _validar_historial:105 | Carpeta 1: Carpeta de historial creada/verificada - C:/EtiquetasHistorial
+2025-08-08 17:57:28 | INFO     | EtiquetadorZPL | validar_configuracion_completa:20 | Validando carpeta 2...
+2025-08-08 17:57:28 | DEBUG    | EtiquetadorZPL | _validar_ruta:64 | Carpeta 2: Ruta válida - C:/Users/Usuario/Desktop/Facturas
+2025-08-08 17:57:28 | DEBUG    | EtiquetadorZPL | _validar_impresora:91 | Carpeta 2: Impresora válida - Magicard Enduro NEO (V2)
+2025-08-08 17:57:28 | DEBUG    | EtiquetadorZPL | _validar_historial:105 | Carpeta 2: Carpeta de historial creada/verificada - C:/Users/Usuario/Desktop/Facturas/historial
+2025-08-08 17:57:28 | INFO     | EtiquetadorZPL | start_monitoring:351 | Validación exitosa. Iniciando monitoreo...
+2025-08-08 17:57:29 | INFO     | EtiquetadorZPL | log_message:490 | 📁 Monitoreando: C:/EtiquetasFlex -> Godex GE300
+2025-08-08 17:57:29 | INFO     | EtiquetadorZPL | log_message:490 | 📁 Monitoreando: C:/Users/Usuario/Desktop/Facturas -> Magicard Enduro NEO (V2)
+2025-08-08 17:57:29 | INFO     | EtiquetadorZPL | log_message:490 | 📡 Monitoreo iniciado en 2 carpetas
+2025-08-08 17:57:32 | INFO     | EtiquetadorZPL | log_message:490 | [Carpeta 2] 🔍 ARCHIVO DETECTADO: 2025-08-08.pdf (ext: .pdf)
+2025-08-08 17:57:32 | INFO     | EtiquetadorZPL | log_message:490 | [Carpeta 2] 🔄 PROCESANDO: 2025-08-08.pdf
+2025-08-08 17:57:34 | INFO     | EtiquetadorZPL | log_message:490 | [Carpeta 2] 🔍 ARCHIVO DETECTADO: 2025-08-08_preview.png (ext: .png)
+2025-08-08 17:58:21 | INFO     | EtiquetadorZPL | log_message:490 | ⏹️ Monitoreo detenido en todas las carpetas
+2025-08-08 17:58:47 | INFO     | EtiquetadorZPL | __init__:45 | === Aplicación iniciada ===
+2025-08-08 17:58:48 | INFO     | EtiquetadorZPL | log_message:490 | ✅ Configuración cargada
+2025-08-08 17:58:51 | INFO     | EtiquetadorZPL | start_monitoring:330 | Iniciando validación de configuración...
+2025-08-08 17:58:51 | INFO     | EtiquetadorZPL | validar_configuracion_completa:20 | Validando carpeta 1...
+2025-08-08 17:58:51 | DEBUG    | EtiquetadorZPL | _validar_ruta:64 | Carpeta 1: Ruta válida - C:/EtiquetasFlex
+2025-08-08 17:58:51 | DEBUG    | EtiquetadorZPL | _validar_impresora:91 | Carpeta 1: Impresora válida - Godex GE300
+2025-08-08 17:58:51 | DEBUG    | EtiquetadorZPL | _validar_historial:105 | Carpeta 1: Carpeta de historial creada/verificada - C:/EtiquetasHistorial
+2025-08-08 17:58:51 | INFO     | EtiquetadorZPL | validar_configuracion_completa:20 | Validando carpeta 2...
+2025-08-08 17:58:51 | DEBUG    | EtiquetadorZPL | _validar_ruta:64 | Carpeta 2: Ruta válida - C:/Users/Usuario/Desktop/Facturas
+2025-08-08 17:58:51 | DEBUG    | EtiquetadorZPL | _validar_impresora:91 | Carpeta 2: Impresora válida - Magicard Enduro NEO (V2)
+2025-08-08 17:58:51 | DEBUG    | EtiquetadorZPL | _validar_historial:105 | Carpeta 2: Carpeta de historial creada/verificada - C:/Users/Usuario/Desktop/Facturas/historial
+2025-08-08 17:58:51 | INFO     | EtiquetadorZPL | start_monitoring:351 | Validación exitosa. Iniciando monitoreo...
+2025-08-08 17:58:51 | INFO     | EtiquetadorZPL | log_message:490 | 📁 Monitoreando: C:/EtiquetasFlex -> Godex GE300
+2025-08-08 17:58:52 | INFO     | EtiquetadorZPL | log_message:490 | 📁 Monitoreando: C:/Users/Usuario/Desktop/Facturas -> Magicard Enduro NEO (V2)
+2025-08-08 17:58:52 | INFO     | EtiquetadorZPL | log_message:490 | 📡 Monitoreo iniciado en 2 carpetas
+2025-08-08 17:59:02 | INFO     | EtiquetadorZPL | log_message:490 | [Carpeta 1] 🔍 ARCHIVO DETECTADO: Etiqueta MercadoEnvios-202508081249.zip (ext: .zip)
+2025-08-08 17:59:02 | INFO     | EtiquetadorZPL | log_message:490 | [Carpeta 1] 🔍 ARCHIVO DETECTADO: Etiqueta MercadoEnvios-202508081249.zip (ext: .zip)
+2025-08-08 17:59:02 | INFO     | EtiquetadorZPL | log_message:490 | [Carpeta 1] 🔄 PROCESANDO: Etiqueta MercadoEnvios-202508081249.zip
+2025-08-08 17:59:38 | INFO     | EtiquetadorZPL | log_message:490 | ⏹️ Monitoreo detenido en todas las carpetas
+2025-08-08 18:00:47 | INFO     | EtiquetadorZPL | __init__:45 | === Aplicación iniciada ===
+2025-08-08 18:00:48 | INFO     | EtiquetadorZPL | log_message:490 | ✅ Configuración cargada
+2025-08-08 18:00:50 | INFO     | EtiquetadorZPL | start_monitoring:330 | Iniciando validación de configuración...
+2025-08-08 18:00:50 | INFO     | EtiquetadorZPL | validar_configuracion_completa:20 | Validando carpeta 1...
+2025-08-08 18:00:50 | DEBUG    | EtiquetadorZPL | _validar_ruta:64 | Carpeta 1: Ruta válida - C:/EtiquetasFlex
+2025-08-08 18:00:50 | DEBUG    | EtiquetadorZPL | _validar_impresora:91 | Carpeta 1: Impresora válida - Godex GE300
+2025-08-08 18:00:50 | DEBUG    | EtiquetadorZPL | _validar_historial:105 | Carpeta 1: Carpeta de historial creada/verificada - C:/EtiquetasHistorial
+2025-08-08 18:00:50 | INFO     | EtiquetadorZPL | validar_configuracion_completa:20 | Validando carpeta 2...
+2025-08-08 18:00:50 | DEBUG    | EtiquetadorZPL | _validar_ruta:64 | Carpeta 2: Ruta válida - C:/Users/Usuario/Desktop/Facturas
+2025-08-08 18:00:50 | DEBUG    | EtiquetadorZPL | _validar_impresora:91 | Carpeta 2: Impresora válida - Magicard Enduro NEO (V2)
+2025-08-08 18:00:50 | DEBUG    | EtiquetadorZPL | _validar_historial:105 | Carpeta 2: Carpeta de historial creada/verificada - C:/Users/Usuario/Desktop/Facturas/historial
+2025-08-08 18:00:50 | INFO     | EtiquetadorZPL | start_monitoring:351 | Validación exitosa. Iniciando monitoreo...
+2025-08-08 18:00:51 | INFO     | EtiquetadorZPL | log_message:490 | 📁 Monitoreando: C:/EtiquetasFlex -> Godex GE300
+2025-08-08 18:00:51 | INFO     | EtiquetadorZPL | log_message:490 | 📁 Monitoreando: C:/Users/Usuario/Desktop/Facturas -> Magicard Enduro NEO (V2)
+2025-08-08 18:00:51 | INFO     | EtiquetadorZPL | log_message:490 | 📡 Monitoreo iniciado en 2 carpetas
+2025-08-08 18:01:00 | INFO     | EtiquetadorZPL | log_message:490 | [Carpeta 1] 🔍 ARCHIVO DETECTADO: Etiqueta MercadoEnvios-202508081249.zip (ext: .zip)
+2025-08-08 18:01:00 | INFO     | EtiquetadorZPL | log_message:490 | [Carpeta 1] 🔍 ARCHIVO DETECTADO: Etiqueta MercadoEnvios-202508081249.zip (ext: .zip)
+2025-08-08 18:01:00 | INFO     | EtiquetadorZPL | log_message:490 | [Carpeta 1] 🔄 PROCESANDO: Etiqueta MercadoEnvios-202508081249.zip
+2025-08-08 18:01:22 | INFO     | EtiquetadorZPL | log_message:490 | ⏹️ Monitoreo detenido en todas las carpetas
+2025-08-08 18:02:13 | INFO     | EtiquetadorZPL | __init__:45 | === Aplicación iniciada ===
+2025-08-08 18:02:15 | INFO     | EtiquetadorZPL | log_message:490 | ✅ Configuración cargada
+2025-08-08 18:02:16 | INFO     | EtiquetadorZPL | start_monitoring:330 | Iniciando validación de configuración...
+2025-08-08 18:02:16 | INFO     | EtiquetadorZPL | validar_configuracion_completa:20 | Validando carpeta 1...
+2025-08-08 18:02:16 | DEBUG    | EtiquetadorZPL | _validar_ruta:64 | Carpeta 1: Ruta válida - C:/EtiquetasFlex
+2025-08-08 18:02:16 | DEBUG    | EtiquetadorZPL | _validar_impresora:91 | Carpeta 1: Impresora válida - Godex GE300
+2025-08-08 18:02:16 | DEBUG    | EtiquetadorZPL | _validar_historial:105 | Carpeta 1: Carpeta de historial creada/verificada - C:/EtiquetasHistorial
+2025-08-08 18:02:16 | INFO     | EtiquetadorZPL | validar_configuracion_completa:20 | Validando carpeta 2...
+2025-08-08 18:02:16 | DEBUG    | EtiquetadorZPL | _validar_ruta:64 | Carpeta 2: Ruta válida - C:/Users/Usuario/Desktop/Facturas
+2025-08-08 18:02:16 | DEBUG    | EtiquetadorZPL | _validar_impresora:91 | Carpeta 2: Impresora válida - Magicard Enduro NEO (V2)
+2025-08-08 18:02:16 | DEBUG    | EtiquetadorZPL | _validar_historial:105 | Carpeta 2: Carpeta de historial creada/verificada - C:/Users/Usuario/Desktop/Facturas/historial
+2025-08-08 18:02:16 | INFO     | EtiquetadorZPL | start_monitoring:351 | Validación exitosa. Iniciando monitoreo...
+2025-08-08 18:02:17 | INFO     | EtiquetadorZPL | log_message:490 | 📁 Monitoreando: C:/EtiquetasFlex -> Godex GE300
+2025-08-08 18:02:17 | INFO     | EtiquetadorZPL | log_message:490 | 📁 Monitoreando: C:/Users/Usuario/Desktop/Facturas -> Magicard Enduro NEO (V2)
+2025-08-08 18:02:17 | INFO     | EtiquetadorZPL | log_message:490 | 📡 Monitoreo iniciado en 2 carpetas
+2025-08-08 18:02:22 | INFO     | EtiquetadorZPL | log_message:490 | [Carpeta 1] 🔍 ARCHIVO DETECTADO: Etiqueta MercadoEnvios-202508081249.zip (ext: .zip)
+2025-08-08 18:02:22 | INFO     | EtiquetadorZPL | log_message:490 | [Carpeta 1] 🔍 ARCHIVO DETECTADO: Etiqueta MercadoEnvios-202508081249.zip (ext: .zip)
+2025-08-08 18:02:22 | INFO     | EtiquetadorZPL | log_message:490 | [Carpeta 1] 🔄 PROCESANDO: Etiqueta MercadoEnvios-202508081249.zip
+2025-08-08 18:02:38 | INFO     | EtiquetadorZPL | log_message:490 | ⏹️ Monitoreo detenido en todas las carpetas
+2025-08-08 18:03:42 | INFO     | EtiquetadorZPL | __init__:45 | === Aplicación iniciada ===
+2025-08-08 18:03:44 | INFO     | EtiquetadorZPL | log_message:490 | ✅ Configuración cargada
+2025-08-08 18:03:49 | INFO     | EtiquetadorZPL | start_monitoring:330 | Iniciando validación de configuración...
+2025-08-08 18:03:49 | INFO     | EtiquetadorZPL | validar_configuracion_completa:20 | Validando carpeta 1...
+2025-08-08 18:03:49 | DEBUG    | EtiquetadorZPL | _validar_ruta:64 | Carpeta 1: Ruta válida - C:/EtiquetasFlex
+2025-08-08 18:03:49 | DEBUG    | EtiquetadorZPL | _validar_impresora:91 | Carpeta 1: Impresora válida - Godex GE300
+2025-08-08 18:03:49 | DEBUG    | EtiquetadorZPL | _validar_historial:105 | Carpeta 1: Carpeta de historial creada/verificada - C:/EtiquetasHistorial
+2025-08-08 18:03:49 | INFO     | EtiquetadorZPL | validar_configuracion_completa:20 | Validando carpeta 2...
+2025-08-08 18:03:49 | DEBUG    | EtiquetadorZPL | _validar_ruta:64 | Carpeta 2: Ruta válida - C:/Users/Usuario/Desktop/Facturas
+2025-08-08 18:03:49 | DEBUG    | EtiquetadorZPL | _validar_impresora:91 | Carpeta 2: Impresora válida - Magicard Enduro NEO (V2)
+2025-08-08 18:03:49 | DEBUG    | EtiquetadorZPL | _validar_historial:105 | Carpeta 2: Carpeta de historial creada/verificada - C:/Users/Usuario/Desktop/Facturas/historial
+2025-08-08 18:03:49 | INFO     | EtiquetadorZPL | start_monitoring:351 | Validación exitosa. Iniciando monitoreo...
+2025-08-08 18:03:50 | INFO     | EtiquetadorZPL | log_message:490 | 📁 Monitoreando: C:/EtiquetasFlex -> Godex GE300
+2025-08-08 18:03:50 | INFO     | EtiquetadorZPL | log_message:490 | 📁 Monitoreando: C:/Users/Usuario/Desktop/Facturas -> Magicard Enduro NEO (V2)
+2025-08-08 18:03:50 | INFO     | EtiquetadorZPL | log_message:490 | 📡 Monitoreo iniciado en 2 carpetas
+2025-08-08 18:03:53 | INFO     | EtiquetadorZPL | log_message:490 | [Carpeta 1] 🔍 ARCHIVO DETECTADO: Etiqueta MercadoEnvios-202508081249.zip (ext: .zip)
+2025-08-08 18:03:53 | INFO     | EtiquetadorZPL | log_message:490 | [Carpeta 1] 🔍 ARCHIVO DETECTADO: Etiqueta MercadoEnvios-202508081249.zip (ext: .zip)
+2025-08-08 18:03:53 | INFO     | EtiquetadorZPL | log_message:490 | [Carpeta 1] 🔄 PROCESANDO: Etiqueta MercadoEnvios-202508081249.zip
+2025-08-08 18:05:32 | INFO     | EtiquetadorZPL | log_message:490 | ⏹️ Monitoreo detenido en todas las carpetas
+2025-08-08 18:05:39 | INFO     | EtiquetadorZPL | __init__:45 | === Aplicación iniciada ===
+2025-08-08 18:05:41 | INFO     | EtiquetadorZPL | log_message:490 | ✅ Configuración cargada
+2025-08-08 18:05:42 | INFO     | EtiquetadorZPL | start_monitoring:330 | Iniciando validación de configuración...
+2025-08-08 18:05:42 | INFO     | EtiquetadorZPL | validar_configuracion_completa:20 | Validando carpeta 1...
+2025-08-08 18:05:42 | DEBUG    | EtiquetadorZPL | _validar_ruta:64 | Carpeta 1: Ruta válida - C:/EtiquetasFlex
+2025-08-08 18:05:42 | DEBUG    | EtiquetadorZPL | _validar_impresora:91 | Carpeta 1: Impresora válida - Godex GE300
+2025-08-08 18:05:42 | DEBUG    | EtiquetadorZPL | _validar_historial:105 | Carpeta 1: Carpeta de historial creada/verificada - C:/EtiquetasHistorial
+2025-08-08 18:05:42 | INFO     | EtiquetadorZPL | validar_configuracion_completa:20 | Validando carpeta 2...
+2025-08-08 18:05:42 | DEBUG    | EtiquetadorZPL | _validar_ruta:64 | Carpeta 2: Ruta válida - C:/Users/Usuario/Desktop/Facturas
+2025-08-08 18:05:42 | DEBUG    | EtiquetadorZPL | _validar_impresora:91 | Carpeta 2: Impresora válida - Magicard Enduro NEO (V2)
+2025-08-08 18:05:42 | DEBUG    | EtiquetadorZPL | _validar_historial:105 | Carpeta 2: Carpeta de historial creada/verificada - C:/Users/Usuario/Desktop/Facturas/historial
+2025-08-08 18:05:42 | INFO     | EtiquetadorZPL | start_monitoring:351 | Validación exitosa. Iniciando monitoreo...
+2025-08-08 18:05:43 | INFO     | EtiquetadorZPL | log_message:490 | 📁 Monitoreando: C:/EtiquetasFlex -> Godex GE300
+2025-08-08 18:05:43 | INFO     | EtiquetadorZPL | log_message:490 | 📁 Monitoreando: C:/Users/Usuario/Desktop/Facturas -> Magicard Enduro NEO (V2)
+2025-08-08 18:05:43 | INFO     | EtiquetadorZPL | log_message:490 | 📡 Monitoreo iniciado en 2 carpetas
+2025-08-08 18:05:48 | INFO     | EtiquetadorZPL | log_message:490 | [Carpeta 1] 🔍 ARCHIVO DETECTADO: Etiqueta MercadoEnvios-202508081249.zip (ext: .zip)
+2025-08-08 18:05:48 | INFO     | EtiquetadorZPL | log_message:490 | [Carpeta 1] 🔍 ARCHIVO DETECTADO: Etiqueta MercadoEnvios-202508081249.zip (ext: .zip)
+2025-08-08 18:05:48 | INFO     | EtiquetadorZPL | log_message:490 | [Carpeta 1] 🔄 PROCESANDO: Etiqueta MercadoEnvios-202508081249.zip
+2025-08-08 18:06:24 | INFO     | EtiquetadorZPL | log_message:490 | ⏹️ Monitoreo detenido en todas las carpetas
+2025-08-08 18:09:46 | INFO     | EtiquetadorZPL | __init__:45 | === Aplicación iniciada ===
+2025-08-08 18:09:47 | INFO     | EtiquetadorZPL | log_message:490 | ✅ Configuración cargada
+2025-08-08 19:44:01 | INFO     | EtiquetadorZPL | __init__:46 | === Aplicación iniciada ===
+2025-08-08 19:44:15 | INFO     | EtiquetadorZPL | log_message:495 | ✅ Configuración cargada
+2025-08-08 19:57:45 | INFO     | EtiquetadorZPL | __init__:60 | === Aplicación iniciada ===
+2025-08-08 19:57:47 | INFO     | EtiquetadorZPL | log_message:533 | ✅ Configuración cargada
+2025-08-08 20:00:07 | INFO     | EtiquetadorZPL | __init__:60 | === Aplicación iniciada ===
+2025-08-08 20:00:08 | INFO     | EtiquetadorZPL | log_message:536 | ✅ Configuración cargada
+2025-08-08 20:00:54 | INFO     | EtiquetadorZPL | log_message:536 | ✅ Configuración cargada
+2025-08-08 20:00:55 | INFO     | EtiquetadorZPL | log_message:536 | 💾 Configuración guardada
+2025-08-08 20:02:44 | INFO     | EtiquetadorZPL | __init__:46 | === Aplicación iniciada ===
+2025-08-08 20:02:54 | INFO     | EtiquetadorZPL | log_message:495 | ✅ Configuración cargada
+2025-08-08 20:04:04 | INFO     | EtiquetadorZPL | __init__:46 | === Aplicación iniciada ===
+2025-08-08 20:04:13 | INFO     | EtiquetadorZPL | log_message:495 | ✅ Configuración cargada
+2025-08-08 20:04:17 | INFO     | EtiquetadorZPL | __init__:60 | === Aplicación iniciada ===
+2025-08-08 20:07:50 | INFO     | EtiquetadorZPL | __init__:60 | === Aplicación iniciada ===
+2025-08-08 20:07:51 | INFO     | EtiquetadorZPL | log_message:536 | ✅ Configuración cargada
+2025-08-08 20:08:35 | INFO     | EtiquetadorZPL | __init__:60 | === Aplicación iniciada ===
+2025-08-08 20:08:37 | INFO     | EtiquetadorZPL | log_message:536 | ✅ Configuración cargada
+2025-08-08 20:09:05 | INFO     | EtiquetadorZPL | log_message:536 | 📁 Monitoreando: C:/EtiquetasFlex -> Godex GE300
+2025-08-08 20:09:05 | INFO     | EtiquetadorZPL | log_message:536 | 📁 Monitoreando: C:/Users/Diego Sasén/OneDrive/Escritorio/maquina pinchos -> Magicard Enduro NEO (V2)
+2025-08-08 20:09:11 | INFO     | EtiquetadorZPL | log_message:536 | 💾 Configuración guardada
+2025-08-08 20:09:16 | INFO     | EtiquetadorZPL | log_message:536 | ⏹️ Monitoreo detenido
+2025-08-08 20:30:03 | INFO     | EtiquetadorZPL | __init__:60 | === Aplicación iniciada ===
+2025-08-08 20:30:08 | INFO     | EtiquetadorZPL | log_message:536 | ⚠️ API no disponible - Modo local
+2025-08-08 20:30:10 | INFO     | EtiquetadorZPL | log_message:536 | ✅ Configuración cargada
+2025-08-08 20:33:16 | INFO     | EtiquetadorZPL | __init__:60 | === Aplicación iniciada ===
+2025-08-08 20:33:21 | INFO     | EtiquetadorZPL | log_message:536 | [LOCAL] API no disponible - Modo local
+2025-08-08 20:33:22 | INFO     | EtiquetadorZPL | log_message:536 | ✅ Configuración cargada
+2025-08-08 20:37:01 | INFO     | EtiquetadorZPL | __init__:60 | === Aplicación iniciada ===
+2025-08-08 20:37:06 | INFO     | EtiquetadorZPL | log_message:536 | [LOCAL] API no disponible - Modo local
+2025-08-08 20:37:07 | INFO     | EtiquetadorZPL | log_message:536 | ✅ Configuración cargada
+2025-08-08 20:59:40 | INFO     | EtiquetadorZPL | __init__:60 | === Aplicación iniciada ===
+2025-08-08 20:59:45 | INFO     | EtiquetadorZPL | log_message:536 | [LOCAL] API no disponible - Modo local
+2025-08-08 20:59:46 | INFO     | EtiquetadorZPL | log_message:536 | ✅ Configuración cargada
+2025-08-08 21:01:08 | INFO     | EtiquetadorZPL | __init__:60 | === Aplicación iniciada ===
+2025-08-08 21:01:13 | INFO     | EtiquetadorZPL | log_message:536 | [LOCAL] API no disponible - Modo local
+2025-08-08 21:01:14 | INFO     | EtiquetadorZPL | log_message:536 | ✅ Configuración cargada
+2025-08-08 21:01:58 | INFO     | EtiquetadorZPL | __init__:60 | === Aplicación iniciada ===
+2025-08-08 21:02:03 | INFO     | EtiquetadorZPL | log_message:536 | [LOCAL] API no disponible - Modo local
+2025-08-08 21:02:05 | INFO     | EtiquetadorZPL | log_message:536 | ✅ Configuración cargada
+2025-08-08 21:03:27 | INFO     | EtiquetadorZPL | __init__:60 | === Aplicación iniciada ===
+2025-08-08 21:03:32 | INFO     | EtiquetadorZPL | log_message:536 | [LOCAL] API no disponible - Modo local
+2025-08-08 21:03:33 | INFO     | EtiquetadorZPL | log_message:536 | ✅ Configuración cargada
+2025-08-08 21:03:46 | INFO     | EtiquetadorZPL | __init__:60 | === Aplicación iniciada ===
+2025-08-08 21:03:51 | INFO     | EtiquetadorZPL | log_message:536 | [LOCAL] API no disponible - Modo local
+2025-08-08 21:03:52 | INFO     | EtiquetadorZPL | log_message:536 | ✅ Configuración cargada
+2025-08-08 21:04:02 | INFO     | EtiquetadorZPL | log_message:536 | 📁 Monitoreando: C:/EtiquetasFlex -> Godex GE300
+2025-08-08 21:04:02 | INFO     | EtiquetadorZPL | log_message:536 | 📁 Monitoreando: C:/Users/Diego Sasén/OneDrive/Escritorio/maquina pinchos -> Magicard Enduro NEO (V2)
+2025-08-08 21:04:12 | INFO     | EtiquetadorZPL | log_message:536 | ⏹️ Monitoreo detenido
+2025-08-08 21:30:20 | INFO     | EtiquetadorZPL | __init__:60 | === Aplicación iniciada ===
+2025-08-08 21:30:25 | INFO     | EtiquetadorZPL | log_message:536 | [LOCAL] API no disponible - Modo local
+2025-08-08 21:30:26 | INFO     | EtiquetadorZPL | log_message:536 | ✅ Configuración cargada
+2025-08-08 21:30:39 | INFO     | EtiquetadorZPL | log_message:536 | 📁 Monitoreando: C:/EtiquetasFlex -> Godex GE300
+2025-08-08 21:30:39 | INFO     | EtiquetadorZPL | log_message:536 | 📁 Monitoreando: C:/Users/Diego Sasén/OneDrive/Escritorio/maquina pinchos -> Magicard Enduro NEO (V2)
+2025-08-08 21:30:55 | INFO     | EtiquetadorZPL | log_message:536 | ⏹️ Monitoreo detenido
+2025-08-08 21:32:42 | INFO     | EtiquetadorZPL | __init__:60 | === Aplicación iniciada ===
+2025-08-08 21:32:47 | INFO     | EtiquetadorZPL | log_message:536 | [LOCAL] API no disponible - Modo local
+2025-08-08 21:32:48 | INFO     | EtiquetadorZPL | log_message:536 | ✅ Configuración cargada
+2025-08-08 21:36:13 | INFO     | EtiquetadorZPL | __init__:60 | === Aplicación iniciada ===
+2025-08-08 21:36:15 | INFO     | EtiquetadorZPL | log_message:536 | ✅ Configuración cargada
+2025-08-08 21:36:52 | INFO     | EtiquetadorZPL | __init__:60 | === Aplicación iniciada ===
+2025-08-08 21:36:54 | INFO     | EtiquetadorZPL | log_message:536 | ✅ Configuración cargada
+2025-08-08 21:42:41 | INFO     | EtiquetadorZPL | __init__:60 | === Aplicación iniciada ===
+2025-08-08 21:42:42 | INFO     | EtiquetadorZPL | log_message:536 | ✅ Configuración cargada
+2025-08-08 21:44:30 | INFO     | EtiquetadorZPL | log_message:536 | 📁 Monitoreando: C:/EtiquetasFlex -> Godex GE300
+2025-08-08 21:44:30 | INFO     | EtiquetadorZPL | log_message:536 | 📁 Monitoreando: C:/Users/Diego Sasén/OneDrive/Escritorio/maquina pinchos -> Magicard Enduro NEO (V2)
+2025-08-08 21:45:04 | INFO     | EtiquetadorZPL | log_message:536 | [Carpeta 1] 🔍 ARCHIVO DETECTADO: AE_8844374.pdf (ext: .pdf)
+2025-08-08 21:45:05 | INFO     | EtiquetadorZPL | log_message:536 | [Carpeta 1] 🔄 PROCESANDO: AE_8844374.pdf
+2025-08-08 21:45:07 | INFO     | EtiquetadorZPL | log_message:536 | [Carpeta 1] 📄 Procesando PDF: AE_8844374.pdf
+2025-08-08 21:45:09 | INFO     | EtiquetadorZPL | log_message:536 | [Carpeta 1] 🔍 ARCHIVO DETECTADO: AE_8844374_temp.png (ext: .png)
+2025-08-08 21:45:20 | INFO     | EtiquetadorZPL | log_message:536 | [Carpeta 1] 🔍 ARCHIVO DETECTADO: AE_8844374_recortada.png (ext: .png)
+2025-08-08 22:10:13 | INFO     | EtiquetadorZPL | log_message:536 | ⏹️ Monitoreo detenido
+2025-08-08 22:10:15 | INFO     | EtiquetadorZPL | log_message:536 | 📁 Monitoreando: C:/EtiquetasFlex -> Godex GE300
+2025-08-08 22:10:15 | INFO     | EtiquetadorZPL | log_message:536 | 📁 Monitoreando: C:/Users/Diego Sasén/OneDrive/Escritorio/maquina pinchos -> Magicard Enduro NEO (V2)
+2025-08-08 22:11:16 | INFO     | EtiquetadorZPL | log_message:536 | [Carpeta 1] 🔍 ARCHIVO DETECTADO: AE_8844374.pdf (ext: .pdf)
+2025-08-08 22:11:17 | INFO     | EtiquetadorZPL | log_message:536 | [Carpeta 1] 🔄 PROCESANDO: AE_8844374.pdf
+2025-08-08 22:11:19 | INFO     | EtiquetadorZPL | log_message:536 | [Carpeta 1] 📄 Procesando PDF: AE_8844374.pdf
+2025-08-08 22:11:20 | INFO     | EtiquetadorZPL | log_message:536 | [Carpeta 1] 🔍 ARCHIVO DETECTADO: AE_8844374_temp.png (ext: .png)
+2025-08-08 22:11:30 | INFO     | EtiquetadorZPL | log_message:536 | [Carpeta 1] 🔍 ARCHIVO DETECTADO: AE_8844374_recortada.png (ext: .png)
+2025-08-08 22:14:10 | INFO     | EtiquetadorZPL | log_message:536 | ⏹️ Monitoreo detenido
+2025-08-08 22:15:47 | INFO     | EtiquetadorZPL | __init__:60 | === Aplicación iniciada ===
+2025-08-08 22:15:49 | INFO     | EtiquetadorZPL | log_message:536 | ✅ Configuración cargada
+2025-08-08 22:16:41 | INFO     | EtiquetadorZPL | __init__:60 | === Aplicación iniciada ===
+2025-08-08 22:16:42 | INFO     | EtiquetadorZPL | log_message:536 | ✅ Configuración cargada
+2025-08-08 22:16:52 | INFO     | EtiquetadorZPL | log_message:536 | 📁 Monitoreando: C:/EtiquetasFlex -> Godex GE300
+2025-08-08 22:16:52 | INFO     | EtiquetadorZPL | log_message:536 | 📁 Monitoreando: C:/Users/Diego Sasén/OneDrive/Escritorio/maquina pinchos -> Magicard Enduro NEO (V2)
+2025-08-08 22:17:10 | INFO     | EtiquetadorZPL | log_message:536 | [Carpeta 1] 🔍 ARCHIVO DETECTADO: AE_8844374.pdf (ext: .pdf)
+2025-08-08 22:17:11 | INFO     | EtiquetadorZPL | log_message:536 | [Carpeta 1] 🔄 PROCESANDO: AE_8844374.pdf
+2025-08-08 22:17:13 | INFO     | EtiquetadorZPL | log_message:536 | [Carpeta 1] 📄 Procesando PDF: AE_8844374.pdf
+2025-08-08 22:17:14 | INFO     | EtiquetadorZPL | log_message:536 | [Carpeta 1] 🔍 ARCHIVO DETECTADO: AE_8844374_temp.png (ext: .png)
+2025-08-08 22:17:24 | INFO     | EtiquetadorZPL | log_message:536 | [Carpeta 1] 🔍 ARCHIVO DETECTADO: AE_8844374_recortada.png (ext: .png)
+2025-08-08 22:20:37 | INFO     | EtiquetadorZPL | log_message:536 | ⏹️ Monitoreo detenido
+2025-08-08 22:21:53 | INFO     | EtiquetadorZPL | __init__:60 | === Aplicación iniciada ===
+2025-08-08 22:21:55 | INFO     | EtiquetadorZPL | log_message:536 | ✅ Configuración cargada
+2025-08-08 22:22:22 | INFO     | EtiquetadorZPL | log_message:536 | 📁 Monitoreando: C:/EtiquetasFlex -> Godex GE300
+2025-08-08 22:22:22 | INFO     | EtiquetadorZPL | log_message:536 | 📁 Monitoreando: C:/Users/Diego Sasén/OneDrive/Escritorio/maquina pinchos -> Magicard Enduro NEO (V2)
+2025-08-08 22:23:02 | INFO     | EtiquetadorZPL | log_message:536 | [Carpeta 1] 🔍 ARCHIVO DETECTADO: AE_8844374.pdf (ext: .pdf)
+2025-08-08 22:23:03 | INFO     | EtiquetadorZPL | log_message:536 | [Carpeta 1] 🔄 PROCESANDO: AE_8844374.pdf
+2025-08-08 22:23:05 | INFO     | EtiquetadorZPL | log_message:536 | [Carpeta 1] 📄 Procesando PDF: AE_8844374.pdf
+2025-08-08 22:23:06 | INFO     | EtiquetadorZPL | log_message:536 | [Carpeta 1] 🔍 ARCHIVO DETECTADO: AE_8844374_temp.png (ext: .png)
+2025-08-08 22:23:17 | INFO     | EtiquetadorZPL | log_message:536 | [Carpeta 1] 🔍 ARCHIVO DETECTADO: AE_8844374_recortada.png (ext: .png)
+2025-08-08 22:25:31 | INFO     | EtiquetadorZPL | log_message:536 | ⏹️ Monitoreo detenido
+2025-08-08 22:29:45 | INFO     | EtiquetadorZPL | __init__:60 | === Aplicación iniciada ===
+2025-08-08 22:29:46 | INFO     | EtiquetadorZPL | log_message:536 | ✅ Configuración cargada
+2025-08-08 22:31:12 | INFO     | EtiquetadorZPL | log_message:536 | 📁 Monitoreando: C:/EtiquetasFlex -> Godex GE300
+2025-08-08 22:31:12 | INFO     | EtiquetadorZPL | log_message:536 | 📁 Monitoreando: C:/Users/Diego Sasén/OneDrive/Escritorio/maquina pinchos -> Magicard Enduro NEO (V2)
+2025-08-08 22:31:36 | INFO     | EtiquetadorZPL | log_message:536 | [Carpeta 1] 🔍 ARCHIVO DETECTADO: AE_8844374.pdf (ext: .pdf)
+2025-08-08 22:31:37 | INFO     | EtiquetadorZPL | log_message:536 | [Carpeta 1] 🔄 PROCESANDO: AE_8844374.pdf
+2025-08-08 22:31:39 | INFO     | EtiquetadorZPL | log_message:536 | [Carpeta 1] 📄 Procesando PDF: AE_8844374.pdf
+2025-08-08 22:31:40 | INFO     | EtiquetadorZPL | log_message:536 | [Carpeta 1] 🔍 ARCHIVO DETECTADO: AE_8844374_temp.png (ext: .png)
+2025-08-08 22:31:51 | INFO     | EtiquetadorZPL | log_message:536 | [Carpeta 1] 🔍 ARCHIVO DETECTADO: AE_8844374_recortada.png (ext: .png)
+2025-08-08 22:33:20 | INFO     | EtiquetadorZPL | log_message:536 | ⏹️ Monitoreo detenido
+2025-08-08 22:33:22 | INFO     | EtiquetadorZPL | log_message:536 | 💾 Configuración guardada
+2025-08-08 22:33:23 | INFO     | EtiquetadorZPL | log_message:536 | 📁 Monitoreando: C:/EtiquetasFlex -> Godex GE300
+2025-08-08 22:33:23 | INFO     | EtiquetadorZPL | log_message:536 | 📁 Monitoreando: C:/Users/Diego Sasén/OneDrive/Escritorio/maquina pinchos -> Magicard Enduro NEO (V2)
+2025-08-08 22:33:31 | INFO     | EtiquetadorZPL | log_message:536 | [Carpeta 1] 🔍 ARCHIVO DETECTADO: AE_8844374.pdf (ext: .pdf)
+2025-08-08 22:33:32 | INFO     | EtiquetadorZPL | log_message:536 | [Carpeta 1] 🔄 PROCESANDO: AE_8844374.pdf
+2025-08-08 22:33:34 | INFO     | EtiquetadorZPL | log_message:536 | [Carpeta 1] 📄 Procesando PDF: AE_8844374.pdf
+2025-08-08 22:33:34 | INFO     | EtiquetadorZPL | log_message:536 | [Carpeta 1] 🔍 ARCHIVO DETECTADO: AE_8844374_preview.png (ext: .png)
+2025-08-08 22:38:20 | INFO     | EtiquetadorZPL | log_message:536 | ⏹️ Monitoreo detenido
+2025-08-08 22:39:05 | INFO     | EtiquetadorZPL | __init__:60 | === Aplicación iniciada ===
+2025-08-08 22:39:07 | INFO     | EtiquetadorZPL | log_message:536 | ✅ Configuración cargada
+2025-08-08 22:39:27 | INFO     | EtiquetadorZPL | log_message:536 | 📁 Monitoreando: C:/EtiquetasFlex -> Godex GE300
+2025-08-08 22:39:27 | INFO     | EtiquetadorZPL | log_message:536 | 📁 Monitoreando: C:/Users/Diego Sasén/OneDrive/Escritorio/maquina pinchos -> Magicard Enduro NEO (V2)
+2025-08-08 22:39:45 | INFO     | EtiquetadorZPL | log_message:536 | [Carpeta 1] 🔍 ARCHIVO DETECTADO: AE_8844374.pdf (ext: .pdf)
+2025-08-08 22:39:46 | INFO     | EtiquetadorZPL | log_message:536 | [Carpeta 1] 🔄 PROCESANDO: AE_8844374.pdf
+2025-08-08 22:39:48 | INFO     | EtiquetadorZPL | log_message:536 | [Carpeta 1] 📄 Procesando PDF: AE_8844374.pdf
+2025-08-08 22:39:49 | INFO     | EtiquetadorZPL | log_message:536 | [Carpeta 1] 🔍 ARCHIVO DETECTADO: AE_8844374_preview.png (ext: .png)
+2025-08-08 22:40:59 | INFO     | EtiquetadorZPL | log_message:536 | ⏹️ Monitoreo detenido
+2025-08-08 22:42:37 | INFO     | EtiquetadorZPL | __init__:60 | === Aplicación iniciada ===
+2025-08-08 22:42:39 | INFO     | EtiquetadorZPL | log_message:536 | ✅ Configuración cargada
+2025-08-08 22:44:45 | INFO     | EtiquetadorZPL | __init__:60 | === Aplicación iniciada ===
+2025-08-08 22:44:46 | INFO     | EtiquetadorZPL | log_message:536 | ✅ Configuración cargada
+2025-08-08 22:46:21 | INFO     | EtiquetadorZPL | __init__:60 | === Aplicación iniciada ===
+2025-08-08 22:46:22 | INFO     | EtiquetadorZPL | log_message:536 | ✅ Configuración cargada
+2025-08-08 22:48:18 | INFO     | EtiquetadorZPL | log_message:536 | 📁 Monitoreando: C:/EtiquetasFlex -> Godex GE300
+2025-08-08 22:48:18 | INFO     | EtiquetadorZPL | log_message:536 | 📁 Monitoreando: C:/Users/Diego Sasén/OneDrive/Escritorio/maquina pinchos -> Magicard Enduro NEO (V2)
+2025-08-08 22:48:37 | INFO     | EtiquetadorZPL | log_message:536 | [Carpeta 1] 🔍 ARCHIVO DETECTADO: AE_8844374.pdf (ext: .pdf)
+2025-08-08 22:48:38 | INFO     | EtiquetadorZPL | log_message:536 | [Carpeta 1] 🔄 PROCESANDO: AE_8844374.pdf
+2025-08-08 22:48:40 | INFO     | EtiquetadorZPL | log_message:536 | [Carpeta 1] 📄 Procesando PDF: AE_8844374.pdf
+2025-08-08 22:48:40 | INFO     | EtiquetadorZPL | log_message:536 | [Carpeta 1] 🔍 ARCHIVO DETECTADO: AE_8844374_preview.png (ext: .png)
+2025-08-08 22:53:35 | INFO     | EtiquetadorZPL | log_message:536 | ⏹️ Monitoreo detenido
+2025-08-08 22:55:44 | INFO     | EtiquetadorZPL | __init__:60 | === Aplicación iniciada ===
+2025-08-08 22:55:46 | INFO     | EtiquetadorZPL | log_message:536 | ✅ Configuración cargada
+2025-08-08 23:01:32 | INFO     | EtiquetadorZPL | __init__:60 | === Aplicación iniciada ===
+2025-08-08 23:01:35 | INFO     | EtiquetadorZPL | log_message:536 | ✅ Configuración cargada
+2025-08-08 23:01:46 | INFO     | EtiquetadorZPL | log_message:536 | 📁 Monitoreando: C:/EtiquetasFlex -> Godex GE300
+2025-08-08 23:01:46 | INFO     | EtiquetadorZPL | log_message:536 | 📁 Monitoreando: C:/Users/Diego Sasén/OneDrive/Escritorio/maquina pinchos -> Magicard Enduro NEO (V2)
+2025-08-08 23:02:07 | INFO     | EtiquetadorZPL | log_message:536 | [Carpeta 1] 🔍 ARCHIVO DETECTADO: AE_8844374.pdf (ext: .pdf)
+2025-08-08 23:02:08 | INFO     | EtiquetadorZPL | log_message:536 | [Carpeta 1] 🔄 PROCESANDO: AE_8844374.pdf
+2025-08-08 23:02:10 | INFO     | EtiquetadorZPL | log_message:536 | [Carpeta 1] 📄 Procesando PDF: AE_8844374.pdf
+2025-08-08 23:02:11 | INFO     | EtiquetadorZPL | log_message:536 | [Carpeta 1] 🔍 ARCHIVO DETECTADO: AE_8844374_preview.png (ext: .png)
+2025-08-08 23:02:37 | INFO     | EtiquetadorZPL | log_message:536 | ⏹️ Monitoreo detenido
+2025-08-08 23:02:56 | INFO     | EtiquetadorZPL | __init__:60 | === Aplicación iniciada ===
+2025-08-08 23:02:57 | INFO     | EtiquetadorZPL | log_message:536 | ✅ Configuración cargada
+2025-08-08 23:03:07 | INFO     | EtiquetadorZPL | log_message:536 | 📁 Monitoreando: C:/EtiquetasFlex -> Godex GE300
+2025-08-08 23:03:07 | INFO     | EtiquetadorZPL | log_message:536 | 📁 Monitoreando: C:/Users/Diego Sasén/OneDrive/Escritorio/maquina pinchos -> Magicard Enduro NEO (V2)
+2025-08-08 23:04:17 | INFO     | EtiquetadorZPL | log_message:536 | [Carpeta 1] 🔍 ARCHIVO DETECTADO: AE_8844374.pdf (ext: .pdf)
+2025-08-08 23:04:18 | INFO     | EtiquetadorZPL | log_message:536 | [Carpeta 1] 🔄 PROCESANDO: AE_8844374.pdf
+2025-08-08 23:04:20 | INFO     | EtiquetadorZPL | log_message:536 | [Carpeta 1] 📄 Procesando PDF: AE_8844374.pdf
+2025-08-08 23:04:20 | INFO     | EtiquetadorZPL | log_message:536 | [Carpeta 1] 🔍 ARCHIVO DETECTADO: AE_8844374_preview.png (ext: .png)
+2025-08-08 23:04:54 | INFO     | EtiquetadorZPL | log_message:536 | ⏹️ Monitoreo detenido
+2025-08-08 23:06:37 | INFO     | EtiquetadorZPL | __init__:60 | === Aplicación iniciada ===
+2025-08-08 23:06:39 | INFO     | EtiquetadorZPL | log_message:536 | ✅ Configuración cargada
+2025-08-08 23:06:48 | INFO     | EtiquetadorZPL | log_message:536 | 📁 Monitoreando: C:/EtiquetasFlex -> Godex GE300
+2025-08-08 23:06:49 | INFO     | EtiquetadorZPL | log_message:536 | 📁 Monitoreando: C:/Users/Diego Sasén/OneDrive/Escritorio/maquina pinchos -> Magicard Enduro NEO (V2)
+2025-08-08 23:07:33 | INFO     | EtiquetadorZPL | log_message:536 | [Carpeta 1] 🔍 ARCHIVO DETECTADO: AE_8844374.pdf (ext: .pdf)
+2025-08-08 23:07:34 | INFO     | EtiquetadorZPL | log_message:536 | [Carpeta 1] 🔄 PROCESANDO: AE_8844374.pdf
+2025-08-08 23:07:36 | INFO     | EtiquetadorZPL | log_message:536 | [Carpeta 1] 📄 Procesando PDF: AE_8844374.pdf
+2025-08-08 23:07:37 | INFO     | EtiquetadorZPL | log_message:536 | [Carpeta 1] 🔍 ARCHIVO DETECTADO: AE_8844374_preview.png (ext: .png)
+2025-08-08 23:08:56 | INFO     | EtiquetadorZPL | log_message:536 | ⏹️ Monitoreo detenido
+2025-08-08 23:12:01 | INFO     | EtiquetadorZPL | __init__:60 | === Aplicación iniciada ===
+2025-08-08 23:12:03 | INFO     | EtiquetadorZPL | log_message:536 | ✅ Configuración cargada
+2025-08-08 23:13:24 | INFO     | EtiquetadorZPL | __init__:60 | === Aplicación iniciada ===
+2025-08-08 23:13:26 | INFO     | EtiquetadorZPL | log_message:536 | ✅ Configuración cargada
+2025-08-08 23:20:12 | INFO     | EtiquetadorZPL | __init__:60 | === Aplicación iniciada ===
+2025-08-08 23:20:14 | INFO     | EtiquetadorZPL | log_message:536 | ✅ Configuración cargada
+2025-08-08 23:23:33 | INFO     | EtiquetadorZPL | __init__:60 | === Aplicación iniciada ===
+2025-08-08 23:23:35 | INFO     | EtiquetadorZPL | log_message:536 | ✅ Configuración cargada
+2025-08-08 23:24:18 | INFO     | EtiquetadorZPL | __init__:60 | === Aplicación iniciada ===
+2025-08-08 23:24:19 | INFO     | EtiquetadorZPL | log_message:536 | ✅ Configuración cargada
