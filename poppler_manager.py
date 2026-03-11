@@ -3,6 +3,7 @@ Gestor de Poppler
 """
 
 import os
+import sys
 from pathlib import Path
 
 def get_poppler_path():
@@ -18,24 +19,41 @@ def get_poppler_path():
         except:
             pass
     
-    # 2. Verificar directorio local
-    local_poppler = Path('poppler')
-    if local_poppler.exists():
-        for root, dirs, files in os.walk(local_poppler):
-            if 'pdftoppm.exe' in files:
-                path = str(Path(root))
-                # Guardar ruta encontrada
+    # 2. Verificar directorio local (estructura del instalador)
+    # Obtener directorio base de la aplicación
+    if hasattr(os.sys, '_MEIPASS'):
+        # Ejecutándose desde PyInstaller
+        base_dir = Path(os.sys._MEIPASS)
+    else:
+        # Ejecutándose desde código fuente
+        base_dir = Path(__file__).parent
+    
+    # Buscar poppler en la estructura del instalador
+    poppler_paths = [
+        base_dir / 'poppler' / 'poppler-23.08.0' / 'Library' / 'bin',
+        base_dir / 'poppler' / 'Library' / 'bin',
+        Path('poppler') / 'poppler-23.08.0' / 'Library' / 'bin',
+        Path('poppler') / 'Library' / 'bin'
+    ]
+    
+    for path in poppler_paths:
+        if path.exists() and (path / 'pdftoppm.exe').exists():
+            path_str = str(path)
+            # Guardar ruta encontrada
+            try:
                 with open('poppler_path.txt', 'w') as f:
-                    f.write(path)
-                return path
+                    f.write(path_str)
+            except:
+                pass
+            return path_str
     
     # 3. Verificar rutas comunes del sistema
     common_paths = [
         "C:/Program Files/poppler/bin",
         "C:/poppler/bin",
         "C:/tools/poppler/bin",
-        "poppler/Library/bin",
-        "poppler/poppler-23.08.0/Library/bin"  # Ruta específica existente
+        "C:/Program Files/EtiquetadorZPL/poppler/poppler-23.08.0/Library/bin",
+        "C:/Program Files (x86)/EtiquetadorZPL/poppler/poppler-23.08.0/Library/bin"
     ]
     
     for path in common_paths:

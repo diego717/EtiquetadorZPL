@@ -174,8 +174,10 @@ hidden_imports = [
     'pdf_printer',
     'vista_previa',
     'config',
-    'handlers',
+    'config_manager',
+    'log_config',
     'database',
+    'handlers',
     'notifications',
     'backup_manager',
     'user_manager',
@@ -188,14 +190,15 @@ hidden_imports = [
 # Datos a incluir
 datas = [
     ('web', 'web'),
-    ('poppler', 'poppler'),
+    ('poppler/poppler-23.08.0/Library/bin', 'poppler/poppler-23.08.0/Library/bin'),
+    ('poppler/poppler-23.08.0/share', 'poppler/poppler-23.08.0/share'),
     ('config', 'config'),
     ('src', 'src'),
     ('api', 'api'),
     ('gui', 'gui'),
-    ('config.py', '.'),  # Archivo config.py en la raíz
-    ('poppler_manager.py', '.'),  # Otros archivos en la raíz
-    ('get_writable_path.py', '.'),  # Utilidad para rutas escribibles
+    ('config.py', '.'),
+    ('poppler_manager.py', '.'),
+    ('get_writable_path.py', '.'),
     ('MANUAL_USUARIO.md', '.'),
 ]
 

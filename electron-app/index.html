@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>Etiquetador ZPL</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>🏷️ Generador de Etiquetas ZPL</h1>
+        </header>
+
+        <main>
+            <div class="config-section">
+                <h2>Configuración de Carpetas</h2>
+                
+                <div class="tabs">
+                    <button class="tab-button active" onclick="showTab(0)">Carpeta 1</button>
+                    <button class="tab-button" onclick="showTab(1)">Carpeta 2</button>
+                    <button class="tab-button" onclick="showTab(2)">Carpeta 3</button>
+                </div>
+
+                <div id="folder-configs">
+                    <!-- Las configuraciones de carpetas se generarán aquí -->
+                </div>
+            </div>
+
+            <div class="controls">
+                <button id="start-btn" class="btn btn-primary">▶️ Iniciar Monitoreo</button>
+                <button id="stop-btn" class="btn btn-secondary" disabled>⏹️ Detener</button>
+                <button id="save-btn" class="btn btn-success">💾 Guardar Config</button>
+                <button id="reload-btn" class="btn btn-info">🔄 Recargar</button>
+            </div>
+
+            <div class="status-section">
+                <h3>Estado</h3>
+                <div id="status" class="status">⏸️ Detenido</div>
+            </div>
+
+            <div class="log-section">
+                <h3>Registro de Actividad</h3>
+                <div class="log-controls">
+                    <button id="clear-log-btn" class="btn btn-small">🗑️ Limpiar</button>
+                </div>
+                <div id="log" class="log-container"></div>
+            </div>
+        </main>
+    </div>
+
+    <script src="renderer.js"></script>
+</body>
+</html>

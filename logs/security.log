@@ -1,0 +1,6 @@
+2025-08-13 10:45:06 | SECURITY | WARNING | ARCHIVO BLOQUEADO: Etiqueta MercadoEnvios-202508081249.zip | Razón: Archivo demasiado grande | Ruta: C:/EtiquetasFlex\Etiqueta MercadoEnvios-202508081249.zip
+2025-08-13 10:45:07 | SECURITY | WARNING | LÍMITE DE RECURSOS: CPU = 94.9% (límite: 90%)
+2025-08-13 10:48:48 | SECURITY | INFO | IMPRESIÓN EXITOSO: Etiqueta de envio.txt | Impresora: Godex GE300 | Copias: 1
+2025-08-13 10:50:34 | SECURITY | WARNING | LÍMITE DE RECURSOS: CPU = 98.5% (límite: 90%)
+2025-08-13 10:58:04 | SECURITY | INFO | IMPRESIÓN EXITOSO: Etiqueta de envio.txt | Impresora: Godex GE300 | Copias: 1
+2025-08-15 17:04:26 | SECURITY | INFO | IMPRESIÓN EXITOSO: Etiqueta de envio.txt | Impresora: Godex GE300 Red | Copias: 1

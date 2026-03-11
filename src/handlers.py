@@ -3,6 +3,7 @@ import logging
 import requests
 import io
 import subprocess
+import socket
 from shutil import unpack_archive, ReadError
 from watchdog.events import FileSystemEventHandler
 from PIL import Image
@@ -34,11 +35,24 @@ class PDFHandler(FileSystemEventHandler):
         self.observer = observer
         self.root = root  # Referencia a la ventana principal
         
+        # Configurar logging si no está configurado
+        try:
+            from log_config import setup_logging
+            setup_logging()
+        except Exception as e:
+            print(f"Error configurando logs: {e}")
+        
+        # Información del sistema para logs
+        self.system_info = self._get_system_info()
+        
         # Debug: verificar si root está disponible
         if self.root:
             logging.info(f"Handler inicializado CON GUI para carpeta: {config.get('entrada', 'N/A')}")
         else:
             logging.warning(f"Handler inicializado SIN GUI para carpeta: {config.get('entrada', 'N/A')}")
+        
+        # Log de información del sistema
+        logging.info(f"SISTEMA: {self.system_info['computer']} | USUARIO: {self.system_info['user']} | IP: {self.system_info['ip']}")
         self.process_queue = Queue(maxsize=100)
         self.stop_event = Event()
         self.processing_thread = None
@@ -66,6 +80,34 @@ class PDFHandler(FileSystemEventHandler):
             permission_manager.validate_printer_access(impresora)
             
         self.start_processing_thread()
+    
+    def _get_system_info(self):
+        """Obtener información del sistema para identificación"""
+        try:
+            computer_name = os.environ.get('COMPUTERNAME', 'UNKNOWN')
+            username = os.environ.get('USERNAME', 'UNKNOWN')
+            
+            # Obtener IP local
+            try:
+                s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+                s.connect(("8.8.8.8", 80))
+                local_ip = s.getsockname()[0]
+                s.close()
+            except:
+                local_ip = "UNKNOWN"
+            
+            return {
+                'computer': computer_name,
+                'user': username,
+                'ip': local_ip
+            }
+        except Exception as e:
+            logging.error(f"Error obteniendo información del sistema: {e}")
+            return {
+                'computer': 'UNKNOWN',
+                'user': 'UNKNOWN', 
+                'ip': 'UNKNOWN'
+            }
         
     def _log_to_gui(self, mensaje):
         """Envía mensaje directamente al log de la GUI"""
@@ -100,7 +142,7 @@ class PDFHandler(FileSystemEventHandler):
             resource_monitor.start_processing()
             
             mensaje = f"[Carpeta {getattr(self, 'carpeta_numero', '?')}] 🔄 PROCESANDO: {Path(ruta).name}"
-            logging.info(mensaje)
+            logging.info(f"EQUIPO: {self.system_info['computer']} | USUARIO: {self.system_info['user']} | {mensaje}")
             if self.root:
                 self.root.after(0, lambda: self._log_to_gui(mensaje))
             
@@ -186,6 +228,15 @@ class PDFHandler(FileSystemEventHandler):
         extension = Path(ruta).suffix.lower()
         nombre_archivo = Path(ruta).name.lower()
         
+        # Esperar un momento para que el archivo se complete
+        import time
+        time.sleep(0.5)
+        
+        # Verificar que el archivo existe antes de validaciones
+        if not Path(ruta).exists():
+            logging.warning(f"Archivo no encontrado durante detección: {ruta}")
+            return
+        
         # Validaciones de seguridad
         if not SecurityValidator.validate_path(ruta, self.config["entrada"]):
             logging.error(f"[Carpeta {getattr(self, 'carpeta_numero', '?')}] ⚠️ RUTA INSEGURA: {Path(ruta).name}")
@@ -201,11 +252,6 @@ class PDFHandler(FileSystemEventHandler):
             logging.error(f"[Carpeta {getattr(self, 'carpeta_numero', '?')}] ⚠️ EXTENSIÓN NO PERMITIDA: {Path(ruta).name}")
             security_logger.log_file_blocked(Path(ruta).name, "Extensión no permitida", ruta)
             return
-            
-        if not SecurityValidator.validate_file_size(ruta):
-            logging.error(f"[Carpeta {getattr(self, 'carpeta_numero', '?')}] ⚠️ ARCHIVO MUY GRANDE: {Path(ruta).name}")
-            security_logger.log_file_blocked(Path(ruta).name, "Archivo demasiado grande", ruta)
-            return
         
         # Log básico para debug
         mensaje = f"[Carpeta {getattr(self, 'carpeta_numero', '?')}] 🔍 ARCHIVO DETECTADO: {Path(ruta).name} (ext: {extension})"
@@ -214,10 +260,6 @@ class PDFHandler(FileSystemEventHandler):
             self.root.after(0, lambda: self._log_to_gui(mensaje))
         
         if extension not in ['.zip', '.txt', '.zpl', '.pdf']:
-            return
-            
-        if not Path(ruta).exists():
-            logging.warning(f"Archivo no encontrado: {ruta}")
             return
             
         # Verificar que el archivo esté dentro del directorio monitoreado
@@ -252,6 +294,11 @@ class PDFHandler(FileSystemEventHandler):
         if ruta in self.archivos_extraidos:
             logging.info(f"Ignorando archivo extraido: {Path(ruta).name}")
             self.archivos_extraidos.discard(ruta)
+            return
+            
+        # Evitar duplicados
+        if ruta in self.archivos_procesando:
+            logging.info(f"Archivo ya en procesamiento, ignorando: {Path(ruta).name}")
             return
             
         try:
@@ -419,6 +466,9 @@ class PDFHandler(FileSystemEventHandler):
                 
                 if response.status_code == 200:
                     # Mostrar vista previa
+                    import sys
+                    gui_path = Path(__file__).parent.parent / "gui"
+                    sys.path.insert(0, str(gui_path))
                     from vista_previa import mostrar_vista_previa
                     
                     def callback_imprimir():
@@ -600,9 +650,10 @@ class PDFHandler(FileSystemEventHandler):
             
             logging.info(f"Imagen guardada: {salida_path}")
             
-            # Imprimir imagen PNG con la impresora seleccionada
-            logging.info(f"Intentando imprimir: {salida_path}")
-            if self._imprimir_png(salida_path, impresora):
+            # Imprimir imagen PNG con la impresora configurada para esta carpeta
+            impresora_carpeta = self.config.get("impresora")
+            logging.info(f"Intentando imprimir en impresora de carpeta: {impresora_carpeta}")
+            if self._imprimir_png(salida_path, impresora_carpeta):
                 logging.info("Imagen enviada a impresora exitosamente")
             else:
                 logging.error("Fallo al enviar imagen a impresora")
@@ -624,7 +675,7 @@ class PDFHandler(FileSystemEventHandler):
     def _imprimir_png(self, png_path, impresora=None):
         """Imprime imagen PNG usando la función especializada"""
         try:
-            # Usar la impresora seleccionada o la configurada
+            # Usar la impresora seleccionada o la configurada para esta carpeta específica
             impresora_a_usar = impresora if impresora else self.config.get("impresora")
             
             # Si no hay impresora, usar "IMPRESORA_NO_CONFIGURADA"
@@ -708,7 +759,7 @@ class PDFHandler(FileSystemEventHandler):
     def _imprimir_pdf_directo(self, ruta_pdf):
         """Imprime PDF directamente sin recorte"""
         try:
-            # Usar la impresora configurada
+            # Usar la impresora configurada para esta carpeta específica
             impresora = self.config.get("impresora")
             if not impresora:
                 logging.error("No hay impresora configurada")
@@ -850,7 +901,7 @@ class PDFHandler(FileSystemEventHandler):
 
     def _procesar_impression(self, ruta_txt, contenido, impresora=None):
         try:
-            # Usar la impresora seleccionada o la configurada
+            # Usar la impresora seleccionada o la configurada para esta carpeta específica
             impresora_a_usar = impresora if impresora else self.config.get("impresora")
             
             # Si no hay impresora, usar "IMPRESORA_NO_CONFIGURADA"
@@ -883,8 +934,9 @@ class PDFHandler(FileSystemEventHandler):
                     logging.error(f"Error al imprimir: {Path(ruta_txt).name}")
                     return False
             
-            # Log del trabajo de impresión
+            # Log del trabajo de impresión con información del sistema
             security_logger.log_print_job(Path(ruta_txt).name, impresora_a_usar, copias, success)
+            logging.info(f"TRABAJO COMPLETADO - EQUIPO: {self.system_info['computer']} | USUARIO: {self.system_info['user']} | ARCHIVO: {Path(ruta_txt).name} | IMPRESORA: {impresora_a_usar} | COPIAS: {copias}")
             
             # Mover a historial
             historial_dir = self.config.get("historial")
@@ -892,10 +944,10 @@ class PDFHandler(FileSystemEventHandler):
                 Path(historial_dir).mkdir(parents=True, exist_ok=True)
                 
             if mover_a_historial(None, ruta_txt, None, None, self.config["historial"]):
-                logging.info(f"Archivo procesado: {Path(ruta_txt).name}")
+                logging.info(f"ARCHIVO FINALIZADO - EQUIPO: {self.system_info['computer']} | ARCHIVO: {Path(ruta_txt).name} | HISTORIAL: {self.config['historial']}")
                 return True
             else:
-                logging.warning(f"No se pudo mover a historial: {Path(ruta_txt).name}")
+                logging.warning(f"ERROR HISTORIAL - EQUIPO: {self.system_info['computer']} | ARCHIVO: {Path(ruta_txt).name}")
                 return False
                 
         except Exception as e:

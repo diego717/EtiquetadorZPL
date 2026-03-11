@@ -1,9 +1,9 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="es">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>EtiquetadorZPL - Configuración</title>
+    <title>EtiquetadorZPL - ConfiguraciÃ³n</title>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: #f5f5f5; }
@@ -29,24 +29,34 @@
         .status.enabled { background: #d4edda; color: #155724; }
         .status.disabled { background: #f8d7da; color: #721c24; }
         .backup-item { display: flex; justify-content: space-between; align-items: center; padding: 10px; border: 1px solid #ddd; margin-bottom: 5px; border-radius: 4px; }
+        .status.ready { background: #d4edda; color: #155724; }
+        .status.not-ready { background: #fff3cd; color: #856404; }
+        .header-actions { margin-top: 12px; display: flex; gap: 10px; flex-wrap: wrap; }
+        body.admin-only .admin-hide { display: none !important; }
+        body.admin-only .container { max-width: 900px; }
+        body.admin-only #administrado-section { margin-top: 0; }
     </style>
 </head>
 <body>
     <div class="container">
         <div class="header">
-            <h1>⚙️ Configuración EtiquetadorZPL</h1>
-            <p>Panel de administración del sistema</p>
+            <h1>Configuracion EtiquetadorZPL</h1>
+            <p>Panel de administracion del sistema</p>
+            <div class="header-actions">
+                <button id="toggle-admin-view-btn" class="btn" onclick="toggleAdminOnlyMode()">Mostrar panel completo</button>
+                <a class="btn secondary" href="cloud.html">Panel Cloud</a>
+            </div>
         </div>
 
-        <div class="nav">
-            <a href="index.html">📊 Dashboard</a>
-            <a href="config.html" class="active">⚙️ Configuración</a>
+        <div class="nav admin-hide">
+            <a href="index.html">ðŸ“Š Dashboard</a>
+            <a href="config.html" class="active">âš™ï¸ ConfiguraciÃ³n</a>
         </div>
 
-        <div class="grid">
+        <div class="grid admin-hide">
             <!-- Notificaciones -->
             <div class="card">
-                <h2>🔔 Notificaciones</h2>
+                <h2>ðŸ”” Notificaciones</h2>
                 <div class="form-group">
                     <label>
                         <input type="checkbox" id="desktop-notifications"> Notificaciones de escritorio
@@ -59,11 +69,11 @@
                 </div>
                 <div class="form-group">
                     <label>
-                        <input type="checkbox" id="success-notifications"> Notificar éxitos
+                        <input type="checkbox" id="success-notifications"> Notificar Ã©xitos
                     </label>
                 </div>
                 
-                <h3>📧 Email</h3>
+                <h3>ðŸ“§ Email</h3>
                 <div class="form-group">
                     <label>
                         <input type="checkbox" id="email-enabled"> Habilitar email
@@ -82,7 +92,7 @@
                     <input type="email" id="smtp-user" placeholder="usuario@gmail.com">
                 </div>
                 <div class="form-group">
-                    <label>Contraseña:</label>
+                    <label>ContraseÃ±a:</label>
                     <input type="password" id="smtp-password">
                 </div>
                 <div class="form-group">
@@ -90,15 +100,15 @@
                     <textarea id="to-emails" placeholder="admin@empresa.com, soporte@empresa.com"></textarea>
                 </div>
                 
-                <button class="btn" onclick="saveNotificationConfig()">💾 Guardar Notificaciones</button>
+                <button class="btn" onclick="saveNotificationConfig()">ðŸ’¾ Guardar Notificaciones</button>
             </div>
 
             <!-- Backup -->
             <div class="card">
-                <h2>💾 Backup</h2>
+                <h2>ðŸ’¾ Backup</h2>
                 <div class="form-group">
                     <label>
-                        <input type="checkbox" id="backup-enabled"> Habilitar backup automático
+                        <input type="checkbox" id="backup-enabled"> Habilitar backup automÃ¡tico
                     </label>
                 </div>
                 <div class="form-group">
@@ -121,22 +131,193 @@
                 </div>
                 
                 <div style="display: flex; gap: 10px; margin-top: 15px;">
-                    <button class="btn" onclick="saveBackupConfig()">💾 Guardar Config</button>
-                    <button class="btn success" onclick="createManualBackup()">📦 Backup Manual</button>
+                    <button class="btn" onclick="saveBackupConfig()">ðŸ’¾ Guardar Config</button>
+                    <button class="btn success" onclick="createManualBackup()">ðŸ“¦ Backup Manual</button>
                 </div>
             </div>
         </div>
 
+        <div class="card admin-hide" id="mercadolibre-section">
+            <h2>Mercado Libre</h2>
+            <div class="grid">
+                <div>
+                    <div class="form-group">
+                        <label>
+                            <input type="checkbox" id="meli-enabled"> Habilitar integracion
+                        </label>
+                    </div>
+                    <div class="form-group">
+                        <label>Client ID:</label>
+                        <input type="text" id="meli-client-id" placeholder="APP_USR-...">
+                    </div>
+                    <div class="form-group">
+                        <label>Client Secret:</label>
+                        <input type="password" id="meli-client-secret" placeholder="Client Secret">
+                    </div>
+                    <div class="form-group">
+                        <label>Redirect URI:</label>
+                        <input type="text" id="meli-redirect-uri" placeholder="http://localhost:8002/api/mercadolibre/oauth/callback">
+                    </div>
+                    <div class="form-group">
+                        <label>Impresora por defecto:</label>
+                        <input type="text" id="meli-default-printer" placeholder="Godex GE300 Red">
+                    </div>
+                    <div class="form-group">
+                        <label>Copias por defecto:</label>
+                        <input type="number" id="meli-default-copies" min="1" max="10" value="1">
+                    </div>
+                    <div class="form-group">
+                        <label>
+                            <input type="checkbox" id="meli-auto-print"> Auto imprimir desde webhook
+                        </label>
+                    </div>
+                    <div style="display: flex; gap: 10px; flex-wrap: wrap;">
+                        <button class="btn" onclick="saveMercadoLibreConfig()">Guardar Mercado Libre</button>
+                        <button class="btn success" onclick="startMercadoLibreOAuth()">Conectar cuenta</button>
+                        <button class="btn" onclick="refreshMercadoLibreStatus()">Actualizar estado</button>
+                    </div>
+                </div>
+                <div>
+                    <h3>Estado</h3>
+                    <p>Configurado: <span class="status" id="meli-configured-status">-</span></p>
+                    <p>Autenticado: <span class="status" id="meli-auth-status">-</span></p>
+                    <p>Usuario ML: <span id="meli-user-id">-</span></p>
+                    <p>Nickname: <span id="meli-nickname">-</span></p>
+                    <p>Ruta config: <span id="meli-config-path">-</span></p>
+                    <p>Ultimo error: <span id="meli-last-error">-</span></p>
+                    <div class="form-group" style="margin-top: 20px;">
+                        <label>Shipment ID para prueba:</label>
+                        <input type="text" id="meli-test-shipment-id" placeholder="12345678901">
+                    </div>
+                    <button class="btn success" onclick="testMercadoLibrePrint()">Probar impresion de shipment</button>
+                </div>
+            </div>
+        </div>
+
+        <div class="card admin-hide">
+            <h2>Ventas listas para imprimir</h2>
+            <div style="display: flex; gap: 10px; align-items: end; flex-wrap: wrap; margin-bottom: 15px;">
+                <div class="form-group" style="margin-bottom: 0; min-width: 180px;">
+                    <label>Traer ultimas ventas:</label>
+                    <input type="number" id="meli-sync-limit" min="1" max="50" value="20">
+                </div>
+                <button class="btn" onclick="syncMercadoLibreSales()">Sincronizar ventas</button>
+                <span id="meli-sync-summary" style="color: #666;">Sin datos</span>
+            </div>
+            <table id="meli-sales-table">
+                <thead>
+                    <tr>
+                        <th>Order</th>
+                        <th>Shipment</th>
+                        <th>Comprador</th>
+                        <th>Titulo</th>
+                        <th>Estado envio</th>
+                        <th>Lista</th>
+                        <th>Accion</th>
+                    </tr>
+                </thead>
+                <tbody id="meli-sales-body">
+                    <tr><td colspan="7">Sincroniza para ver ventas</td></tr>
+                </tbody>
+            </table>
+        </div>
+
+        <div class="card" id="administrado-section">
+            <h2>Administrado</h2>
+            <div class="grid">
+                <div>
+                    <div class="form-group">
+                        <label>
+                            <input type="checkbox" id="adm-enabled"> Habilitar integracion
+                        </label>
+                    </div>
+                    <div class="form-group">
+                        <label>URL ventas:</label>
+                        <input type="text" id="adm-sales-url" placeholder="https://www.administrado.net/seller/ventas3">
+                    </div>
+                    <div class="form-group">
+                        <label>Impresora por defecto:</label>
+                        <select id="adm-default-printer">
+                            <option value="">Cargando impresoras...</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>Impresora manual o ruta compartida:</label>
+                        <input type="text" id="adm-default-printer-manual" placeholder="\\\\PC-SERVIDOR\\Godex o nombre exacto de la impresora">
+                    </div>
+                    <div class="form-group">
+                        <label>Copias por defecto:</label>
+                        <input type="number" id="adm-default-copies" min="1" max="10" value="1">
+                    </div>
+                    <div class="form-group">
+                        <label>
+                            <input type="checkbox" id="adm-auto-crop-pdf" checked> Recortar PDF antes de imprimir
+                        </label>
+                    </div>
+                    <div class="form-group">
+                        <label>Cookie de sesion:</label>
+                        <textarea id="adm-cookie-header" rows="5" placeholder="Pega aqui el header Cookie completo del navegador"></textarea>
+                    </div>
+                    <div style="display: flex; gap: 10px; flex-wrap: wrap;">
+                        <button class="btn" onclick="saveAdministradoConfig()">Guardar Administrado</button>
+                        <button class="btn success" onclick="testAdministradoSession()">Probar sesion</button>
+                    </div>
+                    <div style="display: flex; gap: 10px; flex-wrap: wrap; margin-top: 10px;">
+                        <button class="btn" onclick="importAdministradoCookies('chrome')">Importar desde Chrome</button>
+                        <button class="btn" onclick="importAdministradoCookies('edge')">Importar desde Edge</button>
+                    </div>
+                    <div style="display: flex; gap: 10px; flex-wrap: wrap; margin-top: 10px;">
+                        <button class="btn success" onclick="captureAdministradoPlaywrightSession()">Capturar sesion con navegador</button>
+                    </div>
+                </div>
+                <div>
+                    <h3>Estado</h3>
+                    <p>Configurado: <span class="status" id="adm-configured-status">-</span></p>
+                    <p>Sesion Playwright: <span id="adm-playwright-session">-</span></p>
+                    <p>Ruta config: <span id="adm-config-path">-</span></p>
+                    <p>Ruta sesion: <span id="adm-storage-path">-</span></p>
+                    <p>Ultimo error: <span id="adm-last-error">-</span></p>
+                    <div class="form-group" style="margin-top: 20px;">
+                        <label>Envio ID para prueba:</label>
+                        <input type="text" id="adm-test-envio-id" placeholder="46624465730">
+                    </div>
+                    <button class="btn success" onclick="printAdministradoLabel()">Descargar e imprimir etiqueta</button>
+                </div>
+            </div>
+
+            <div style="display: flex; gap: 10px; align-items: end; flex-wrap: wrap; margin: 20px 0 15px;">
+                <div class="form-group" style="margin-bottom: 0; min-width: 180px;">
+                    <label>Traer ultimos envios con etiqueta:</label>
+                    <input type="number" id="adm-sync-limit" min="1" max="50" value="20">
+                </div>
+                <button id="adm-sync-btn" class="btn" onclick="syncAdministradoSales()">Sincronizar desde Administrado</button>
+                <span id="adm-sync-summary" style="color: #666;">Sin datos</span>
+            </div>
+            <table>
+                <thead>
+                    <tr>
+                        <th>Envio</th>
+                        <th>Nombre</th>
+                        <th>Usuario</th>
+                        <th>Imprimir</th>
+                    </tr>
+                </thead>
+                <tbody id="adm-sales-body">
+                    <tr><td colspan="4">Sincroniza para ver etiquetas detectadas</td></tr>
+                </tbody>
+            </table>
+        </div>
+
         <!-- Lista de Backups -->
-        <div class="card">
-            <h2>📦 Backups Disponibles</h2>
+        <div class="card admin-hide">
+            <h2>ðŸ“¦ Backups Disponibles</h2>
             <div id="backup-list">Cargando...</div>
-            <button class="btn" onclick="loadBackups()">🔄 Actualizar</button>
+            <button class="btn" onclick="loadBackups()">ðŸ”„ Actualizar</button>
         </div>
 
         <!-- Sistema -->
-        <div class="card">
-            <h2>🖥️ Sistema</h2>
+        <div class="card admin-hide">
+            <h2>ðŸ–¥ï¸ Sistema</h2>
             <div class="grid">
                 <div>
                     <h3>Estado del Sistema</h3>
@@ -147,9 +328,9 @@
                 </div>
                 <div>
                     <h3>Acciones</h3>
-                    <button class="btn" onclick="testNotification()">🔔 Probar Notificación</button>
-                    <button class="btn danger" onclick="clearDatabase()">🗑️ Limpiar BD</button>
-                    <button class="btn" onclick="exportLogs()">📄 Exportar Logs</button>
+                    <button class="btn" onclick="testNotification()">ðŸ”” Probar NotificaciÃ³n</button>
+                    <button class="btn danger" onclick="clearDatabase()">ðŸ—‘ï¸ Limpiar BD</button>
+                    <button class="btn" onclick="exportLogs()">ðŸ“„ Exportar Logs</button>
                 </div>
             </div>
         </div>
@@ -159,14 +340,95 @@
     <script>
         let notificationConfig = {};
         let backupConfig = {};
+        let mercadoLibreConfig = {};
+        let mercadoLibreSales = [];
+        let administradoConfig = {};
+        let administradoSales = [];
+        let administradoSyncInProgress = false;
+        let administradoAutoSyncDone = false;
+        const ADMIN_ONLY_STORAGE_KEY = 'etiquetador_admin_only_mode';
+        let adminOnlyMode = true;
+
+        function applyAdminOnlyMode() {
+            document.body.classList.toggle('admin-only', adminOnlyMode);
+            const toggleBtn = document.getElementById('toggle-admin-view-btn');
+            if (toggleBtn) {
+                toggleBtn.textContent = adminOnlyMode ? 'Mostrar panel completo' : 'Mostrar solo Administrado';
+            }
+        }
+
+        function initViewMode() {
+            let stored = null;
+            try {
+                stored = localStorage.getItem(ADMIN_ONLY_STORAGE_KEY);
+            } catch (e) {
+                stored = null;
+            }
+            adminOnlyMode = stored === null ? true : stored === '1';
+            applyAdminOnlyMode();
+            if (adminOnlyMode && window.location.hash !== '#administrado') {
+                window.location.hash = '#administrado';
+            }
+        }
+
+        function toggleAdminOnlyMode() {
+            adminOnlyMode = !adminOnlyMode;
+            try {
+                localStorage.setItem(ADMIN_ONLY_STORAGE_KEY, adminOnlyMode ? '1' : '0');
+            } catch (e) {
+                // Ignorar si localStorage no esta disponible.
+            }
+            applyAdminOnlyMode();
+            if (adminOnlyMode) {
+                window.location.hash = '#administrado';
+                focusSectionFromHash();
+                autoSyncAdministradoIfNeeded(true);
+            }
+        }
+
+        function focusSectionFromHash() {
+            if (window.location.hash === '#mercadolibre') {
+                const section = document.getElementById('mercadolibre-section');
+                if (section) {
+                    section.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                    section.style.outline = '2px solid #3498db';
+                    section.style.outlineOffset = '4px';
+                    setTimeout(() => {
+                        section.style.outline = '';
+                        section.style.outlineOffset = '';
+                    }, 2500);
+                }
+            }
+            if (window.location.hash === '#administrado') {
+                const section = document.getElementById('administrado-section');
+                if (section) {
+                    section.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                }
+            }
+        }
+
+        function isAdministradoHashActive() {
+            return window.location.hash === '#administrado';
+        }
+
+        async function autoSyncAdministradoIfNeeded(force = false) {
+            if (!isAdministradoHashActive()) {
+                return;
+            }
+            if (!force && administradoAutoSyncDone) {
+                return;
+            }
+            await syncAdministradoSales({ silent: true });
+            administradoAutoSyncDone = true;
+        }
         
-        // Función fetchAPI local
+        // FunciÃ³n fetchAPI local
         async function fetchAPI(endpoint) {
             try {
                 // Asegurar que tenemos el puerto correcto
                 if (!API_BASE || API_BASE.includes('8003')) {
                     const port = await getApiPort();
-                    API_BASE = `http://localhost:${port}`;
+                    API_BASE = `${window.location.protocol}//${window.location.hostname}:${port}`;
                 }
                 
                 const response = await fetch(`${API_BASE}${endpoint}`);
@@ -185,16 +447,16 @@
                 // Asegurar que tenemos el puerto correcto
                 if (!API_BASE || API_BASE.includes('8003')) {
                     const port = await getApiPort();
-                    API_BASE = `http://localhost:${port}`;
+                    API_BASE = `${window.location.protocol}//${window.location.hostname}:${port}`;
                 }
                 
-                // Cargar configuración de notificaciones
+                // Cargar configuraciÃ³n de notificaciones
                 const notifResponse = await fetchAPI('/api/config/notifications');
                 if (notifResponse && !notifResponse.error) {
                     notificationConfig = notifResponse;
                     console.log('Config notificaciones cargada:', notificationConfig);
                 } else {
-                    // Usar configuración por defecto
+                    // Usar configuraciÃ³n por defecto
                     notificationConfig = {
                         desktop_enabled: true,
                         notify_on_error: true,
@@ -206,13 +468,13 @@
                 }
                 updateNotificationForm();
 
-                // Cargar configuración de backup
+                // Cargar configuraciÃ³n de backup
                 const backupResponse = await fetchAPI('/api/config/backup');
                 if (backupResponse && !backupResponse.error) {
                     backupConfig = backupResponse;
                     console.log('Config backup cargada:', backupConfig);
                 } else {
-                    // Usar configuración por defecto
+                    // Usar configuraciÃ³n por defecto
                     backupConfig = {
                         enabled: true,
                         daily_backup: true,
@@ -224,12 +486,17 @@
                 }
                 updateBackupForm();
 
+                await loadMercadoLibreConfig();
+                await loadAdministradoConfig();
+                await autoSyncAdministradoIfNeeded();
                 loadBackups();
             } catch (error) {
                 console.error('Error cargando configuraciones:', error);
                 // Cargar valores por defecto si hay error
                 updateNotificationForm();
                 updateBackupForm();
+                updateMercadoLibreForm();
+                updateAdministradoForm();
             }
         }
 
@@ -274,6 +541,100 @@
             }
         }
 
+        function updateMercadoLibreForm() {
+            const config = mercadoLibreConfig || {};
+
+            document.getElementById('meli-enabled').checked = config.enabled === true;
+            document.getElementById('meli-client-id').value = config.client_id && config.client_id !== '***' ? config.client_id : '';
+            document.getElementById('meli-client-secret').value = '';
+            document.getElementById('meli-redirect-uri').value = config.redirect_uri || 'http://localhost:8002/api/mercadolibre/oauth/callback';
+            document.getElementById('meli-default-printer').value = config.default_printer || '';
+            document.getElementById('meli-default-copies').value = config.default_copies || 1;
+            document.getElementById('meli-auto-print').checked = config.auto_print === true;
+
+            const configured = config.configured === true;
+            const authenticated = config.authenticated === true;
+
+            const configuredStatus = document.getElementById('meli-configured-status');
+            configuredStatus.textContent = configured ? 'Configurado' : 'Pendiente';
+            configuredStatus.className = `status ${configured ? 'enabled' : 'disabled'}`;
+
+            const authStatus = document.getElementById('meli-auth-status');
+            authStatus.textContent = authenticated ? 'Autenticado' : 'Sin autenticar';
+            authStatus.className = `status ${authenticated ? 'enabled' : 'disabled'}`;
+
+            document.getElementById('meli-user-id').textContent = config.user_id || '-';
+            document.getElementById('meli-nickname').textContent = config.nickname || '-';
+            document.getElementById('meli-config-path').textContent = config.config_path || '-';
+            document.getElementById('meli-last-error').textContent = config.last_error || '-';
+        }
+
+        async function loadMercadoLibreConfig() {
+            const response = await fetchAPI('/api/mercadolibre/config');
+            if (response) {
+                mercadoLibreConfig = response;
+            } else {
+                mercadoLibreConfig = {};
+            }
+            updateMercadoLibreForm();
+        }
+
+        async function refreshMercadoLibreStatus() {
+            await loadMercadoLibreConfig();
+        }
+
+        function updateAdministradoForm() {
+            const config = administradoConfig || {};
+            document.getElementById('adm-enabled').checked = config.enabled === true;
+            document.getElementById('adm-sales-url').value = config.sales_url || 'https://www.administrado.net/seller/ventas3';
+            document.getElementById('adm-default-copies').value = config.default_copies || 1;
+            document.getElementById('adm-auto-crop-pdf').checked = config.auto_crop_pdf !== false;
+            document.getElementById('adm-cookie-header').value = '';
+            document.getElementById('adm-default-printer-manual').value = config.default_printer || '';
+
+            const configured = config.configured === true;
+            const status = document.getElementById('adm-configured-status');
+            status.textContent = configured ? 'Configurado' : 'Pendiente';
+            status.className = `status ${configured ? 'enabled' : 'disabled'}`;
+            document.getElementById('adm-playwright-session').textContent = config.playwright_session ? 'Guardada' : 'No';
+            document.getElementById('adm-config-path').textContent = config.config_path || '-';
+            document.getElementById('adm-storage-path').textContent = config.storage_state_path || '-';
+            document.getElementById('adm-last-error').textContent = config.last_error || '-';
+        }
+
+        async function loadAdministradoConfig() {
+            const response = await fetchAPI('/api/administrado/config');
+            administradoConfig = response || {};
+            updateAdministradoForm();
+            await loadAdministradoPrinters();
+        }
+
+        async function loadAdministradoPrinters() {
+            const select = document.getElementById('adm-default-printer');
+            const selected = administradoConfig.default_printer || '';
+            const data = await fetchAPI('/api/printers');
+            let printers = data && data.printers ? data.printers : [];
+            // Priorizar Godex, pero no ocultar el resto de impresoras disponibles.
+            printers = printers.sort((a, b) => {
+                const aGodex = a.toLowerCase().includes('godex') ? 1 : 0;
+                const bGodex = b.toLowerCase().includes('godex') ? 1 : 0;
+                return bGodex - aGodex;
+            });
+
+            if (!printers.length) {
+                select.innerHTML = '<option value=\"\">No se encontraron impresoras</option>';
+                return;
+            }
+
+            select.innerHTML = printers.map(printer =>
+                `<option value="${printer}" ${printer === selected ? 'selected' : ''}>${printer}</option>`
+            ).join('');
+
+            if (selected && !printers.includes(selected)) {
+                select.innerHTML += `<option value="${selected}" selected>${selected}</option>`;
+            }
+        }
+
         async function saveNotificationConfig() {
             const config = {
                 desktop_enabled: document.getElementById('desktop-notifications').checked,
@@ -301,17 +662,17 @@
 
                 if (response.ok) {
                     const result = await response.json();
-                    alert('OK: Configuración de notificaciones guardada');
+                    alert('OK: ConfiguraciÃ³n de notificaciones guardada');
                     console.log('Guardado en:', result.path);
                     notificationConfig = config;
                     updateNotificationForm();
                 } else {
                     const error = await response.text();
-                    alert(`Error guardando configuración: ${response.status}`);
+                    alert(`Error guardando configuraciÃ³n: ${response.status}`);
                     console.error('Error response:', error);
                 }
             } catch (error) {
-                alert(`Error de conexión: ${error.message}`);
+                alert(`Error de conexiÃ³n: ${error.message}`);
                 console.error('Connection error:', error);
             }
         }
@@ -337,18 +698,360 @@
 
                 if (response.ok) {
                     const result = await response.json();
-                    alert('OK: Configuración de backup guardada');
+                    alert('OK: ConfiguraciÃ³n de backup guardada');
                     console.log('Guardado en:', result.path);
                     backupConfig = config;
                     updateBackupForm();
                 } else {
                     const error = await response.text();
-                    alert(`Error guardando configuración: ${response.status}`);
+                    alert(`Error guardando configuraciÃ³n: ${response.status}`);
                     console.error('Error response:', error);
                 }
             } catch (error) {
-                alert(`Error de conexión: ${error.message}`);
+                alert(`Error de conexiÃ³n: ${error.message}`);
                 console.error('Connection error:', error);
+            }
+        }
+
+        async function saveMercadoLibreConfig() {
+            const config = {
+                enabled: document.getElementById('meli-enabled').checked,
+                client_id: document.getElementById('meli-client-id').value.trim(),
+                client_secret: document.getElementById('meli-client-secret').value.trim(),
+                redirect_uri: document.getElementById('meli-redirect-uri').value.trim(),
+                default_printer: document.getElementById('meli-default-printer').value.trim(),
+                default_copies: parseInt(document.getElementById('meli-default-copies').value, 10) || 1,
+                auto_print: document.getElementById('meli-auto-print').checked,
+                response_type: 'zpl2'
+            };
+
+            try {
+                const apiBase = await ensureApiPort();
+                const response = await fetch(`${apiBase}/api/mercadolibre/config`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(config)
+                });
+
+                if (response.ok) {
+                    mercadoLibreConfig = await response.json();
+                    updateMercadoLibreForm();
+                    alert('OK: Configuracion de Mercado Libre guardada');
+                } else {
+                    const error = await response.text();
+                    alert(`Error guardando Mercado Libre: ${response.status}`);
+                    console.error('Error Mercado Libre:', error);
+                }
+            } catch (error) {
+                alert(`Error de conexion: ${error.message}`);
+            }
+        }
+
+        async function startMercadoLibreOAuth() {
+            try {
+                await saveMercadoLibreConfig();
+                const apiBase = await ensureApiPort();
+                const response = await fetch(`${apiBase}/api/mercadolibre/auth-url?state=web-config`);
+                if (!response.ok) {
+                    throw new Error(await response.text());
+                }
+
+                const data = await response.json();
+                if (!data.auth_url) {
+                    throw new Error('La API no devolvio auth_url');
+                }
+
+                window.open(data.auth_url, '_blank');
+            } catch (error) {
+                alert(`Error iniciando OAuth: ${error.message}`);
+            }
+        }
+
+        async function testMercadoLibrePrint() {
+            const shipmentId = document.getElementById('meli-test-shipment-id').value.trim();
+            if (!shipmentId) {
+                alert('Ingresa un shipment ID');
+                return;
+            }
+
+            try {
+                const apiBase = await ensureApiPort();
+                const response = await fetch(`${apiBase}/api/mercadolibre/shipments/print`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        shipment_id: shipmentId,
+                        printer: document.getElementById('meli-default-printer').value.trim(),
+                        copies: parseInt(document.getElementById('meli-default-copies').value, 10) || 1,
+                        response_type: 'zpl2'
+                    })
+                });
+
+                const result = await response.json();
+                if (response.ok) {
+                    alert(`OK: Etiqueta enviada. Job ${result.print_job?.job_id || '-'}`);
+                } else {
+                    alert(`Error imprimiendo shipment: ${result.detail || response.status}`);
+                }
+            } catch (error) {
+                alert(`Error de conexion: ${error.message}`);
+            }
+        }
+
+        function renderMercadoLibreSales() {
+            const tbody = document.getElementById('meli-sales-body');
+            const summary = document.getElementById('meli-sync-summary');
+
+            if (!mercadoLibreSales.length) {
+                tbody.innerHTML = '<tr><td colspan="7">Sincroniza para ver ventas</td></tr>';
+                summary.textContent = 'Sin datos';
+                return;
+            }
+
+            const readyCount = mercadoLibreSales.filter(sale => sale.ready_to_print).length;
+            summary.textContent = `${readyCount} listas de ${mercadoLibreSales.length} ventas revisadas`;
+
+            tbody.innerHTML = mercadoLibreSales.map(sale => `
+                <tr>
+                    <td>${sale.order_id || '-'}</td>
+                    <td>${sale.shipment_id || '-'}</td>
+                    <td>${sale.buyer || '-'}</td>
+                    <td>${sale.title || '-'}</td>
+                    <td>${sale.shipment_status || '-'} ${sale.shipment_substatus ? `(${sale.shipment_substatus})` : ''}</td>
+                    <td><span class="status ${sale.ready_to_print ? 'ready' : 'not-ready'}">${sale.ready_to_print ? 'Si' : 'No'}</span></td>
+                    <td>${sale.ready_to_print ? `<button class="btn success" onclick="printSyncedShipment('${sale.shipment_id}')">Imprimir</button>` : (sale.error || '-')}</td>
+                </tr>
+            `).join('');
+        }
+
+        async function syncMercadoLibreSales() {
+            try {
+                const apiBase = await ensureApiPort();
+                const limit = parseInt(document.getElementById('meli-sync-limit').value, 10) || 20;
+                const response = await fetch(`${apiBase}/api/mercadolibre/sales/sync`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ limit })
+                });
+
+                const result = await response.json();
+                if (response.ok) {
+                    mercadoLibreSales = result.sales || [];
+                    renderMercadoLibreSales();
+                } else {
+                    mercadoLibreSales = [];
+                    renderMercadoLibreSales();
+                    alert(`Error sincronizando ventas: ${result.detail || response.status}`);
+                }
+            } catch (error) {
+                mercadoLibreSales = [];
+                renderMercadoLibreSales();
+                alert(`Error de conexion: ${error.message}`);
+            }
+        }
+
+        async function printSyncedShipment(shipmentId) {
+            document.getElementById('meli-test-shipment-id').value = shipmentId;
+            await testMercadoLibrePrint();
+        }
+
+        async function saveAdministradoConfig() {
+            const config = {
+                enabled: document.getElementById('adm-enabled').checked,
+                base_url: 'https://www.administrado.net',
+                sales_url: document.getElementById('adm-sales-url').value.trim(),
+                cookie_header: document.getElementById('adm-cookie-header').value.trim(),
+                default_printer: (
+                    document.getElementById('adm-default-printer-manual').value.trim() ||
+                    document.getElementById('adm-default-printer').value.trim()
+                ),
+                default_copies: parseInt(document.getElementById('adm-default-copies').value, 10) || 1,
+                auto_crop_pdf: document.getElementById('adm-auto-crop-pdf').checked
+            };
+
+            try {
+                const apiBase = await ensureApiPort();
+                const response = await fetch(`${apiBase}/api/administrado/config`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(config)
+                });
+                if (response.ok) {
+                    administradoConfig = await response.json();
+                    await loadAdministradoConfig();
+                    alert('OK: Configuracion de Administrado guardada');
+                } else {
+                    const error = await response.text();
+                    alert(`Error guardando Administrado: ${response.status}`);
+                    console.error(error);
+                }
+            } catch (error) {
+                alert(`Error de conexion: ${error.message}`);
+            }
+        }
+
+        async function testAdministradoSession() {
+            try {
+                await saveAdministradoConfig();
+                const apiBase = await ensureApiPort();
+                const response = await fetch(`${apiBase}/api/administrado/session/test`, { method: 'POST' });
+                const result = await response.json();
+                if (response.ok) {
+                    alert(result.ok ? `Sesion valida (${result.status_code})` : `Sesion no valida. URL final: ${result.final_url}`);
+                } else {
+                    alert(`Error probando sesion: ${result.detail || response.status}`);
+                }
+            } catch (error) {
+                alert(`Error de conexion: ${error.message}`);
+            }
+        }
+
+        async function importAdministradoCookies(browser) {
+            try {
+                const apiBase = await ensureApiPort();
+                const response = await fetch(`${apiBase}/api/administrado/cookies/import`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ browser, profile: '' })
+                });
+                const result = await response.json();
+                if (response.ok) {
+                    await loadAdministradoConfig();
+                    alert(`Cookies importadas desde ${result.browser} (${result.profile})`);
+                } else {
+                    alert(`Error importando cookies: ${result.detail || response.status}`);
+                }
+            } catch (error) {
+                alert(`Error de conexion: ${error.message}`);
+            }
+        }
+
+        async function captureAdministradoPlaywrightSession() {
+            try {
+                const apiBase = await ensureApiPort();
+                alert('Se abrira un navegador controlado. Inicia sesion en Administrado y espera a que la ventana se cierre sola.');
+                const response = await fetch(`${apiBase}/api/administrado/playwright/capture-session`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ timeout_seconds: 600 })
+                });
+                const result = await response.json();
+                if (response.ok) {
+                    await loadAdministradoConfig();
+                    alert('Sesion de Playwright guardada correctamente');
+                } else {
+                    alert(`Error capturando sesion: ${result.detail || response.status}`);
+                }
+            } catch (error) {
+                alert(`Error de conexion: ${error.message}`);
+            }
+        }
+
+        function renderAdministradoSales() {
+            const tbody = document.getElementById('adm-sales-body');
+            const summary = document.getElementById('adm-sync-summary');
+            if (!administradoSales.length) {
+                tbody.innerHTML = '<tr><td colspan="4">Sincroniza para ver etiquetas detectadas</td></tr>';
+                summary.textContent = 'Sin datos';
+                return;
+            }
+            summary.textContent = `${administradoSales.length} etiquetas detectadas`;
+            tbody.innerHTML = administradoSales.map(sale => `
+                <tr>
+                    <td>${sale.envio_id}</td>
+                    <td>${sale.customer_name || '-'}</td>
+                    <td>${sale.customer_username || '-'}</td>
+                    <td>
+                        <button class="btn success" onclick="printAdministradoShipment('${sale.envio_id}')">
+                            ${sale.print_mode === 'reimprimir' ? 'Reimprimir' : 'Imprimir'}
+                        </button>
+                    </td>
+                </tr>
+            `).join('');
+        }
+
+        async function syncAdministradoSales(options = {}) {
+            const silent = Boolean(options.silent);
+            if (administradoSyncInProgress) {
+                return;
+            }
+            administradoSyncInProgress = true;
+            const summary = document.getElementById('adm-sync-summary');
+            const syncBtn = document.getElementById('adm-sync-btn');
+            if (summary) {
+                summary.textContent = 'Sincronizando...';
+            }
+            if (syncBtn) {
+                syncBtn.disabled = true;
+            }
+            try {
+                const apiBase = await ensureApiPort();
+                const limit = parseInt(document.getElementById('adm-sync-limit').value, 10) || 20;
+                const response = await fetch(`${apiBase}/api/administrado/sales/sync`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ limit })
+                });
+                const result = await response.json();
+                if (response.ok) {
+                    administradoSales = result.sales || [];
+                    renderAdministradoSales();
+                } else {
+                    administradoSales = [];
+                    renderAdministradoSales();
+                    if (!silent) {
+                        alert(`Error sincronizando Administrado: ${result.detail || response.status}`);
+                    }
+                }
+            } catch (error) {
+                administradoSales = [];
+                renderAdministradoSales();
+                if (!silent) {
+                    alert(`Error de conexion: ${error.message}`);
+                }
+            } finally {
+                administradoSyncInProgress = false;
+                if (syncBtn) {
+                    syncBtn.disabled = false;
+                }
+            }
+        }
+
+        async function printAdministradoLabel() {
+            const envioId = document.getElementById('adm-test-envio-id').value.trim();
+            if (!envioId) {
+                alert('Ingresa un envio ID');
+                return;
+            }
+            await printAdministradoShipment(envioId);
+        }
+
+        async function printAdministradoShipment(envioId) {
+            try {
+                const apiBase = await ensureApiPort();
+                const response = await fetch(`${apiBase}/api/administrado/labels/print`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        envio_id: envioId,
+                        printer: (
+                            document.getElementById('adm-default-printer-manual').value.trim() ||
+                            document.getElementById('adm-default-printer').value.trim()
+                        )
+                    })
+                });
+                const result = await response.json();
+                if (response.ok) {
+                    const verification = result.verification || {};
+                    const status = verification.new_job_detected
+                        ? `Detectado en spooler (${(verification.new_job_ids || []).join(', ')})`
+                        : 'Enviado a impresora, sin confirmacion de spooler';
+                    alert(`OK: Etiqueta de envio ${envioId} procesada para ${result.printer}. ${status}`);
+                } else {
+                    alert(`Error imprimiendo etiqueta: ${result.detail || response.status}`);
+                }
+            } catch (error) {
+                alert(`Error de conexion: ${error.message}`);
             }
         }
 
@@ -356,13 +1059,13 @@
             try {
                 const response = await fetch(`${API_BASE}/api/backup/create`, { method: 'POST' });
                 if (response.ok) {
-                    alert('✅ Backup manual creado');
+                    alert('âœ… Backup manual creado');
                     loadBackups();
                 } else {
-                    alert('❌ Error creando backup');
+                    alert('âŒ Error creando backup');
                 }
             } catch (error) {
-                alert('❌ Error de conexión');
+                alert('âŒ Error de conexiÃ³n');
             }
         }
 
@@ -379,7 +1082,7 @@
                                 <small>${backup.type} - ${new Date(backup.created_at).toLocaleString()}</small>
                             </div>
                             <div>
-                                <button class="btn" onclick="restoreBackup('${backup.name}')">🔄 Restaurar</button>
+                                <button class="btn" onclick="restoreBackup('${backup.name}')">ðŸ”„ Restaurar</button>
                             </div>
                         </div>
                     `).join('');
@@ -392,7 +1095,7 @@
         }
 
         async function restoreBackup(backupName) {
-            if (!confirm(`¿Restaurar backup "${backupName}"? Esto sobrescribirá la configuración actual.`)) {
+            if (!confirm(`Â¿Restaurar backup "${backupName}"? Esto sobrescribirÃ¡ la configuraciÃ³n actual.`)) {
                 return;
             }
 
@@ -404,12 +1107,12 @@
                 });
 
                 if (response.ok) {
-                    alert('✅ Backup restaurado. Reinicia la aplicación.');
+                    alert('âœ… Backup restaurado. Reinicia la aplicaciÃ³n.');
                 } else {
-                    alert('❌ Error restaurando backup');
+                    alert('âŒ Error restaurando backup');
                 }
             } catch (error) {
-                alert('❌ Error de conexión');
+                alert('âŒ Error de conexiÃ³n');
             }
         }
 
@@ -417,34 +1120,46 @@
             try {
                 const response = await fetch(`${API_BASE}/api/test-notification`, { method: 'POST' });
                 if (response.ok) {
-                    alert('✅ Notificación de prueba enviada');
+                    alert('âœ… NotificaciÃ³n de prueba enviada');
                 } else {
-                    alert('❌ Error enviando notificación');
+                    alert('âŒ Error enviando notificaciÃ³n');
                 }
             } catch (error) {
-                alert('❌ Error de conexión');
+                alert('âŒ Error de conexiÃ³n');
             }
         }
 
         async function clearDatabase() {
-            if (!confirm('¿Limpiar toda la base de datos? Esta acción no se puede deshacer.')) {
+            if (!confirm('Â¿Limpiar toda la base de datos? Esta acciÃ³n no se puede deshacer.')) {
                 return;
             }
 
             try {
                 const response = await fetch(`${API_BASE}/api/database/clear`, { method: 'POST' });
                 if (response.ok) {
-                    alert('✅ Base de datos limpiada');
+                    alert('âœ… Base de datos limpiada');
                 } else {
-                    alert('❌ Error limpiando base de datos');
+                    alert('âŒ Error limpiando base de datos');
                 }
             } catch (error) {
-                alert('❌ Error de conexión');
+                alert('âŒ Error de conexiÃ³n');
             }
         }
 
         // Cargar configuraciones al iniciar
+        initViewMode();
+        focusSectionFromHash();
         loadConfigs();
+        window.addEventListener('hashchange', () => {
+            if (adminOnlyMode && window.location.hash !== '#administrado') {
+                window.location.hash = '#administrado';
+                return;
+            }
+            focusSectionFromHash();
+            autoSyncAdministradoIfNeeded(true);
+        });
     </script>
 </body>
 </html>
+
+

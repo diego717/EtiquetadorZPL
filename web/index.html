@@ -10,8 +10,8 @@
         .container { max-width: 1200px; margin: 0 auto; padding: 20px; }
         .header { background: #2c3e50; color: white; padding: 20px; border-radius: 8px; margin-bottom: 20px; }
         .card { background: white; border-radius: 8px; padding: 20px; margin-bottom: 20px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
-        .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 20px; }
-        .btn { background: #3498db; color: white; border: none; padding: 10px 20px; border-radius: 4px; cursor: pointer; }
+        .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 20px; margin-bottom: 20px; }
+        .btn { background: #3498db; color: white; border: none; padding: 10px 20px; border-radius: 4px; cursor: pointer; text-decoration: none; display: inline-block; }
         .btn:hover { background: #2980b9; }
         .status { padding: 4px 8px; border-radius: 4px; font-size: 12px; }
         .status.completed { background: #d4edda; color: #155724; }
@@ -20,23 +20,24 @@
         table { width: 100%; border-collapse: collapse; }
         th, td { padding: 12px; text-align: left; border-bottom: 1px solid #ddd; }
         th { background: #f8f9fa; }
-        .stats { display: flex; justify-content: space-around; text-align: center; }
+        .stats { display: flex; justify-content: space-around; text-align: center; gap: 20px; }
         .stat-item h3 { color: #3498db; font-size: 2em; margin-bottom: 5px; }
     </style>
 </head>
 <body>
     <div class="container">
         <div class="header">
-            <h1>🏷️ EtiquetadorZPL Dashboard</h1>
-            <p>Sistema de gestión de etiquetas ZPL</p>
+            <h1>EtiquetadorZPL Dashboard</h1>
+            <p>Sistema de gestion de etiquetas ZPL</p>
             <div style="margin-top: 10px;">
-                <a href="config.html" class="btn">⚙️ Configuración</a>
+                <a href="config.html" class="btn">Configuracion</a>
+                <a href="cloud.html" class="btn" style="margin-left: 8px;">Cloud</a>
             </div>
         </div>
 
         <div class="grid">
             <div class="card">
-                <h2>📊 Estadísticas</h2>
+                <h2>Estadisticas</h2>
                 <div class="stats" id="stats">
                     <div class="stat-item">
                         <h3 id="total-jobs">-</h3>
@@ -54,45 +55,85 @@
             </div>
 
             <div class="card">
-                <h2>🖨️ Impresoras</h2>
+                <h2>Impresoras</h2>
                 <div id="printers">Cargando...</div>
-                <button class="btn" onclick="refreshPrinters()">🔄 Actualizar</button>
+                <button class="btn" onclick="refreshPrinters()">Actualizar</button>
+            </div>
+
+            <div class="card">
+                <h2>Mercado Libre</h2>
+                <p style="color: #666; margin-bottom: 10px;">Estado de la integracion directa de etiquetas</p>
+                <p>Configurado: <span id="meli-configured">-</span></p>
+                <p>Autenticado: <span id="meli-authenticated">-</span></p>
+                <p>Usuario: <span id="meli-user">-</span></p>
+                <div style="margin-top: 15px; display: flex; gap: 10px; flex-wrap: wrap;">
+                    <a href="config.html#mercadolibre" class="btn">Configurar</a>
+                    <button class="btn" onclick="loadMercadoLibreStatus()">Actualizar</button>
+                </div>
             </div>
         </div>
 
         <div class="card">
-            <h2>📋 Trabajos Recientes</h2>
+            <h2>Impresoras de Red</h2>
+            <p style="color: #666; margin-bottom: 10px;">Impresoras de red detectadas en el sistema</p>
+            <div id="network-printers" style="margin-bottom: 15px; padding: 10px; background: #e8f4f8; border-radius: 4px;">
+                <strong>Impresoras de red detectadas:</strong>
+                <span id="network-printers-list">Cargando...</span>
+            </div>
+            <button class="btn" onclick="loadNetworkPrinters()">Actualizar Impresoras de Red</button>
+        </div>
+
+        <div class="card">
+            <h2>Trabajos Recientes</h2>
             <table id="jobs-table">
                 <thead>
                     <tr>
                         <th>ID</th>
                         <th>Archivo</th>
+                        <th>Usuario</th>
+                        <th>Equipo</th>
                         <th>Impresora</th>
                         <th>Estado</th>
-                        <th>Error</th>
                         <th>Creado</th>
-                        <th>Tiempo</th>
                     </tr>
                 </thead>
                 <tbody id="jobs-body">
                     <tr><td colspan="7">Cargando...</td></tr>
                 </tbody>
             </table>
-            <button class="btn" onclick="refreshJobs()">🔄 Actualizar</button>
+            <button class="btn" onclick="refreshJobs()">Actualizar</button>
+        </div>
+
+        <div class="card">
+            <h2>Registro de Usuarios</h2>
+            <p style="color: #666; margin-bottom: 10px;">Historial de documentos enviados por usuario y equipo</p>
+            <table id="users-table">
+                <thead>
+                    <tr>
+                        <th>Usuario</th>
+                        <th>Equipo</th>
+                        <th>Total</th>
+                        <th>Exitosos</th>
+                        <th>Fallidos</th>
+                    </tr>
+                </thead>
+                <tbody id="users-body">
+                    <tr><td colspan="5">Cargando...</td></tr>
+                </tbody>
+            </table>
+            <button class="btn" onclick="loadUserStats()">Actualizar Registro</button>
         </div>
     </div>
 
     <script src="config.js"></script>
     <script>
-        
         async function fetchAPI(endpoint) {
             try {
-                // Asegurar que tenemos el puerto correcto
                 if (!API_BASE || API_BASE.includes('8003')) {
                     const port = await getApiPort();
                     API_BASE = `http://localhost:${port}`;
                 }
-                
+
                 const response = await fetch(`${API_BASE}${endpoint}`);
                 if (!response.ok) {
                     throw new Error(`HTTP ${response.status}`);
@@ -116,32 +157,41 @@
         async function loadPrinters() {
             const data = await fetchAPI('/api/printers');
             const printersDiv = document.getElementById('printers');
-            
+
             if (data && data.printers) {
-                printersDiv.innerHTML = data.printers.map(printer => 
-                    `<div style="padding: 5px; border-left: 3px solid #3498db; margin: 5px 0; background: #f8f9fa;">
-                        ${printer}
-                    </div>`
+                printersDiv.innerHTML = data.printers.map(printer =>
+                    `<div style="padding: 5px; border-left: 3px solid #3498db; margin: 5px 0; background: #f8f9fa;">${printer}</div>`
                 ).join('');
             } else {
                 printersDiv.innerHTML = '<p>No se pudieron cargar las impresoras</p>';
             }
         }
 
+        async function loadNetworkPrinters() {
+            const networkData = await fetchAPI('/api/printers/network');
+            const printersList = document.getElementById('network-printers-list');
+
+            if (networkData && networkData.printers) {
+                printersList.textContent = networkData.printers.length > 0
+                    ? networkData.printers.join(', ')
+                    : 'No hay impresoras de red detectadas';
+            }
+        }
+
         async function loadJobs() {
             const data = await fetchAPI('/api/jobs');
             const tbody = document.getElementById('jobs-body');
-            
+
             if (data && data.jobs) {
                 tbody.innerHTML = data.jobs.map(job => `
                     <tr>
                         <td>${job.id}</td>
                         <td>${job.filename}</td>
+                        <td>${job.username || '-'}</td>
+                        <td>${job.hostname || '-'}</td>
                         <td>${job.printer}</td>
                         <td><span class="status ${job.status}">${job.status}</span></td>
-                        <td>${job.error_message || '-'}</td>
                         <td>${new Date(job.created_at).toLocaleString()}</td>
-                        <td>${job.processing_time ? job.processing_time.toFixed(2) + 's' : '-'}</td>
                     </tr>
                 `).join('');
             } else {
@@ -149,18 +199,53 @@
             }
         }
 
+        async function loadUserStats() {
+            const data = await fetchAPI('/api/statistics/users');
+            const tbody = document.getElementById('users-body');
+
+            if (data && data.users) {
+                if (data.users.length === 0) {
+                    tbody.innerHTML = '<tr><td colspan="5">No hay datos de usuarios</td></tr>';
+                } else {
+                    tbody.innerHTML = data.users.map(user => `
+                        <tr>
+                            <td><strong>${user.username}</strong></td>
+                            <td>${user.hostname}</td>
+                            <td>${user.total}</td>
+                            <td><span class="status completed">${user.completed}</span></td>
+                            <td><span class="status failed">${user.failed}</span></td>
+                        </tr>
+                    `).join('');
+                }
+            } else {
+                tbody.innerHTML = '<tr><td colspan="5">No se pudieron cargar las estadisticas</td></tr>';
+            }
+        }
+
+        async function loadMercadoLibreStatus() {
+            const data = await fetchAPI('/api/mercadolibre/status');
+            document.getElementById('meli-configured').textContent = data?.configured ? 'Si' : 'No';
+            document.getElementById('meli-authenticated').textContent = data?.authenticated ? 'Si' : 'No';
+            document.getElementById('meli-user').textContent = data?.nickname || data?.user_id || '-';
+        }
+
         function refreshPrinters() { loadPrinters(); }
         function refreshJobs() { loadJobs(); }
 
-        // Cargar datos iniciales
         loadStatistics();
         loadPrinters();
+        loadNetworkPrinters();
         loadJobs();
+        loadUserStats();
+        loadMercadoLibreStatus();
 
-        // Auto-refresh cada 30 segundos
         setInterval(() => {
             loadStatistics();
+            loadPrinters();
+            loadNetworkPrinters();
             loadJobs();
+            loadUserStats();
+            loadMercadoLibreStatus();
         }, 30000);
     </script>
 </body>

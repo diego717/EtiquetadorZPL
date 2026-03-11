@@ -28,7 +28,16 @@ def create_icon_first():
         print("0. Creando icono...")
         try:
             exec(open('create_icon.py').read())
-            print("OK: Icono creado")
+            if Path('etiquetador_icon.ico').exists():
+                print("OK: Icono creado")
+                # Habilitar icono en Inno Setup
+                with open('EtiquetadorZPL_Simple.iss', 'r') as f:
+                    content = f.read()
+                content = content.replace('; SetupIconFile=etiquetador_icon.ico', 'SetupIconFile=etiquetador_icon.ico')
+                with open('EtiquetadorZPL_Simple.iss', 'w') as f:
+                    f.write(content)
+            else:
+                print("AVISO: No se pudo crear icono")
         except Exception as e:
             print(f"AVISO: No se pudo crear icono: {e}")
 
@@ -36,9 +45,28 @@ def build_executable_first():
     """Construir ejecutable con PyInstaller primero"""
     print("1. Construyendo ejecutable con PyInstaller...")
     
+    # Verificar que existe el spec file
+    if not Path("EtiquetadorZPL_Complete.spec").exists():
+        print("ERROR: No se encontro EtiquetadorZPL_Complete.spec")
+        return False
+    
+    # Verificar que existe el launcher
+    if not Path("launcher_modern.py").exists():
+        print("ERROR: No se encontro launcher_modern.py")
+        return False
+    
     try:
         # Instalar PyInstaller si no está
-        subprocess.run([sys.executable, "-m", "pip", "install", "pyinstaller"], check=True)
+        print("Verificando PyInstaller...")
+        subprocess.run([sys.executable, "-m", "pip", "install", "pyinstaller"], 
+                      capture_output=True, check=True)
+        
+        # Limpiar build anterior
+        import shutil
+        for dir_name in ['build', 'dist']:
+            if Path(dir_name).exists():
+                shutil.rmtree(dir_name)
+                print(f"Limpiado: {dir_name}/")
         
         # Comando PyInstaller optimizado
         cmd = [
@@ -48,11 +76,17 @@ def build_executable_first():
             "EtiquetadorZPL_Complete.spec"
         ]
         
+        print("Ejecutando PyInstaller...")
         result = subprocess.run(cmd, capture_output=True, text=True)
         
         if result.returncode == 0:
-            print("OK: Ejecutable creado: dist/EtiquetadorZPL.exe")
-            return True
+            if Path("dist/EtiquetadorZPL.exe").exists():
+                size_mb = Path("dist/EtiquetadorZPL.exe").stat().st_size / (1024 * 1024)
+                print(f"OK: Ejecutable creado: dist/EtiquetadorZPL.exe ({size_mb:.1f} MB)")
+                return True
+            else:
+                print("ERROR: PyInstaller termino pero no se creo el ejecutable")
+                return False
         else:
             print("ERROR: Error creando ejecutable:")
             print(result.stderr)
@@ -64,7 +98,7 @@ def build_executable_first():
 
 def build_installer():
     """Construir instalador con Inno Setup"""
-    print("2. Construyendo instalador con Inno Setup...")
+    print("3. Construyendo instalador con Inno Setup...")
     
     # Verificar Inno Setup
     iscc_path = check_inno_setup()
@@ -140,30 +174,50 @@ Requisitos: Windows 10/11 (64-bit)
     
     print("INFO: Informacion de build guardada: BUILD_INFO.txt")
 
+def verify_before_build():
+    """Verificar paths antes del build"""
+    print("0. Verificando paths y archivos...")
+    try:
+        from verify_paths import verify_paths
+        if not verify_paths():
+            print("ERROR: Faltan archivos críticos")
+            return False
+        print("OK: Todos los archivos verificados")
+        return True
+    except Exception as e:
+        print(f"AVISO: No se pudo ejecutar verificación: {e}")
+        return True  # Continuar si no se puede verificar
+
 def main():
     """Función principal"""
     print("=== Constructor de Instalador EtiquetadorZPL ===")
     print("Usando: PyInstaller + Inno Setup")
     print()
     
-    # Paso 0: Crear icono
+    # Paso 0: Verificar paths
+    if not verify_before_build():
+        return False
+    
+    print()
+    
+    # Paso 1: Crear icono
     create_icon_first()
     
-    # Paso 1: Construir ejecutable
+    # Paso 2: Construir ejecutable
     if not build_executable_first():
         print("ERROR: Fallo la construccion del ejecutable")
         return False
     
     print()
     
-    # Paso 2: Construir instalador
+    # Paso 3: Construir instalador
     if not build_installer():
         print("ERROR: Fallo la construccion del instalador")
         return False
     
     print()
     
-    # Paso 3: Crear información
+    # Paso 4: Crear información
     create_build_info()
     
     print()
