@@ -1,0 +1,165 @@
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    min-height: 100vh;
+}
+
+.container {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 20px;
+}
+
+header {
+    text-align: center;
+    margin-bottom: 30px;
+}
+
+header h1 {
+    color: white;
+    font-size: 2.5em;
+    text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
+}
+
+.config-section {
+    background: white;
+    border-radius: 10px;
+    padding: 20px;
+    margin-bottom: 20px;
+    box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+}
+
+.tabs {
+    display: flex;
+    margin-bottom: 20px;
+}
+
+.tab-button {
+    flex: 1;
+    padding: 10px;
+    border: none;
+    background: #f0f0f0;
+    cursor: pointer;
+    border-radius: 5px 5px 0 0;
+    margin-right: 2px;
+}
+
+.tab-button.active {
+    background: #007bff;
+    color: white;
+}
+
+.folder-config {
+    display: none;
+    padding: 20px;
+    border: 1px solid #ddd;
+    border-radius: 0 5px 5px 5px;
+}
+
+.folder-config.active {
+    display: block;
+}
+
+.form-group {
+    margin-bottom: 15px;
+}
+
+.form-group label {
+    display: block;
+    margin-bottom: 5px;
+    font-weight: bold;
+}
+
+.form-group input, .form-group select {
+    width: 100%;
+    padding: 8px;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    font-size: 14px;
+}
+
+.form-group.inline {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.form-group.inline input[type="checkbox"] {
+    width: auto;
+}
+
+.btn {
+    padding: 10px 20px;
+    border: none;
+    border-radius: 5px;
+    cursor: pointer;
+    font-size: 14px;
+    margin: 5px;
+    transition: background-color 0.3s;
+}
+
+.btn-primary { background: #007bff; color: white; }
+.btn-secondary { background: #6c757d; color: white; }
+.btn-success { background: #28a745; color: white; }
+.btn-info { background: #17a2b8; color: white; }
+.btn-small { padding: 5px 10px; font-size: 12px; }
+
+.btn:hover:not(:disabled) {
+    opacity: 0.8;
+}
+
+.btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.controls {
+    text-align: center;
+    margin: 20px 0;
+}
+
+.status-section {
+    background: white;
+    border-radius: 10px;
+    padding: 20px;
+    margin-bottom: 20px;
+    box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+    text-align: center;
+}
+
+.status {
+    font-size: 1.2em;
+    font-weight: bold;
+    padding: 10px;
+    border-radius: 5px;
+    background: #f8f9fa;
+}
+
+.log-section {
+    background: white;
+    border-radius: 10px;
+    padding: 20px;
+    box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+}
+
+.log-controls {
+    margin-bottom: 10px;
+}
+
+.log-container {
+    height: 300px;
+    overflow-y: auto;
+    background: #f8f9fa;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    padding: 10px;
+    font-family: 'Courier New', monospace;
+    font-size: 12px;
+    white-space: pre-wrap;
+}

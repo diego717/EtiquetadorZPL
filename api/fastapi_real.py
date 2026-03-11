@@ -7,10 +7,17 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse, RedirectResponse
 from pydantic import BaseModel
 import uvicorn
+import base64
+import hashlib
 import json
+import os
+import socket
 import sys
 import threading
 import time
+import logging
+import tempfile
+from logging.handlers import RotatingFileHandler
 from pathlib import Path
 from typing import Optional, List, Dict, Any
 
@@ -47,6 +54,41 @@ app = FastAPI(
     version="1.0.0"
 )
 
+# Incluir endpoints de Electron
+try:
+    from electron_endpoints import router as electron_router
+    app.include_router(electron_router)
+except ImportError:
+    print("ADVERTENCIA: Endpoints de Electron no disponibles")
+
+# Incluir endpoints de Mercado Libre
+try:
+    from mercadolibre_endpoints import router as mercadolibre_router
+    app.include_router(mercadolibre_router)
+except ImportError as e:
+    print(f"ADVERTENCIA: Endpoints de Mercado Libre no disponibles: {e}")
+
+# Incluir endpoints de Administrado
+try:
+    from administrado_endpoints import router as administrado_router
+    app.include_router(administrado_router)
+except ImportError as e:
+    print(f"ADVERTENCIA: Endpoints de Administrado no disponibles: {e}")
+
+# Incluir endpoints de Auth Cloud (separado del flujo legacy)
+try:
+    from auth_endpoints import router as auth_router
+    app.include_router(auth_router)
+except ImportError as e:
+    print(f"ADVERTENCIA: Endpoints de Auth no disponibles: {e}")
+
+# Incluir endpoints de Cola Cloud (separado del flujo legacy)
+try:
+    from cloud_print_endpoints import router as cloud_print_router
+    app.include_router(cloud_print_router)
+except ImportError as e:
+    print(f"ADVERTENCIA: Endpoints de Cola Cloud no disponibles: {e}")
+
 # Montar archivos estáticos
 try:
     if Path("web").exists():
@@ -65,10 +107,36 @@ cache = {
     "stats_cache_time": 0
 }
 
+PNG_BASE64_PREFIX = "PNG_BASE64:"
+
+
+def _build_print_audit_logger() -> logging.Logger:
+    """Create a dedicated logger for print dispatch diagnostics."""
+    logger = logging.getLogger("print_dispatch_audit")
+    if logger.handlers:
+        return logger
+
+    log_dir = project_root / "logs"
+    log_dir.mkdir(parents=True, exist_ok=True)
+    handler = RotatingFileHandler(
+        log_dir / "print_dispatch.log",
+        maxBytes=2 * 1024 * 1024,
+        backupCount=5,
+        encoding="utf-8",
+    )
+    handler.setFormatter(logging.Formatter("%(asctime)s | %(message)s"))
+    logger.setLevel(logging.INFO)
+    logger.addHandler(handler)
+    logger.propagate = False
+    return logger
+
+
+PRINT_AUDIT_LOGGER = _build_print_audit_logger()
+
 @app.get("/")
 async def root():
     """Redirigir a dashboard"""
-    return RedirectResponse(url="/web/index.html")
+    return RedirectResponse(url="/web/config.html#administrado")
 
 @app.get("/api/status")
 async def get_status():
@@ -77,7 +145,7 @@ async def get_status():
 
 @app.get("/api/printers")
 async def get_printers():
-    """Obtener lista de impresoras"""
+    """Obtener lista de impresoras (todas)"""
     try:
         # Cache de 30 segundos
         if time.time() - cache["printer_cache_time"] > 30:
@@ -96,6 +164,29 @@ async def get_printers():
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
+@app.get("/api/printers/network")
+async def get_network_printers_endpoint():
+    """Obtener impresoras de red disponibles"""
+    try:
+        from print_queue_monitor import get_network_printers as get_net_printers, get_printer_status
+        
+        printers = get_net_printers()
+        printer_status = []
+        
+        for printer in printers:
+            status = get_printer_status(printer)
+            if status:
+                printer_status.append(status)
+        
+        return {
+            "printers": printers,
+            "printer_status": printer_status,
+            "count": len(printers)
+        }
+    except Exception as e:
+        print(f"Error en get_network_printers_endpoint: {e}")
+        return {"printers": [], "count": 0, "error": str(e)}
+
 @app.get("/api/jobs")
 async def get_jobs():
     """Obtener trabajos recientes"""
@@ -109,6 +200,45 @@ async def get_jobs():
     except Exception as e:
         print(f"Error en get_jobs: {e}")
         return {"jobs": [], "count": 0, "error": "Base de datos no disponible"}
+
+@app.get("/api/jobs/spooler")
+async def get_spooler_jobs(max_jobs: int = 20):
+    """Obtener trabajos del spooler de Windows (impresoras de red)"""
+    try:
+        from print_queue_monitor import get_recent_print_jobs_from_network, get_network_printers
+        
+        # Obtener impresoras de red
+        network_printers = get_network_printers()
+        
+        # Obtener trabajos recientes
+        jobs = get_recent_print_jobs_from_network(max_jobs)
+        
+        return {
+            "jobs": jobs,
+            "count": len(jobs),
+            "network_printers": network_printers,
+            "source": "Windows Print Spooler"
+        }
+    except Exception as e:
+        print(f"Error en get_spooler_jobs: {e}")
+        return {"jobs": [], "count": 0, "error": str(e)}
+
+@app.get("/api/printers/{printer_name}/jobs")
+async def get_printer_jobs(printer_name: str, max_jobs: int = 20):
+    """Obtener trabajos de una impresora específica"""
+    try:
+        from print_queue_monitor import get_print_jobs_from_spooler
+        
+        jobs = get_print_jobs_from_spooler(printer_name, max_jobs)
+        
+        return {
+            "printer_name": printer_name,
+            "jobs": jobs,
+            "count": len(jobs)
+        }
+    except Exception as e:
+        print(f"Error en get_printer_jobs: {e}")
+        return {"printer_name": printer_name, "jobs": [], "count": 0, "error": str(e)}
 
 @app.get("/api/jobs/{job_id}")
 async def get_job(job_id: int):
@@ -144,22 +274,37 @@ async def get_statistics():
         print(f"Error en get_statistics: {e}")
         return {"total_jobs": 0, "completed": 0, "failed": 0, "error": "Estadísticas no disponibles"}
 
+@app.get("/api/statistics/users")
+async def get_user_statistics():
+    """Obtener estadísticas por usuario/equipo"""
+    try:
+        from database import db
+        users = db.get_user_statistics()
+        return {"users": users, "count": len(users)}
+    except Exception as e:
+        print(f"Error en get_user_statistics: {e}")
+        return {"users": [], "count": 0, "error": str(e)}
+
 @app.post("/api/process-file")
 async def process_file(request: ProcessFileRequest, background_tasks: BackgroundTasks):
     """Procesar archivo"""
     try:
+        logging.info(f"Procesando archivo: {request.filename} -> {request.printer} ({request.copies} copias)")
+        
         # Intentar usar base de datos
         try:
             from database import db
+            content_type = "png" if request.content.startswith(PNG_BASE64_PREFIX) else "zpl"
             job_id = db.add_job(
                 filename=request.filename,
                 printer=request.printer,
-                content_type='zpl',
+                content_type=content_type,
                 copies=request.copies,
                 file_size=len(request.content)
             )
+            logging.info(f"Trabajo creado en BD con ID: {job_id}")
         except Exception as e:
-            print(f"BD no disponible, usando ID temporal: {e}")
+            logging.warning(f"BD no disponible, usando ID temporal: {e}")
             import random
             job_id = random.randint(1000, 9999)
         
@@ -172,51 +317,224 @@ async def process_file(request: ProcessFileRequest, background_tasks: Background
             request.copies
         )
         
+        logging.info(f"Trabajo {job_id} enviado a procesamiento en background")
         return {"job_id": job_id, "status": "processing"}
     except Exception as e:
-        print(f"Error en process_file: {e}")
+        logging.error(f"Error en process_file: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
+def _print_job_content(content: str, printer: str, copies: int) -> tuple[bool, Optional[str]]:
+    """Imprime contenido recibido por API. Soporta ZPL y PNG base64."""
+    safe_copies = max(1, int(copies or 1))
+
+    if content.startswith(PNG_BASE64_PREFIX):
+        encoded_png = content[len(PNG_BASE64_PREFIX):].strip()
+        if not encoded_png:
+            return False, "Contenido PNG vacio"
+
+        try:
+            png_bytes = base64.b64decode(encoded_png, validate=True)
+        except Exception as exc:
+            return False, f"PNG base64 invalido: {exc}"
+
+        if not png_bytes:
+            return False, "Contenido PNG vacio"
+
+        temp_path = None
+        try:
+            with tempfile.NamedTemporaryFile(delete=False, suffix=".png") as temp_file:
+                temp_file.write(png_bytes)
+                temp_path = temp_file.name
+
+            from pdf_printer import imprimir_png
+            for copy_idx in range(safe_copies):
+                if not imprimir_png(temp_path, printer):
+                    return False, f"Fallo al imprimir PNG en copia {copy_idx + 1}/{safe_copies}"
+            return True, None
+        except Exception as exc:
+            return False, f"Error imprimiendo PNG: {exc}"
+        finally:
+            if temp_path:
+                try:
+                    Path(temp_path).unlink(missing_ok=True)
+                except Exception:
+                    pass
+
+    if not content.strip():
+        return False, "Contenido ZPL vacio"
+
+    try:
+        from printer import imprimir_zpl_directo
+        if not imprimir_zpl_directo(content, printer, safe_copies):
+            return False, "Fallo al imprimir contenido ZPL"
+        return True, None
+    except Exception as exc:
+        return False, f"Error imprimiendo ZPL: {exc}"
+
+
+def _content_kind(content: str) -> str:
+    return "png" if content.startswith(PNG_BASE64_PREFIX) else "zpl"
+
+
+def _content_digest(content: str) -> str:
+    try:
+        return hashlib.sha1(content.encode("utf-8", errors="ignore")).hexdigest()[:16]
+    except Exception:
+        return "unavailable"
+
+
+def _spooler_snapshot(printer: str, max_jobs: int = 5) -> Dict[str, Any]:
+    normalized_printer = (printer or "").strip()
+    snapshot: Dict[str, Any] = {
+        "printer": normalized_printer,
+        "job_count": 0,
+        "jobs": [],
+        "error": None,
+    }
+
+    try:
+        from print_queue_monitor import get_print_jobs_from_spooler
+
+        jobs = get_print_jobs_from_spooler(normalized_printer or None, max_jobs=max_jobs)
+        snapshot["job_count"] = len(jobs)
+        snapshot["jobs"] = [
+            {
+                "job_id": job.get("job_id"),
+                "document_name": job.get("document_name"),
+                "status": job.get("status"),
+                "submitted_time": job.get("submitted_time"),
+                "size": job.get("size"),
+            }
+            for job in jobs
+        ]
+    except Exception as exc:
+        snapshot["error"] = str(exc)
+
+    return snapshot
+
+
+def _log_print_dispatch(
+    *,
+    job_id: int,
+    printer: str,
+    copies: int,
+    content: str,
+    result: str,
+    error: Optional[str] = None,
+    processing_time: Optional[float] = None,
+) -> None:
+    payload = {
+        "job_id": job_id,
+        "printer": printer,
+        "copies": max(1, int(copies or 1)),
+        "content_type": _content_kind(content),
+        "content_length": len(content),
+        "content_sha1_16": _content_digest(content),
+        "result": result,
+        "error": error,
+        "processing_time_sec": round(processing_time, 4) if processing_time is not None else None,
+        "spooler": _spooler_snapshot(printer, max_jobs=5),
+    }
+
+    try:
+        PRINT_AUDIT_LOGGER.info(json.dumps(payload, ensure_ascii=False))
+    except Exception as exc:
+        logging.warning(f"No se pudo registrar audit log de impresion para job {job_id}: {exc}")
 
 async def process_job_background(job_id: int, content: str, printer: str, copies: int):
     """Procesar trabajo en background"""
     start_time = time.time()
+    logging.info(f"Iniciando procesamiento background del trabajo {job_id}")
     
     try:
         from database import db
         db.update_job_status(job_id, 'processing')
+        logging.info(f"Trabajo {job_id} marcado como 'processing'")
         
         # Validación de impresora
-        if printer == "IMPRESORA_NO_CONFIGURADA":
+        if not printer or printer == "IMPRESORA_NO_CONFIGURADA":
             processing_time = time.time() - start_time
+            logging.warning(f"Trabajo {job_id} fallido: Impresora no configurada")
             db.update_job_status(job_id, 'failed', 'Impresora no configurada', processing_time)
             await send_notification(job_id, 'failed', 'Impresora no configurada')
+            _log_print_dispatch(
+                job_id=job_id,
+                printer=printer,
+                copies=copies,
+                content=content,
+                result="failed_no_printer",
+                error="Impresora no configurada",
+                processing_time=processing_time,
+            )
             return
         
         # Validar que la impresora existe
-        from printer_utils import obtener_impresoras
-        impresoras_disponibles = obtener_impresoras()
-        
-        if printer not in impresoras_disponibles:
-            processing_time = time.time() - start_time
-            error_msg = f'Impresora "{printer}" no encontrada'
-            db.update_job_status(job_id, 'failed', error_msg, processing_time)
-            await send_notification(job_id, 'failed', error_msg)
-            return
+        try:
+            from printer_utils import obtener_impresoras
+            impresoras_disponibles = obtener_impresoras()
+            logging.info(f"Impresoras disponibles: {impresoras_disponibles}")
+            
+            if printer not in impresoras_disponibles:
+                logging.warning(
+                    f'Impresora "{printer}" no encontrada en listado local. '
+                    "Se intentara imprimir de todas formas."
+                )
+        except Exception as e:
+            logging.warning(f"No se pudo verificar impresoras: {e}. Continuando...")
         
         # Procesamiento real
-        time.sleep(0.1)  # Simular procesamiento
+        logging.info(f"Procesando trabajo {job_id} en impresora {printer}")
+        print_ok, print_error = _print_job_content(content, printer, copies)
+        if not print_ok:
+            processing_time = time.time() - start_time
+            error_msg = print_error or "Error de impresion desconocido"
+            logging.error(f"Trabajo {job_id} fallido: {error_msg}")
+            db.update_job_status(job_id, 'failed', error_msg, processing_time)
+            await send_notification(job_id, 'failed', error_msg)
+            _log_print_dispatch(
+                job_id=job_id,
+                printer=printer,
+                copies=copies,
+                content=content,
+                result="failed_print",
+                error=error_msg,
+                processing_time=processing_time,
+            )
+            return
         
         # Marcar como completado
         processing_time = time.time() - start_time
+        logging.info(f"Trabajo {job_id} completado en {processing_time:.2f}s")
         db.update_job_status(job_id, 'completed', None, processing_time)
         await send_notification(job_id, 'completed', None)
+        _log_print_dispatch(
+            job_id=job_id,
+            printer=printer,
+            copies=copies,
+            content=content,
+            result="completed",
+            processing_time=processing_time,
+        )
         
     except Exception as e:
         processing_time = time.time() - start_time
-        from database import db
+        logging.error(f"Error procesando trabajo {job_id}: {e}")
         error_msg = str(e)
-        db.update_job_status(job_id, 'failed', error_msg, processing_time)
-        await send_notification(job_id, 'failed', error_msg)
+        try:
+            from database import db
+            db.update_job_status(job_id, 'failed', error_msg, processing_time)
+            await send_notification(job_id, 'failed', error_msg)
+        except Exception as e2:
+            logging.error(f"Error actualizando estado fallido del trabajo {job_id}: {e2}")
+        _log_print_dispatch(
+            job_id=job_id,
+            printer=printer,
+            copies=copies,
+            content=content,
+            result="failed_exception",
+            error=error_msg,
+            processing_time=processing_time,
+        )
 
 async def send_notification(job_id: int, status: str, error_msg: Optional[str]):
     """Enviar notificación"""
@@ -346,17 +664,31 @@ async def get_system_metrics():
         raise HTTPException(status_code=500, detail=str(e))
 
 def find_free_port():
-    """Encontrar puerto libre"""
-    import socket
-    for port in [8002, 8003, 8004, 8005]:  # Puertos específicos
-        try:
-            with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
-                s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-                s.bind(('127.0.0.1', port))
-                return port
-        except OSError:
-            continue
+    """Usar puerto fijo para Electron"""
     return 8002
+
+
+def _is_port_listening(port: int, host: str = "127.0.0.1", timeout: float = 1.0) -> bool:
+    try:
+        with socket.create_connection((host, port), timeout=timeout):
+            return True
+    except OSError:
+        return False
+
+
+def _is_etiquetador_api_running(port: int) -> bool:
+    if not _is_port_listening(port):
+        return False
+
+    try:
+        import requests
+
+        response = requests.get(f"http://127.0.0.1:{port}/api/status", timeout=2)
+        data = response.json() if response.headers.get("content-type", "").startswith("application/json") else {}
+        return response.status_code == 200 and data.get("framework") == "FastAPI"
+    except Exception:
+        return False
+
 
 def start_fastapi_server():
     """Iniciar servidor FastAPI"""
@@ -373,11 +705,18 @@ def start_fastapi_server():
         
         # Configurar logging
         try:
-            from log_config import setup_logging
-            log_dir = setup_logging()
+            from config_manager import get_config_manager
+            config_mgr = get_config_manager()
+            log_dir = config_mgr.get_log_directory()
             print(f"Logs configurados en: {log_dir}")
         except Exception as e:
             print(f"Error configurando logs: {e}")
+            try:
+                from log_config import setup_logging
+                log_dir = setup_logging()
+                print(f"Logs configurados (fallback) en: {log_dir}")
+            except Exception as e2:
+                print(f"Error configurando logs fallback: {e2}")
         
         # Inicializar base de datos en background (opcional)
         try:
@@ -386,14 +725,22 @@ def start_fastapi_server():
         except Exception as e:
             print(f"ADVERTENCIA: BD no disponible - Dashboard funcionará con datos limitados: {e}")
         
+        # Si ya hay una instancia corriendo en el puerto fijo, reutilizarla.
+        if _is_etiquetador_api_running(port):
+            print(f"API ya está ejecutándose en http://127.0.0.1:{port} (se reutiliza la instancia existente)")
+            return
+
         # Verificar que uvicorn funciona
         print("Iniciando servidor uvicorn...")
         
         # Usar uvicorn.run directamente
-        print(f"Iniciando servidor en http://127.0.0.1:{port}")
+        host = os.environ.get("ETIQUETADOR_API_HOST", "0.0.0.0").strip() or "0.0.0.0"
+        print(f"Iniciando servidor en http://{host}:{port}")
+        if host == "0.0.0.0":
+            print(f"Acceso por red local: http://IP_DE_ESTA_PC:{port}")
         uvicorn.run(
             app,
-            host="127.0.0.1",
+            host=host,
             port=port,
             log_level="info",
             access_log=False

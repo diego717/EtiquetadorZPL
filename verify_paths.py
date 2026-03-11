@@ -18,7 +18,10 @@ def verify_paths():
         "poppler_manager.py",
         "get_writable_path.py",
         "MANUAL_USUARIO.md",
-        "etiquetador_icon.ico"
+        "etiquetador_icon.ico",
+        "src/config_manager.py",
+        "src/log_config.py",
+        "src/database.py"
     ]
     
     required_dirs = [
@@ -40,97 +43,97 @@ def verify_paths():
     all_good = True
     
     # Verificar archivos requeridos
-    print("📁 Verificando archivos requeridos:")
+    print("Verificando archivos requeridos:")
     for file in required_files:
         if Path(file).exists():
-            print(f"  ✅ {file}")
+            print(f"  OK {file}")
         else:
-            print(f"  ❌ {file} - FALTANTE")
+            print(f"  ERROR {file} - FALTANTE")
             all_good = False
     
-    print("\n📂 Verificando directorios requeridos:")
+    print("\nVerificando directorios requeridos:")
     for dir_path in required_dirs:
         if Path(dir_path).exists():
-            print(f"  ✅ {dir_path}/")
+            print(f"  OK {dir_path}/")
         else:
-            print(f"  ❌ {dir_path}/ - FALTANTE")
+            print(f"  ERROR {dir_path}/ - FALTANTE")
             all_good = False
     
-    print("\n🔧 Verificando archivos críticos:")
+    print("\nVerificando archivos criticos:")
     for file in critical_files:
         if Path(file).exists():
-            print(f"  ✅ {file}")
+            print(f"  OK {file}")
         else:
-            print(f"  ❌ {file} - CRÍTICO FALTANTE")
+            print(f"  ERROR {file} - CRITICO FALTANTE")
             all_good = False
     
     # Verificar estructura de poppler
-    print("\n🔍 Verificando estructura de Poppler:")
+    print("\nVerificando estructura de Poppler:")
     poppler_bin = Path("poppler/poppler-23.08.0/Library/bin")
     if poppler_bin.exists():
         exe_files = list(poppler_bin.glob("*.exe"))
         dll_files = list(poppler_bin.glob("*.dll"))
-        print(f"  ✅ Binarios encontrados: {len(exe_files)} .exe, {len(dll_files)} .dll")
+        print(f"  OK Binarios encontrados: {len(exe_files)} .exe, {len(dll_files)} .dll")
         
         # Verificar archivos específicos de poppler
         critical_poppler = ["pdftoppm.exe", "pdfinfo.exe", "poppler.dll"]
         for file in critical_poppler:
             if (poppler_bin / file).exists():
-                print(f"    ✅ {file}")
+                print(f"    OK {file}")
             else:
-                print(f"    ❌ {file} - FALTANTE")
+                print(f"    ERROR {file} - FALTANTE")
                 all_good = False
     else:
-        print("  ❌ Directorio de binarios de Poppler no encontrado")
+        print("  ERROR Directorio de binarios de Poppler no encontrado")
         all_good = False
     
     # Verificar archivos web
-    print("\n🌐 Verificando archivos web:")
+    print("\nVerificando archivos web:")
     web_files = ["index.html", "config.html", "login.html", "config.js"]
     for file in web_files:
         web_path = Path("web") / file
         if web_path.exists():
-            print(f"  ✅ web/{file}")
+            print(f"  OK web/{file}")
         else:
-            print(f"  ❌ web/{file} - FALTANTE")
+            print(f"  ERROR web/{file} - FALTANTE")
             all_good = False
     
     print(f"\n{'='*50}")
     if all_good:
-        print("🎉 VERIFICACIÓN EXITOSA - Todos los archivos están presentes")
-        print("✅ El proyecto está listo para el build")
+        print("VERIFICACION EXITOSA - Todos los archivos estan presentes")
+        print("El proyecto esta listo para el build")
     else:
-        print("⚠️  VERIFICACIÓN FALLIDA - Faltan archivos críticos")
-        print("❌ Corrige los problemas antes de continuar con el build")
+        print("VERIFICACION FALLIDA - Faltan archivos criticos")
+        print("Corrige los problemas antes de continuar con el build")
     
     return all_good
 
 def fix_common_issues():
     """Intentar corregir problemas comunes"""
     
-    print("\n🔧 Intentando corregir problemas comunes...")
+    print("\nIntentando corregir problemas comunes...")
     
     # Crear carpetas faltantes
     required_dirs = ["logs", "temp", "installer"]
     for dir_name in required_dirs:
         Path(dir_name).mkdir(exist_ok=True)
-        print(f"  ✅ Creado/verificado: {dir_name}/")
+        print(f"  OK Creado/verificado: {dir_name}/")
     
     # Verificar icono
     if not Path("etiquetador_icon.ico").exists():
-        print("  🎨 Creando icono...")
+        print("  Creando icono...")
         try:
             exec(open("create_icon.py").read())
-            print("  ✅ Icono creado")
+            print("  OK Icono creado")
         except Exception as e:
-            print(f"  ❌ Error creando icono: {e}")
+            print(f"  ERROR creando icono: {e}")
 
 if __name__ == "__main__":
     if verify_paths():
-        print("\n🚀 Puedes proceder con el build usando: python build_with_inno.py")
+        print("\nPuedes proceder con el build usando: python build_with_inno.py")
     else:
-        print("\n🔧 Intentando corregir problemas...")
+        print("\nIntentando corregir problemas...")
         fix_common_issues()
-        print("\n🔄 Ejecuta este script nuevamente para verificar")
+        print("\nEjecuta este script nuevamente para verificar")
     
     input("\nPresiona Enter para continuar...")

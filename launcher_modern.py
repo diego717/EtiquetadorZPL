@@ -9,6 +9,8 @@ import sys
 import os
 from pathlib import Path
 import threading
+import json
+import urllib.request
 
 class ModernLauncher:
     def __init__(self):
@@ -219,9 +221,43 @@ class ModernLauncher:
             '#3498db': '#2980b9'
         }
         return color_map.get(color, color)
+
+    def _read_api_port(self):
+        """Leer puerto API configurado."""
+        config_files = ['config/api_port.txt', 'api_port.txt']
+        for config_file in config_files:
+            try:
+                with open(config_file, 'r') as f:
+                    port = f.read().strip()
+                if port:
+                    return port
+            except Exception:
+                continue
+        return "8002"
+
+    def _is_api_running(self, port):
+        """Verificar si la API de Etiquetador ya está activa."""
+        try:
+            with urllib.request.urlopen(f"http://127.0.0.1:{port}/api/status", timeout=1.5) as response:
+                if response.status != 200:
+                    return False
+                payload = json.loads(response.read().decode("utf-8", errors="ignore"))
+                return payload.get("framework") == "FastAPI"
+        except Exception:
+            return False
+
+    def _open_administrado(self, port):
+        """Abrir panel de Administrado."""
+        self.open_url(f"http://localhost:{port}/web/config.html#administrado")
     
     def start_api(self):
         """Iniciar solo API"""
+        api_port = self._read_api_port()
+        if self._is_api_running(api_port):
+            self.show_loading("API ya estaba activa. Abriendo panel web...")
+            self.root.after(500, lambda: self._open_administrado(api_port))
+            return
+
         self.show_loading("Iniciando API...")
         
         def run_api():
@@ -277,19 +313,22 @@ class ModernLauncher:
                 sys.path.insert(0, "src")
                 sys.path.insert(0, "api")
                 sys.path.insert(0, "config")
-                
-                # Iniciar API con fallback
-                def start_api_with_fallback():
-                    try:
-                        from fastapi_real import start_fastapi_server
-                        start_fastapi_server()
-                    except Exception as e:
-                        print(f"FastAPI falló, usando API original: {e}")
-                        from fast_api import start_fast_api
-                        start_fast_api()
-                
-                api_thread = threading.Thread(target=start_api_with_fallback, daemon=True)
-                api_thread.start()
+                api_port = self._read_api_port()
+                if not self._is_api_running(api_port):
+                    # Iniciar API con fallback
+                    def start_api_with_fallback():
+                        try:
+                            from fastapi_real import start_fastapi_server
+                            start_fastapi_server()
+                        except Exception as e:
+                            print(f"FastAPI fallo, usando API original: {e}")
+                            from fast_api import start_fast_api
+                            start_fast_api()
+                    
+                    api_thread = threading.Thread(target=start_api_with_fallback, daemon=True)
+                    api_thread.start()
+                else:
+                    print(f"API ya activa en puerto {api_port}, se reutiliza la instancia existente.")
                 
                 # Esperar un momento
                 import time
