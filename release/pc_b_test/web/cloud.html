@@ -1,0 +1,420 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>EtiquetadorZPL - Cloud</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif; background: #f5f5f5; }
+        .container { max-width: 1100px; margin: 0 auto; padding: 20px; }
+        .header { background: #2c3e50; color: white; border-radius: 8px; padding: 20px; margin-bottom: 20px; }
+        .header-top { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; }
+        .card { background: white; border-radius: 8px; padding: 20px; box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1); margin-bottom: 20px; }
+        .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+        .btn { background: #3498db; color: white; border: none; border-radius: 4px; padding: 10px 16px; cursor: pointer; text-decoration: none; display: inline-block; }
+        .btn:hover { background: #2980b9; }
+        .btn.success { background: #27ae60; }
+        .btn.success:hover { background: #229954; }
+        .btn.danger { background: #e74c3c; }
+        .btn.danger:hover { background: #c0392b; }
+        .btn.secondary { background: #7f8c8d; }
+        .btn.secondary:hover { background: #6f7b7c; }
+        .form-group { margin-bottom: 12px; }
+        .form-group label { display: block; margin-bottom: 6px; font-weight: 600; }
+        .form-group input, .form-group select { width: 100%; padding: 9px; border: 1px solid #d8d8d8; border-radius: 4px; }
+        .status { display: inline-block; padding: 4px 8px; border-radius: 4px; font-size: 12px; font-weight: 600; }
+        .status.ok { background: #d4edda; color: #155724; }
+        .status.bad { background: #f8d7da; color: #721c24; }
+        .status.warn { background: #fff3cd; color: #856404; }
+        .message { margin-top: 10px; padding: 10px; border-radius: 4px; display: none; }
+        .message.ok { display: block; background: #d4edda; color: #155724; }
+        .message.bad { display: block; background: #f8d7da; color: #721c24; }
+        .muted { color: #666; font-size: 14px; }
+        table { width: 100%; border-collapse: collapse; margin-top: 10px; }
+        th, td { border-bottom: 1px solid #e6e6e6; text-align: left; padding: 10px; font-size: 14px; }
+        th { background: #f8f9fa; }
+        .hidden { display: none !important; }
+        .actions { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 10px; }
+        @media (max-width: 860px) {
+            .grid { grid-template-columns: 1fr; }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <div class="header-top">
+                <div>
+                    <h1>Panel Cloud</h1>
+                    <p class="muted" style="color: #d8e0e8;">Login y gestion de usuarios para modo cloud</p>
+                </div>
+                <div class="actions">
+                    <a class="btn secondary" href="config.html#administrado">Volver a Administrado</a>
+                    <button id="logout-btn" class="btn danger hidden" onclick="logout()">Cerrar sesion</button>
+                </div>
+            </div>
+            <div style="margin-top: 12px;">
+                <span>API: <span id="api-status" class="status warn">Detectando...</span></span>
+                <span style="margin-left: 10px;">Usuario: <strong id="auth-user">-</strong></span>
+                <span style="margin-left: 10px;">Rol: <strong id="auth-role">-</strong></span>
+            </div>
+        </div>
+
+        <div id="login-card" class="card">
+            <h2>Iniciar sesion cloud</h2>
+            <p class="muted">Usa un usuario creado en <code>/api/auth/users</code> (o admin inicial).</p>
+            <div class="grid" style="margin-top: 12px;">
+                <div>
+                    <div class="form-group">
+                        <label for="login-username">Usuario</label>
+                        <input id="login-username" type="text" placeholder="admin">
+                    </div>
+                    <div class="form-group">
+                        <label for="login-password">Contrasena</label>
+                        <input id="login-password" type="password" placeholder="********">
+                    </div>
+                    <button class="btn success" onclick="login()">Iniciar sesion</button>
+                    <div id="login-message" class="message"></div>
+                </div>
+                <div>
+                    <h3>Primer acceso</h3>
+                    <p class="muted">Si no hay configuracion previa, se crea por defecto:</p>
+                    <p class="muted"><strong>Usuario:</strong> admin</p>
+                    <p class="muted"><strong>Contrasena:</strong> admin123</p>
+                </div>
+            </div>
+        </div>
+
+        <div id="app-card" class="hidden">
+            <div class="grid">
+                <div class="card">
+                    <h2>Mi cuenta</h2>
+                    <p class="muted">Cambia tu contrasena actual.</p>
+                    <div class="form-group">
+                        <label for="current-password">Contrasena actual</label>
+                        <input id="current-password" type="password">
+                    </div>
+                    <div class="form-group">
+                        <label for="new-password">Nueva contrasena (min 8)</label>
+                        <input id="new-password" type="password">
+                    </div>
+                    <button class="btn" onclick="changePassword()">Cambiar contrasena</button>
+                    <div id="password-message" class="message"></div>
+                </div>
+
+                <div id="admin-users-card" class="card hidden">
+                    <h2>Crear usuario</h2>
+                    <p class="muted">Solo visible para rol admin.</p>
+                    <div class="form-group">
+                        <label for="new-username">Usuario</label>
+                        <input id="new-username" type="text" placeholder="agent1">
+                    </div>
+                    <div class="form-group">
+                        <label for="new-user-password">Contrasena (min 8)</label>
+                        <input id="new-user-password" type="password" placeholder="strongpass123">
+                    </div>
+                    <div class="form-group">
+                        <label for="new-user-role">Rol</label>
+                        <select id="new-user-role">
+                            <option value="agent">agent</option>
+                            <option value="admin">admin</option>
+                        </select>
+                    </div>
+                    <button class="btn success" onclick="createUser()">Crear usuario</button>
+                    <div id="user-create-message" class="message"></div>
+                </div>
+            </div>
+
+            <div id="users-list-card" class="card hidden">
+                <div style="display: flex; justify-content: space-between; align-items: center; gap: 10px; flex-wrap: wrap;">
+                    <div>
+                        <h2>Usuarios cloud</h2>
+                        <p class="muted">Listado de usuarios disponibles para login cloud.</p>
+                    </div>
+                    <button class="btn" onclick="loadUsers()">Actualizar</button>
+                </div>
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Usuario</th>
+                            <th>Rol</th>
+                            <th>Activo</th>
+                            <th>Creado</th>
+                        </tr>
+                    </thead>
+                    <tbody id="users-table-body">
+                        <tr><td colspan="4">Sin datos</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <script src="config.js"></script>
+    <script>
+        const TOKEN_KEY = 'cloud_access_token';
+        const USER_KEY = 'cloud_username';
+        const ROLE_KEY = 'cloud_role';
+
+        function setMessage(elementId, text, type) {
+            const el = document.getElementById(elementId);
+            if (!el) return;
+            el.className = 'message';
+            el.textContent = text || '';
+            if (!text) return;
+            if (type === 'ok') el.classList.add('ok');
+            if (type === 'bad') el.classList.add('bad');
+        }
+
+        function setApiStatus(text, statusClass) {
+            const el = document.getElementById('api-status');
+            el.textContent = text;
+            el.className = `status ${statusClass}`;
+        }
+
+        function getToken() {
+            return localStorage.getItem(TOKEN_KEY) || '';
+        }
+
+        function setSession(data) {
+            localStorage.setItem(TOKEN_KEY, data.access_token || '');
+            localStorage.setItem(USER_KEY, data.username || '');
+            localStorage.setItem(ROLE_KEY, data.role || '');
+        }
+
+        function clearSession() {
+            localStorage.removeItem(TOKEN_KEY);
+            localStorage.removeItem(USER_KEY);
+            localStorage.removeItem(ROLE_KEY);
+        }
+
+        function updateSessionHeader(username, role) {
+            document.getElementById('auth-user').textContent = username || '-';
+            document.getElementById('auth-role').textContent = role || '-';
+        }
+
+        async function apiRequest(path, options = {}) {
+            const method = options.method || 'GET';
+            const auth = options.auth !== false;
+            const body = options.body || null;
+
+            const base = await ensureApiPort();
+            const headers = { 'Content-Type': 'application/json' };
+            if (auth && getToken()) {
+                headers['Authorization'] = `Bearer ${getToken()}`;
+            }
+
+            const response = await fetch(`${base}${path}`, {
+                method,
+                headers,
+                body: body ? JSON.stringify(body) : undefined
+            });
+
+            let data = {};
+            const ct = response.headers.get('content-type') || '';
+            if (ct.includes('application/json')) {
+                data = await response.json();
+            } else {
+                data = { detail: await response.text() };
+            }
+
+            return { ok: response.ok, status: response.status, data };
+        }
+
+        function showLogin() {
+            document.getElementById('login-card').classList.remove('hidden');
+            document.getElementById('app-card').classList.add('hidden');
+            document.getElementById('logout-btn').classList.add('hidden');
+            updateSessionHeader('-', '-');
+        }
+
+        function showApp(username, role) {
+            document.getElementById('login-card').classList.add('hidden');
+            document.getElementById('app-card').classList.remove('hidden');
+            document.getElementById('logout-btn').classList.remove('hidden');
+            updateSessionHeader(username, role);
+
+            const isAdmin = role === 'admin';
+            document.getElementById('admin-users-card').classList.toggle('hidden', !isAdmin);
+            document.getElementById('users-list-card').classList.toggle('hidden', !isAdmin);
+            if (isAdmin) {
+                loadUsers();
+            }
+        }
+
+        async function checkApi() {
+            try {
+                const base = await ensureApiPort();
+                const response = await fetch(`${base}/api/status`);
+                if (response.ok) {
+                    setApiStatus('Online', 'ok');
+                    return true;
+                }
+                setApiStatus(`HTTP ${response.status}`, 'warn');
+                return false;
+            } catch (error) {
+                setApiStatus('Sin conexion', 'bad');
+                return false;
+            }
+        }
+
+        async function login() {
+            setMessage('login-message', '', '');
+            const username = document.getElementById('login-username').value.trim();
+            const password = document.getElementById('login-password').value;
+
+            if (!username || !password) {
+                setMessage('login-message', 'Completa usuario y contrasena', 'bad');
+                return;
+            }
+
+            try {
+                const result = await apiRequest('/api/auth/login', {
+                    method: 'POST',
+                    auth: false,
+                    body: { username, password }
+                });
+                if (!result.ok) {
+                    setMessage('login-message', result.data.detail || 'Login fallido', 'bad');
+                    return;
+                }
+
+                setSession(result.data);
+                setMessage('login-message', 'Sesion iniciada', 'ok');
+                showApp(result.data.username, result.data.role);
+            } catch (error) {
+                setMessage('login-message', `Error de conexion: ${error.message}`, 'bad');
+            }
+        }
+
+        function logout() {
+            clearSession();
+            showLogin();
+        }
+
+        async function loadMe() {
+            const token = getToken();
+            if (!token) {
+                showLogin();
+                return;
+            }
+            try {
+                const result = await apiRequest('/api/auth/me');
+                if (!result.ok) {
+                    clearSession();
+                    showLogin();
+                    return;
+                }
+                showApp(result.data.username, result.data.role);
+            } catch (error) {
+                clearSession();
+                showLogin();
+            }
+        }
+
+        async function changePassword() {
+            setMessage('password-message', '', '');
+            const currentPassword = document.getElementById('current-password').value;
+            const newPassword = document.getElementById('new-password').value;
+
+            if (!currentPassword || !newPassword) {
+                setMessage('password-message', 'Completa ambos campos', 'bad');
+                return;
+            }
+
+            try {
+                const result = await apiRequest('/api/auth/change-password', {
+                    method: 'POST',
+                    body: {
+                        current_password: currentPassword,
+                        new_password: newPassword
+                    }
+                });
+                if (!result.ok) {
+                    setMessage('password-message', result.data.detail || 'No se pudo cambiar la contrasena', 'bad');
+                    return;
+                }
+                document.getElementById('current-password').value = '';
+                document.getElementById('new-password').value = '';
+                setMessage('password-message', 'Contrasena actualizada', 'ok');
+            } catch (error) {
+                setMessage('password-message', `Error de conexion: ${error.message}`, 'bad');
+            }
+        }
+
+        async function createUser() {
+            setMessage('user-create-message', '', '');
+            const username = document.getElementById('new-username').value.trim();
+            const password = document.getElementById('new-user-password').value;
+            const role = document.getElementById('new-user-role').value;
+
+            if (!username || !password) {
+                setMessage('user-create-message', 'Completa usuario y contrasena', 'bad');
+                return;
+            }
+
+            try {
+                const result = await apiRequest('/api/auth/users', {
+                    method: 'POST',
+                    body: { username, password, role }
+                });
+                if (!result.ok) {
+                    setMessage('user-create-message', result.data.detail || 'No se pudo crear el usuario', 'bad');
+                    return;
+                }
+                document.getElementById('new-username').value = '';
+                document.getElementById('new-user-password').value = '';
+                setMessage('user-create-message', `Usuario ${result.data.username} creado`, 'ok');
+                loadUsers();
+            } catch (error) {
+                setMessage('user-create-message', `Error de conexion: ${error.message}`, 'bad');
+            }
+        }
+
+        function renderUsers(users) {
+            const tbody = document.getElementById('users-table-body');
+            if (!users || !users.length) {
+                tbody.innerHTML = '<tr><td colspan="4">Sin usuarios</td></tr>';
+                return;
+            }
+            tbody.innerHTML = users.map((user) => {
+                const created = user.created_at
+                    ? new Date(user.created_at * 1000).toLocaleString()
+                    : '-';
+                return `
+                    <tr>
+                        <td>${user.username}</td>
+                        <td>${user.role}</td>
+                        <td>${user.enabled ? 'Si' : 'No'}</td>
+                        <td>${created}</td>
+                    </tr>
+                `;
+            }).join('');
+        }
+
+        async function loadUsers() {
+            try {
+                const result = await apiRequest('/api/auth/users');
+                if (!result.ok) {
+                    if (result.status === 403) {
+                        document.getElementById('users-list-card').classList.add('hidden');
+                    }
+                    return;
+                }
+                renderUsers(result.data.users || []);
+            } catch (error) {
+                renderUsers([]);
+            }
+        }
+
+        async function init() {
+            await checkApi();
+            await loadMe();
+        }
+
+        init();
+    </script>
+</body>
+</html>
+
