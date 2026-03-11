@@ -13,13 +13,13 @@ class SecurityValidator:
     ALLOWED_EXTENSIONS = {'.pdf', '.txt', '.zpl', '.zip', '.png', '.jpg', '.jpeg'}
     
     # Tamaños máximos (en bytes)
-    MAX_FILE_SIZE = 50 * 1024 * 1024  # 50MB
-    MAX_ZIP_SIZE = 100 * 1024 * 1024  # 100MB
+    MAX_FILE_SIZE = 200 * 1024 * 1024  # 200MB
+    MAX_ZIP_SIZE = 500 * 1024 * 1024  # 500MB
     
     # Límites de recursos
-    MAX_MEMORY_PERCENT = 80  # 80% de RAM máxima
-    MAX_CPU_PERCENT = 90     # 90% de CPU máxima
-    MAX_CONCURRENT_FILES = 5  # Máximo 5 archivos simultáneos
+    MAX_MEMORY_PERCENT = 95  # 95% de RAM máxima
+    MAX_CPU_PERCENT = 98     # 98% de CPU máxima
+    MAX_CONCURRENT_FILES = 10  # Máximo 10 archivos simultáneos
     
     # Nombres de archivo peligrosos
     DANGEROUS_NAMES = {
@@ -86,17 +86,27 @@ class SecurityValidator:
     def validate_file_size(filepath):
         """Valida el tamaño del archivo"""
         try:
-            size = Path(filepath).stat().st_size
+            file_path = Path(filepath)
+            if not file_path.exists():
+                logging.warning(f"Archivo no existe para validación de tamaño: {filepath}")
+                return True  # Permitir continuar si el archivo no existe
+            
+            size = file_path.stat().st_size
             max_size = SecurityValidator.MAX_ZIP_SIZE if filepath.endswith('.zip') else SecurityValidator.MAX_FILE_SIZE
             
             if size > max_size:
-                logging.error(f"Archivo demasiado grande: {size} bytes")
+                size_mb = size / (1024 * 1024)
+                max_mb = max_size / (1024 * 1024)
+                logging.error(f"Archivo demasiado grande: {size_mb:.1f}MB (máximo: {max_mb:.1f}MB)")
                 return False
+            
+            size_mb = size / (1024 * 1024)
+            logging.info(f"Archivo válido: {file_path.name} ({size_mb:.1f}MB)")
             return True
             
         except Exception as e:
             logging.error(f"Error verificando tamaño: {e}")
-            return False
+            return True  # Permitir continuar en caso de error
     
     @staticmethod
     def check_system_resources():

@@ -52,17 +52,25 @@ poppler_path = {poppler_path}
         config.read(archivo_ini, encoding='utf-8')
 
         # Usar Poppler automático si no está configurado
-        poppler_config = config["rutas"].get("poppler_path", "")
         try:
+            poppler_config = config["rutas"].get("poppler_path", "")
             if not poppler_config or not os.path.exists(poppler_config):
                 poppler_config = get_poppler_path() or poppler_config
+        except KeyError:
+            poppler_config = get_poppler_path() or "poppler/poppler-23.08.0/Library/bin"
         except Exception:
             logging.warning("Poppler no disponible")
+            poppler_config = "poppler/poppler-23.08.0/Library/bin"
             
         # Obtener rutas de la configuración
-        entrada_path = config["rutas"]["entrada"]
-        salida_path = config["rutas"]["salida"]
-        historial_path = config["rutas"]["historial"]
+        try:
+            entrada_path = config["rutas"]["entrada"]
+            salida_path = config["rutas"]["salida"]
+            historial_path = config["rutas"]["historial"]
+        except KeyError:
+            entrada_path = "C:/EtiquetasFlex"
+            salida_path = "C:/EtiquetasFlex"
+            historial_path = "C:/EtiquetasFlex/Historial1"
         
         # Crear carpetas si no existen
         try:
@@ -91,21 +99,42 @@ poppler_path = {poppler_path}
         
         # Si no hay carpetas configuradas, usar configuración antigua
         if not carpetas:
+            try:
+                impresora_nombre = config["impresora"]["nombre"]
+            except KeyError:
+                impresora_nombre = "Impresora_Predeterminada"
+            
             carpetas.append({
                 'ruta': entrada_path,
-                'impresora': config["impresora"]["nombre"],
+                'impresora': impresora_nombre,
                 'historial': historial_path,
                 'activa': True,
                 'recortar_pdf': True
             })
         
+        # Obtener valores con fallback seguro
+        try:
+            ancho_mm = int(config["etiqueta"]["ancho_mm"])
+        except (KeyError, ValueError):
+            ancho_mm = 100
+            
+        try:
+            alto_mm = int(config["etiqueta"]["alto_mm"])
+        except (KeyError, ValueError):
+            alto_mm = 150
+            
+        try:
+            impresora_nombre = config["impresora"]["nombre"]
+        except KeyError:
+            impresora_nombre = "Impresora_Predeterminada"
+        
         return {
-            "ancho_mm": int(config["etiqueta"]["ancho_mm"]),
-            "alto_mm": int(config["etiqueta"]["alto_mm"]),
+            "ancho_mm": ancho_mm,
+            "alto_mm": alto_mm,
             "carpetas": carpetas,
             "poppler": poppler_config,
             # Mantener compatibilidad
-            "impresora": config["impresora"]["nombre"],
+            "impresora": impresora_nombre,
             "entrada": entrada_path,
             "salida": salida_path,
             "historial": historial_path

@@ -8,13 +8,36 @@ from datetime import datetime
 from pathlib import Path
 
 class EtiquetadorDB:
-    def __init__(self, db_path="etiquetador.db"):
-        self.db_path = db_path
+    def __init__(self, db_path=None):
+        if db_path is None:
+            # Usar ubicación escribible
+            try:
+                # Intentar en directorio actual
+                test_path = Path("etiquetador.db")
+                test_path.touch()
+                test_path.unlink()
+                self.db_path = "etiquetador.db"
+            except (PermissionError, OSError):
+                # Usar AppData si no se puede escribir
+                import os
+                appdata = Path(os.environ.get('APPDATA', '.'))
+                db_dir = appdata / 'EtiquetadorZPL'
+                db_dir.mkdir(exist_ok=True)
+                self.db_path = str(db_dir / 'etiquetador.db')
+        else:
+            self.db_path = db_path
+        
+        print(f"Base de datos: {self.db_path}")
         self.init_db()
     
     def init_db(self):
         """Inicializar base de datos"""
-        conn = sqlite3.connect(self.db_path)
+        try:
+            conn = sqlite3.connect(self.db_path)
+            print(f"Conectado a BD: {self.db_path}")
+        except Exception as e:
+            print(f"Error conectando a BD: {e}")
+            raise
         
         # Tabla de trabajos de impresión
         conn.execute('''
@@ -61,6 +84,7 @@ class EtiquetadorDB:
         
         conn.commit()
         conn.close()
+        print("Base de datos inicializada correctamente")
     
     def add_job(self, filename, printer, content_type='zpl', copies=1, file_size=0):
         """Agregar trabajo de impresión"""

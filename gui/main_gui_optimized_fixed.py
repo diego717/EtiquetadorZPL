@@ -67,7 +67,7 @@ class EtiquetadorGUIOptimized:
         """Crea la interfaz de usuario"""
         # Frame principal
         self.main_frame = ttk.Frame(self.root, padding="10")
-        self.main_frame.pack(fill=tk.BOTH, expand=True)
+        self.main_frame.pack(fill='both', expand=True)
         
         # Configurar grid
         self.main_frame.columnconfigure(1, weight=1)
@@ -131,8 +131,17 @@ class EtiquetadorGUIOptimized:
         row = 0
         
         # Checkbox activa
-        ttk.Checkbutton(carpeta_frame, text="Activa", 
-                       variable=carpeta_vars['activa']).grid(row=row, column=0, sticky=tk.W, pady=2)
+        def on_activa_change(idx=index, vars=carpeta_vars):
+            # Forzar toggle manual del valor
+            current = vars['activa'].get()
+            new_value = not current
+            vars['activa'].set(new_value)
+            self.log_message(f"Carpeta {idx+1} - Checkbox Activa FORZADO a: {new_value}")
+        
+        checkbox_activa = ttk.Checkbutton(carpeta_frame, text="Activa", 
+                                         command=lambda: on_activa_change())
+        checkbox_activa.grid(row=row, column=0, sticky=tk.W, pady=2)
+        carpeta_vars['checkbox_activa'] = checkbox_activa
         
         # Checkbox recortar PDF
         ttk.Checkbutton(carpeta_frame, text="Recortar PDF automáticamente", 
@@ -152,6 +161,24 @@ class EtiquetadorGUIOptimized:
         ttk.Label(carpeta_frame, text="Impresora:").grid(row=row, column=0, sticky=tk.W, pady=2)
         combo = ttk.Combobox(carpeta_frame, textvariable=carpeta_vars['impresora'], width=37, state='readonly')
         combo.grid(row=row, column=1, sticky=(tk.W, tk.E), padx=(5, 5), pady=2)
+        
+        # Callback para cuando cambia la selección
+        def on_printer_change(event, idx=index, vars=carpeta_vars):
+            # Obtener valor seleccionado
+            selected = event.widget.get()
+            # Forzar actualización de la variable
+            vars['impresora'].set(selected)
+            # Log inmediato
+            self.log_message(f"Carpeta {idx+1} - Impresora cambiada a: {selected}")
+            logging.info("Usuario cambió impresora carpeta %d: %s", idx+1, selected)
+            # Verificar que se guardó correctamente
+            actual = vars['impresora'].get()
+            if actual != selected:
+                logging.error("ERROR: Variable no actualizada. Esperado: %s, Actual: %s", selected, actual)
+            else:
+                logging.info("OK: Variable actualizada correctamente: %s", actual)
+        
+        combo.bind('<<ComboboxSelected>>', on_printer_change)
         carpeta_vars['combo'] = combo
         row += 1
         
@@ -344,9 +371,21 @@ class EtiquetadorGUIOptimized:
                     section = f"CARPETA{i+1}"
                     if config.has_section(section):
                         self.carpetas_config[i]['ruta'].set(config.get(section, 'entrada', fallback=''))
-                        # NO cargar impresora desde config - usar impresoras actuales
+                        # Cargar impresora desde config si existe
+                        impresora_config = config.get(section, 'impresora', fallback='')
+                        if impresora_config:
+                            self.carpetas_config[i]['impresora'].set(impresora_config)
+                            logging.info("Carpeta %d impresora cargada: %s", i+1, impresora_config)
                         self.carpetas_config[i]['historial'].set(config.get(section, 'historial', fallback=''))
-                        self.carpetas_config[i]['activa'].set(config.getboolean(section, 'activa', fallback=False))
+                        activa_value = config.getboolean(section, 'activa', fallback=False)
+                        self.carpetas_config[i]['activa'].set(activa_value)
+                        # Sincronizar checkbox visual
+                        if 'checkbox_activa' in self.carpetas_config[i]:
+                            if activa_value:
+                                self.carpetas_config[i]['checkbox_activa'].state(['selected'])
+                            else:
+                                self.carpetas_config[i]['checkbox_activa'].state(['!selected'])
+                        self.log_message(f"Carpeta {i+1} - Cargando activa: {activa_value}")
                         self.carpetas_config[i]['recortar_pdf'].set(config.getboolean(section, 'recortar_pdf', fallback=True))
                         self.carpetas_config[i]['copias'].set(config.get(section, 'copias', fallback='1'))
                         
@@ -361,6 +400,12 @@ class EtiquetadorGUIOptimized:
                             entry.delete(0, tk.END)
                             entry.insert(0, config.get(section, 'historial', fallback=''))
                         
+                        # FORZAR actualización de combo impresora
+                        if 'combo' in self.carpetas_config[i] and impresora_config:
+                            combo = self.carpetas_config[i]['combo']
+                            combo.set(impresora_config)
+                            pass  # La variable ya está actualizada arriba
+                        
                         self.log_message(f"Configuración aplicada - Carpeta {i+1}: {config.get(section, 'entrada', fallback='N/A')}")
             else:
                 # Formato dict (legacy)
@@ -368,9 +413,21 @@ class EtiquetadorGUIOptimized:
                 for i in range(min(3, len(carpetas))):
                     carpeta = carpetas[i]
                     self.carpetas_config[i]['ruta'].set(carpeta.get('ruta', ''))
-                    # NO cargar impresora desde config - usar impresoras actuales
+                    # Cargar impresora desde config si existe y está disponible
+                    impresora_config = carpeta.get('impresora', '')
+                    if impresora_config:
+                        self.carpetas_config[i]['impresora'].set(impresora_config)
+                        logging.info("Carpeta %d impresora cargada desde config: %s", i+1, impresora_config)
                     self.carpetas_config[i]['historial'].set(carpeta.get('historial', ''))
-                    self.carpetas_config[i]['activa'].set(carpeta.get('activa', False))
+                    activa_value = carpeta.get('activa', False)
+                    self.carpetas_config[i]['activa'].set(activa_value)
+                    # Sincronizar checkbox visual
+                    if 'checkbox_activa' in self.carpetas_config[i]:
+                        if activa_value:
+                            self.carpetas_config[i]['checkbox_activa'].state(['selected'])
+                        else:
+                            self.carpetas_config[i]['checkbox_activa'].state(['!selected'])
+                    self.log_message(f"Carpeta {i+1} - Cargando activa (legacy): {activa_value}")
                     self.carpetas_config[i]['recortar_pdf'].set(carpeta.get('recortar_pdf', True))
                     self.carpetas_config[i]['copias'].set(str(carpeta.get('copias', 1)))
                     
@@ -410,24 +467,26 @@ class EtiquetadorGUIOptimized:
         for i, carpeta_vars in enumerate(self.carpetas_config):
             combo = carpeta_vars['combo']
             
-            # LIMPIAR completamente el combo
-            combo.set('')
-            combo['values'] = []
-            carpeta_vars['impresora'].set('')
+            # Guardar selección actual
+            current_selection = carpeta_vars['impresora'].get()
             
-            # Establecer nuevas impresoras
+            # Actualizar lista de impresoras
             combo['values'] = printers
             
-            # Solo seleccionar impresora predeterminada si hay impresoras
-            if printers:
+            # Mantener selección actual si existe, sino usar predeterminada
+            if current_selection and current_selection in printers:
+                # Mantener la selección actual
+                combo.set(current_selection)
+                self.log_message(f"Carpeta {i+1} - Manteniendo impresora: {current_selection}")
+            elif printers:
+                # Solo asignar predeterminada si no hay selección previa
                 if default_printer and default_printer in printers:
                     carpeta_vars['impresora'].set(default_printer)
                     combo.set(default_printer)
                 else:
                     carpeta_vars['impresora'].set(printers[0])
                     combo.set(printers[0])
-                
-                self.log_message(f"Carpeta {i+1} - Impresora asignada: {carpeta_vars['impresora'].get()}")
+                self.log_message(f"Carpeta {i+1} - Nueva impresora asignada: {carpeta_vars['impresora'].get()}")
             else:
                 self.log_message(f"Carpeta {i+1} - Sin impresoras disponibles")
                     
@@ -493,6 +552,17 @@ class EtiquetadorGUIOptimized:
             return
             
         try:
+            # Debug: mostrar estado de todas las carpetas
+            for i, vars in enumerate(self.carpetas_config):
+                activa = vars['activa'].get()
+                ruta = vars['ruta'].get()
+                # También verificar el estado visual del checkbox
+                if 'checkbox_activa' in vars:
+                    checkbox_state = vars['checkbox_activa'].instate(['selected'])
+                    self.log_message(f"DEBUG Carpeta {i+1}: Activa={activa}, Ruta='{ruta}', Checkbox_Visual={checkbox_state}")
+                else:
+                    self.log_message(f"DEBUG Carpeta {i+1}: Activa={activa}, Ruta='{ruta}'")
+            
             # Verificar que hay al menos una carpeta activa
             carpetas_activas_count = sum(1 for vars in self.carpetas_config if vars['activa'].get())
             if carpetas_activas_count == 0:
@@ -519,10 +589,28 @@ class EtiquetadorGUIOptimized:
         
         for i, carpeta_vars in enumerate(self.carpetas_config):
             if not carpeta_vars['activa'].get():
+                self.log_message(f"Carpeta {i+1} - INACTIVA, saltando")
                 continue
+            
+            self.log_message(f"Carpeta {i+1} - ACTIVA, validando...")
                 
             ruta = carpeta_vars['ruta'].get().strip()
             impresora = carpeta_vars['impresora'].get().strip()
+            # Verificar combo y variable estén sincronizados
+            combo_value = carpeta_vars['combo'].get().strip()
+            var_value = carpeta_vars['impresora'].get().strip()
+            
+            logging.info(f"Carpeta {i+1} - Combo: '{combo_value}', Variable: '{var_value}'")
+            
+            # Usar el valor del combo si es diferente (más reciente)
+            if combo_value and combo_value != var_value:
+                impresora = combo_value
+                carpeta_vars['impresora'].set(impresora)
+                logging.info(f"Carpeta {i+1} - Usando valor del combo: '{impresora}'")
+            elif var_value:
+                impresora = var_value
+                logging.info(f"Carpeta {i+1} - Usando valor de variable: '{impresora}'")
+            logging.info("Carpeta %d preparando con impresora: %s", i+1, impresora)
             historial = carpeta_vars['historial'].get().strip()
             
             # Validaciones estrictas
@@ -531,8 +619,18 @@ class EtiquetadorGUIOptimized:
                 
             if not impresora:
                 raise Exception(f"Carpeta {i+1}: Debe seleccionar una impresora")
+            
+            # Verificar que la impresora seleccionada existe
+            try:
+                impresoras_disponibles = obtener_impresoras()
+                if impresora not in impresoras_disponibles:
+                    logging.warning(f"Carpeta {i+1}: Impresora '{impresora}' no encontrada en sistema")
+                    # No fallar, solo advertir - la API puede manejar impresoras de red
+            except Exception as e:
+                logging.warning(f"No se pudo verificar impresora: {e}")
                 
             if not historial:
+                self.log_message(f"Carpeta {i+1} - ERROR: Sin carpeta historial configurada")
                 raise Exception(f"Carpeta {i+1}: Debe seleccionar una carpeta de historial")
                 
             if not Path(ruta).exists():
@@ -558,7 +656,7 @@ class EtiquetadorGUIOptimized:
                 
             carpetas_activas.append({
                 'entrada': ruta,
-                'impresora': impresora,
+                'impresora': impresora,  # Esta es la impresora seleccionada en la GUI
                 'historial': str(historial_path),
                 'ancho_mm': 100,
                 'alto_mm': 150,
@@ -568,6 +666,7 @@ class EtiquetadorGUIOptimized:
             })
             
             self.log_message(f"Carpeta {i+1} validada: {ruta} -> {impresora} ({copias} copias)")
+            logging.info("Configuración carpeta %d: impresora=%s, copias=%d", i+1, impresora, copias)
             
         return carpetas_activas
         
@@ -582,6 +681,9 @@ class EtiquetadorGUIOptimized:
                 handler.carpeta_numero = i + 1
                 handler.gui_instance = self
                 
+                # Log de debug para verificar configuración
+                logging.info("Handler %d creado con impresora: %s", i+1, carpeta_config.get('impresora'))
+                
                 observer = Observer()
                 observer.schedule(handler, path=carpeta_config["entrada"], recursive=False)
                 handler.observer = observer
@@ -591,6 +693,7 @@ class EtiquetadorGUIOptimized:
                 observer.start()
                 
                 self.log_message(f"📁 Monitoreando: {carpeta_config['entrada']} -> {carpeta_config['impresora']}")
+                logging.info("Carpeta %d monitoreando con impresora: %s", i+1, carpeta_config['impresora'])
             
             self.monitoring = True
             self.root.after(0, self._update_ui_monitoring_started)
@@ -606,14 +709,14 @@ class EtiquetadorGUIOptimized:
         """Actualiza UI cuando inicia el monitoreo"""
         carpetas_count = len(self.carpetas_monitoreadas)
         self.status_var.set(f"▶️ Monitoreando {carpetas_count} carpeta(s)")
-        self.start_button.config(state=tk.DISABLED)
-        self.stop_button.config(state=tk.NORMAL)
+        self.start_button.config(state='disabled')
+        self.stop_button.config(state='normal')
         
     def _update_ui_monitoring_stopped(self):
         """Actualiza UI cuando se detiene el monitoreo"""
         self.status_var.set("⏹️ Detenido")
-        self.start_button.config(state=tk.NORMAL)
-        self.stop_button.config(state=tk.DISABLED)
+        self.start_button.config(state='normal')
+        self.stop_button.config(state='disabled')
         
     def stop_monitoring(self):
         """Detiene el monitoreo"""
@@ -651,11 +754,14 @@ class EtiquetadorGUIOptimized:
                 except ValueError:
                     copias = 1
                 
+                activa_value = carpeta_vars['activa'].get()
+                self.log_message(f"Guardando Carpeta {i+1} - Activa: {activa_value}")
+                
                 config[section] = {
                     'entrada': carpeta_vars['ruta'].get().strip(),
                     'impresora': carpeta_vars['impresora'].get().strip(),
                     'historial': carpeta_vars['historial'].get().strip(),
-                    'activa': str(carpeta_vars['activa'].get()),
+                    'activa': str(activa_value),
                     'recortar_pdf': str(carpeta_vars['recortar_pdf'].get()),
                     'copias': str(copias)
                 }
@@ -732,8 +838,11 @@ class EtiquetadorGUIOptimized:
             else:
                 self.root.destroy()
         except Exception as e:
-            logging.error(f"Error al cerrar: {e}")
-            self.root.destroy()
+            logging.error("Error al cerrar: %s", e)
+            try:
+                self.root.destroy()
+            except Exception:
+                pass
             
     def run(self):
         """Ejecuta la aplicación"""
@@ -741,5 +850,11 @@ class EtiquetadorGUIOptimized:
         self.root.mainloop()
 
 if __name__ == "__main__":
-    app = EtiquetadorGUIOptimized()
-    app.run()
+    try:
+        app = EtiquetadorGUIOptimized()
+        app.run()
+    except Exception as e:
+        logging.error("Error crítico en la aplicación: %s", e)
+        import traceback
+        traceback.print_exc()
+        input("Presiona Enter para salir...")

@@ -1,0 +1,97 @@
+# =========================
+# Python / caches
+# =========================
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.nox/
+.tox/
+.coverage
+.coverage.*
+htmlcov/
+
+# Virtual environments
+.venv/
+venv/
+env/
+ENV/
+
+# =========================
+# Build / packaging outputs
+# =========================
+build/
+dist/
+release/
+*.egg-info/
+pip-wheel-metadata/
+installer/*.exe
+installer/*.msi
+installer/*.zip
+BUILD_INFO.txt
+
+# PyInstaller extra artifacts
+*.toc
+*.pyz
+*.pkg
+warn-*.txt
+xref-*.html
+
+# =========================
+# Logs / runtime artifacts
+# =========================
+logs/
+*.log
+*.pid
+*.out
+*.err
+
+# Local DB / backups
+*.db
+*.sqlite
+*.sqlite3
+backups/
+
+# Local runtime/config generated files
+api_port.txt
+poppler_path.txt
+notification_config.json
+users.json
+
+# Cloudflare / tunnel local files
+.cloudflared/
+*.json.lock
+
+# Session/cookie local files
+*storage_state*.json
+*cookie*.json
+
+# =========================
+# OS / editor files
+# =========================
+.DS_Store
+Thumbs.db
+Desktop.ini
+
+.vscode/
+.idea/
+*.code-workspace
+
+# =========================
+# Node/electron local deps
+# =========================
+electron-app/node_modules/
+electron-app/dist/
+electron-app/out/
+
+# =========================
+# Temp / scratch files
+# =========================
+tmp/
+temp/
+*.tmp
+*.bak
+*.swp
+*.swo

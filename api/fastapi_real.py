@@ -49,9 +49,13 @@ app = FastAPI(
 
 # Montar archivos estáticos
 try:
-    app.mount("/web", StaticFiles(directory="web", html=True), name="web")
-except:
-    pass
+    if Path("web").exists():
+        app.mount("/web", StaticFiles(directory="web", html=True), name="web")
+        print("Archivos web montados correctamente")
+    else:
+        print("ADVERTENCIA: Directorio 'web' no encontrado")
+except Exception as e:
+    print(f"Error montando archivos web: {e}")
 
 # Cache global
 cache = {
@@ -103,7 +107,8 @@ async def get_jobs():
         # Fallback si no existe el módulo
         return {"jobs": [], "count": 0}
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        print(f"Error en get_jobs: {e}")
+        return {"jobs": [], "count": 0, "error": "Base de datos no disponible"}
 
 @app.get("/api/jobs/{job_id}")
 async def get_job(job_id: int):
@@ -129,26 +134,34 @@ async def get_statistics():
             except ImportError:
                 # Fallback si no existe el módulo
                 cache["stats"] = {"total_jobs": 0, "completed": 0, "failed": 0}
+            except Exception as e:
+                print(f"Error BD en statistics: {e}")
+                cache["stats"] = {"total_jobs": 0, "completed": 0, "failed": 0, "error": "BD no disponible"}
             cache["stats_cache_time"] = time.time()
         
         return cache["stats"]
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        print(f"Error en get_statistics: {e}")
+        return {"total_jobs": 0, "completed": 0, "failed": 0, "error": "Estadísticas no disponibles"}
 
 @app.post("/api/process-file")
 async def process_file(request: ProcessFileRequest, background_tasks: BackgroundTasks):
     """Procesar archivo"""
     try:
-        from database import db
-        
-        # Crear trabajo
-        job_id = db.add_job(
-            filename=request.filename,
-            printer=request.printer,
-            content_type='zpl',
-            copies=request.copies,
-            file_size=len(request.content)
-        )
+        # Intentar usar base de datos
+        try:
+            from database import db
+            job_id = db.add_job(
+                filename=request.filename,
+                printer=request.printer,
+                content_type='zpl',
+                copies=request.copies,
+                file_size=len(request.content)
+            )
+        except Exception as e:
+            print(f"BD no disponible, usando ID temporal: {e}")
+            import random
+            job_id = random.randint(1000, 9999)
         
         # Procesar en background
         background_tasks.add_task(
@@ -161,6 +174,7 @@ async def process_file(request: ProcessFileRequest, background_tasks: Background
         
         return {"job_id": job_id, "status": "processing"}
     except Exception as e:
+        print(f"Error en process_file: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 async def process_job_background(job_id: int, content: str, printer: str, copies: int):
@@ -334,7 +348,7 @@ async def get_system_metrics():
 def find_free_port():
     """Encontrar puerto libre"""
     import socket
-    for port in range(8003, 8020):  # Cambiar rango
+    for port in [8002, 8003, 8004, 8005]:  # Puertos específicos
         try:
             with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
                 s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
@@ -342,7 +356,7 @@ def find_free_port():
                 return port
         except OSError:
             continue
-    return 8003
+    return 8002
 
 def start_fastapi_server():
     """Iniciar servidor FastAPI"""
@@ -357,31 +371,32 @@ def start_fastapi_server():
         print(f"Dashboard: http://localhost:{port}/web/")
         print(f"Docs: http://localhost:{port}/docs")
         
-        # Inicializar base de datos en background
+        # Configurar logging
         try:
-            def init_db():
-                try:
-                    from database import db
-                    print("Base de datos inicializada")
-                except Exception as e:
-                    print(f"Error inicializando BD: {e}")
-            
-            threading.Thread(target=init_db, daemon=True).start()
+            from log_config import setup_logging
+            log_dir = setup_logging()
+            print(f"Logs configurados en: {log_dir}")
         except Exception as e:
-            print(f"Error iniciando hilo BD: {e}")
+            print(f"Error configurando logs: {e}")
+        
+        # Inicializar base de datos en background (opcional)
+        try:
+            from database import db
+            print("Base de datos inicializada")
+        except Exception as e:
+            print(f"ADVERTENCIA: BD no disponible - Dashboard funcionará con datos limitados: {e}")
         
         # Verificar que uvicorn funciona
         print("Iniciando servidor uvicorn...")
         
-        # Usar uvicorn.run directamente (más simple)
+        # Usar uvicorn.run directamente
+        print(f"Iniciando servidor en http://127.0.0.1:{port}")
         uvicorn.run(
-            "fastapi_real:app",  # Usar string import
+            app,
             host="127.0.0.1",
             port=port,
-            log_level="error",
-            access_log=False,
-            reload=False,
-            workers=1
+            log_level="info",
+            access_log=False
         )
         
     except Exception as e:
