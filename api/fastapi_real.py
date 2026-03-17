@@ -75,6 +75,13 @@ try:
 except ImportError as e:
     print(f"ADVERTENCIA: Endpoints de Administrado no disponibles: {e}")
 
+# Incluir endpoints de Odoo
+try:
+    from odoo_endpoints import router as odoo_router
+    app.include_router(odoo_router)
+except ImportError as e:
+    print(f"ADVERTENCIA: Endpoints de Odoo no disponibles: {e}")
+
 # Incluir endpoints de Auth Cloud (separado del flujo legacy)
 try:
     from auth_endpoints import router as auth_router
@@ -132,6 +139,28 @@ def _build_print_audit_logger() -> logging.Logger:
 
 
 PRINT_AUDIT_LOGGER = _build_print_audit_logger()
+
+
+@app.on_event("startup")
+async def startup_events():
+    """Iniciar workers opcionales de automatizacion."""
+    try:
+        from odoo_automation import odoo_automation_worker
+
+        odoo_automation_worker.start()
+    except Exception as e:
+        print(f"ADVERTENCIA: No se pudo iniciar worker Odoo: {e}")
+
+
+@app.on_event("shutdown")
+async def shutdown_events():
+    """Detener workers opcionales de automatizacion."""
+    try:
+        from odoo_automation import odoo_automation_worker
+
+        odoo_automation_worker.stop()
+    except Exception as e:
+        print(f"ADVERTENCIA: No se pudo detener worker Odoo: {e}")
 
 @app.get("/")
 async def root():

@@ -366,12 +366,177 @@
                         <th>Envio</th>
                         <th>Cliente</th>
                         <th>Accion</th>
+                        <th>Estado</th>
                     </tr>
                     </thead>
                     <tbody id="adm-sales-body">
-                        <tr><td colspan="3" class="empty-cell">Sincroniza para ver etiquetas detectadas</td></tr>
+                        <tr><td colspan="4" class="empty-cell">Sincroniza para ver etiquetas detectadas</td></tr>
                     </tbody>
                 </table>
+            </div>
+        </div>
+
+        <div class="card" id="odoo-automation-section">
+            <h2>Automatizacion Odoo + Administrado</h2>
+            <p style="margin-bottom: 12px; color: #4b5563;">
+                Flujo separado: detecta envios en Administrado, busca la cotizacion en Odoo y luego imprime orden + etiqueta.
+            </p>
+            <div class="grid">
+                <div>
+                    <div class="form-group">
+                        <label>
+                            <input type="checkbox" id="odoo-enabled"> Habilitar integracion Odoo
+                        </label>
+                    </div>
+                    <div class="form-group">
+                        <label>
+                            <input type="checkbox" id="odoo-auto-enabled"> Habilitar automatizacion en background
+                        </label>
+                    </div>
+                    <div class="form-group">
+                        <label>Intervalo (segundos):</label>
+                        <input type="number" id="odoo-interval" min="15" max="3600" value="60">
+                    </div>
+                    <div class="form-group">
+                        <label>URL Odoo:</label>
+                        <input type="text" id="odoo-url" placeholder="https://tu-odoo.com">
+                    </div>
+                    <div class="form-group">
+                        <label>Base de datos:</label>
+                        <input type="text" id="odoo-db" placeholder="odoo_prod">
+                    </div>
+                    <div class="form-group">
+                        <label>Usuario:</label>
+                        <input type="text" id="odoo-user" placeholder="usuario@empresa.com">
+                    </div>
+                    <div class="form-group">
+                        <label>Clave/API Key:</label>
+                        <input type="password" id="odoo-password" placeholder="API key o password">
+                    </div>
+                    <div class="form-group">
+                        <label>Reporte cotizacion:</label>
+                        <input type="text" id="odoo-report-name" placeholder="sale.report_saleorder">
+                    </div>
+                    <div class="form-group">
+                        <label>Prefijo de orden (por envio):</label>
+                        <input type="text" id="odoo-order-prefix" placeholder="ML ">
+                    </div>
+                    <div class="form-group">
+                        <label>Campo shipment en Odoo (opcional):</label>
+                        <input type="text" id="odoo-shipment-field" placeholder="x_meli_shipment_id">
+                    </div>
+                    <div class="form-group">
+                        <label>Estados permitidos:</label>
+                        <input type="text" id="odoo-order-states" placeholder="draft,sent,sale">
+                    </div>
+                    <div class="form-group">
+                        <label>Envios por ciclo:</label>
+                        <input type="number" id="odoo-sync-limit" min="1" max="50" value="20">
+                    </div>
+                    <div class="form-group">
+                        <label>Delay orden -> etiqueta (segundos):</label>
+                        <input type="number" id="odoo-order-label-delay" min="0" max="30" value="1">
+                    </div>
+                    <div class="form-group">
+                        <label>
+                            <input type="checkbox" id="odoo-include-reprint"> Incluir "reimprimir etiqueta"
+                        </label>
+                    </div>
+                    <div class="form-group">
+                        <label>
+                            <input type="checkbox" id="odoo-confirm-on-print"> Confirmar cotizacion al imprimir orden + etiqueta
+                        </label>
+                    </div>
+                    <div style="display: flex; gap: 10px; flex-wrap: wrap;">
+                        <button class="btn" onclick="saveOdooConfig()">Guardar Odoo</button>
+                        <button class="btn success" onclick="testOdooConnection()">Probar conexion</button>
+                        <button class="btn" onclick="runOdooAutomationOnce()">Ejecutar ciclo ahora</button>
+                        <button class="btn danger" onclick="resetOdooAutomationProcessed()">Reset procesados</button>
+                    </div>
+                    <h3 style="margin-top: 18px;">Usuarios Odoo por operador</h3>
+                    <p style="color: #6b7280; margin-bottom: 10px;">
+                        Si se carga un usuario, la confirmacion en Odoo queda registrada con ese usuario.
+                    </p>
+                    <div class="form-group">
+                        <label>Usuario en Administrado:</label>
+                        <input type="text" id="odoo-operator-app-username" placeholder="ej: admin">
+                    </div>
+                    <div class="form-group">
+                        <label>Usuario Odoo:</label>
+                        <input type="text" id="odoo-operator-odoo-username" placeholder="ej: ventas@empresa.com">
+                    </div>
+                    <div class="form-group">
+                        <label>Password Odoo:</label>
+                        <input type="password" id="odoo-operator-odoo-password" placeholder="password usuario Odoo">
+                    </div>
+                    <div style="display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 10px;">
+                        <button class="btn" onclick="saveOdooOperatorUser()">Guardar usuario Odoo</button>
+                        <button class="btn" onclick="loadOdooOperatorUsers()">Actualizar lista</button>
+                    </div>
+                    <div class="table-scroll">
+                        <table class="table-clean">
+                            <thead>
+                            <tr>
+                                <th>Usuario app</th>
+                                <th>Usuario Odoo</th>
+                                <th>Password</th>
+                                <th>Accion</th>
+                            </tr>
+                            </thead>
+                            <tbody id="odoo-operator-users-body">
+                                <tr><td colspan="4" class="empty-cell">Sin usuarios cargados</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+                <div>
+                    <h3>Impresoras para orden y etiqueta</h3>
+                    <div class="form-group">
+                        <label>Orden Odoo - principal:</label>
+                        <select id="odoo-order-printer-primary">
+                            <option value="">Cargando impresoras...</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>Orden Odoo - respaldo:</label>
+                        <select id="odoo-order-printer-fallback">
+                            <option value="">(Sin respaldo)</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>Copias orden:</label>
+                        <input type="number" id="odoo-order-copies" min="1" max="10" value="1">
+                    </div>
+                    <div class="form-group">
+                        <label>
+                            <input type="checkbox" id="odoo-force-order-grayscale"> Forzar orden en blanco y negro
+                        </label>
+                    </div>
+                    <div class="form-group">
+                        <label>Etiqueta Administrado - principal:</label>
+                        <select id="odoo-label-printer-primary">
+                            <option value="">Cargando impresoras...</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>Etiqueta Administrado - respaldo:</label>
+                        <select id="odoo-label-printer-fallback">
+                            <option value="">(Sin respaldo)</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>Copias etiqueta:</label>
+                        <input type="number" id="odoo-label-copies" min="1" max="10" value="1">
+                    </div>
+                    <h3>Estado worker</h3>
+                    <p>Worker activo: <span id="odoo-worker-running">-</span></p>
+                    <p>Envios procesados: <span id="odoo-processed-count">0</span></p>
+                    <p>Ultimo ciclo: <span id="odoo-last-cycle">-</span></p>
+                    <p>Resultado: <span id="odoo-last-result">-</span></p>
+                    <p>Ultimos impresos: <span id="odoo-recent-processed">-</span></p>
+                    <p>Ultimo error: <span id="odoo-last-error">-</span></p>
+                    <p>Config path: <span id="odoo-config-path">-</span></p>
+                </div>
             </div>
         </div>
 
@@ -413,6 +578,11 @@
         let administradoSales = [];
         let administradoSyncInProgress = false;
         let administradoAutoSyncDone = false;
+        const administradoPrintInFlight = new Set();
+        let odooConfig = {};
+        let odooOperatorUsers = [];
+        let odooAutomationStatus = {};
+        let odooStatusTimer = null;
         const ADMIN_ONLY_STORAGE_KEY = 'etiquetador_admin_only_mode';
         let adminOnlyMode = true;
 
@@ -556,6 +726,8 @@
                 await loadMercadoLibreConfig();
                 await loadAdministradoConfig();
                 await autoSyncAdministradoIfNeeded();
+                await loadOdooConfig();
+                await loadOdooAutomationStatus();
                 loadBackups();
             } catch (error) {
                 console.error('Error cargando configuraciones:', error);
@@ -564,6 +736,7 @@
                 updateBackupForm();
                 updateMercadoLibreForm();
                 updateAdministradoForm();
+                updateOdooForm();
             }
         }
 
@@ -699,6 +872,350 @@
 
             if (selected && !printers.includes(selected)) {
                 select.innerHTML += `<option value="${selected}" selected>${selected}</option>`;
+            }
+        }
+
+        function mergeUniqueStrings(arrays) {
+            const seen = new Set();
+            const result = [];
+            for (const arr of arrays) {
+                for (const value of arr || []) {
+                    const text = String(value || '').trim();
+                    if (!text) continue;
+                    if (seen.has(text)) continue;
+                    seen.add(text);
+                    result.push(text);
+                }
+            }
+            return result;
+        }
+
+        function setSelectOptions(selectId, options, selectedValue = '', emptyLabel = '(Sin seleccionar)') {
+            const select = document.getElementById(selectId);
+            if (!select) return;
+            const normalizedSelected = String(selectedValue || '').trim();
+            const list = Array.isArray(options) ? options : [];
+            const html = [`<option value="">${emptyLabel}</option>`];
+            for (const option of list) {
+                const safe = String(option || '').trim();
+                if (!safe) continue;
+                html.push(`<option value="${safe}" ${safe === normalizedSelected ? 'selected' : ''}>${safe}</option>`);
+            }
+            if (normalizedSelected && !list.includes(normalizedSelected)) {
+                html.push(`<option value="${normalizedSelected}" selected>${normalizedSelected}</option>`);
+            }
+            select.innerHTML = html.join('');
+        }
+
+        function updateOdooForm() {
+            const config = odooConfig || {};
+            document.getElementById('odoo-enabled').checked = config.enabled === true;
+            document.getElementById('odoo-auto-enabled').checked = config.automation_enabled === true;
+            document.getElementById('odoo-interval').value = config.automation_interval_seconds || 60;
+            document.getElementById('odoo-url').value = config.base_url || '';
+            document.getElementById('odoo-db').value = config.database || '';
+            document.getElementById('odoo-user').value = config.username || '';
+            document.getElementById('odoo-password').value = '';
+            document.getElementById('odoo-report-name').value = config.report_name || 'sale.report_saleorder';
+            document.getElementById('odoo-order-prefix').value = config.order_prefix || 'ML ';
+            document.getElementById('odoo-shipment-field').value = config.shipment_field || '';
+            document.getElementById('odoo-order-states').value = config.allowed_order_states || 'draft,sent,sale';
+            document.getElementById('odoo-sync-limit').value = config.automation_sync_limit || 20;
+            const orderToLabelDelay = Number(config.automation_order_to_label_delay_seconds);
+            document.getElementById('odoo-order-label-delay').value = Number.isFinite(orderToLabelDelay) ? orderToLabelDelay : 1;
+            document.getElementById('odoo-include-reprint').checked = config.automation_include_reprint === true;
+            document.getElementById('odoo-confirm-on-print').checked = config.confirm_order_on_print === true;
+            document.getElementById('odoo-order-copies').value = config.default_order_copies || 1;
+            document.getElementById('odoo-force-order-grayscale').checked = config.force_order_grayscale === true;
+            document.getElementById('odoo-label-copies').value = config.default_label_copies || 1;
+            document.getElementById('odoo-config-path').textContent = config.config_path || '-';
+            updateOdooAutomationStatusForm();
+        }
+
+        function renderOdooOperatorUsers() {
+            const tbody = document.getElementById('odoo-operator-users-body');
+            const items = Array.isArray(odooOperatorUsers) ? odooOperatorUsers : [];
+            if (!items.length) {
+                tbody.innerHTML = '<tr><td colspan="4" class="empty-cell">Sin usuarios cargados</td></tr>';
+                return;
+            }
+            tbody.innerHTML = items.map((item) => {
+                const appUser = item.app_username || '';
+                const encodedAppUser = encodeURIComponent(appUser);
+                return `
+                <tr>
+                    <td><span class="mono-id">${appUser || '-'}</span></td>
+                    <td>${item.odoo_username || '-'}</td>
+                    <td>${item.has_password ? 'Guardada' : 'No'}</td>
+                    <td><button class="btn danger sm" onclick="deleteOdooOperatorUser('${encodedAppUser}')">Eliminar</button></td>
+                </tr>
+            `;
+            }).join('');
+        }
+
+        async function loadOdooOperatorUsers() {
+            const response = await fetchAPI('/api/odoo/operator-users');
+            odooOperatorUsers = (response && Array.isArray(response.items)) ? response.items : [];
+            renderOdooOperatorUsers();
+        }
+
+        function updateOdooAutomationStatusForm() {
+            const status = odooAutomationStatus || {};
+            const running = status.running === true;
+            document.getElementById('odoo-worker-running').textContent = running ? 'Si' : 'No';
+            document.getElementById('odoo-processed-count').textContent = status.processed_count || 0;
+            document.getElementById('odoo-last-cycle').textContent = status.last_cycle_finished_at || '-';
+            const result = status.last_cycle_result || {};
+            if (Object.keys(result).length) {
+                const text = `checked=${result.checked || 0}, printed=${result.printed || 0}, errors=${result.errors || 0}`;
+                document.getElementById('odoo-last-result').textContent = text;
+            } else {
+                document.getElementById('odoo-last-result').textContent = '-';
+            }
+            const recentProcessed = Array.isArray(status.recent_processed_envios) ? status.recent_processed_envios : [];
+            if (recentProcessed.length) {
+                document.getElementById('odoo-recent-processed').textContent = recentProcessed
+                    .slice(0, 10)
+                    .map(item => item.envio_id)
+                    .join(', ');
+            } else {
+                document.getElementById('odoo-recent-processed').textContent = '-';
+            }
+            document.getElementById('odoo-last-error').textContent = status.last_error || '-';
+        }
+
+        async function loadOdooPrinters() {
+            const allData = await fetchAPI('/api/printers');
+            const networkData = await fetchAPI('/api/printers/network');
+
+            const allPrinters = mergeUniqueStrings([
+                (allData && allData.printers) ? allData.printers : [],
+                (networkData && networkData.printers) ? networkData.printers : []
+            ]);
+            const networkPrinters = mergeUniqueStrings([
+                (networkData && networkData.printers) ? networkData.printers : [],
+                allPrinters
+            ]);
+
+            setSelectOptions(
+                'odoo-order-printer-primary',
+                networkPrinters,
+                odooConfig.default_order_printer || 'Expedicion',
+                'Seleccionar impresora principal'
+            );
+            setSelectOptions(
+                'odoo-order-printer-fallback',
+                networkPrinters,
+                odooConfig.fallback_order_printer || '',
+                '(Sin impresora de respaldo)'
+            );
+            setSelectOptions(
+                'odoo-label-printer-primary',
+                allPrinters,
+                odooConfig.default_label_printer || administradoConfig.default_printer || '',
+                'Seleccionar impresora principal'
+            );
+            setSelectOptions(
+                'odoo-label-printer-fallback',
+                allPrinters,
+                odooConfig.fallback_label_printer || '',
+                '(Sin impresora de respaldo)'
+            );
+        }
+
+        async function loadOdooConfig() {
+            const response = await fetchAPI('/api/odoo/config');
+            odooConfig = response || {};
+            updateOdooForm();
+            await loadOdooOperatorUsers();
+            await loadOdooPrinters();
+        }
+
+        async function loadOdooAutomationStatus() {
+            const response = await fetchAPI('/api/odoo/automation/status');
+            odooAutomationStatus = response || {};
+            updateOdooAutomationStatusForm();
+        }
+
+        async function saveOdooConfig() {
+            const config = {
+                enabled: document.getElementById('odoo-enabled').checked,
+                automation_enabled: document.getElementById('odoo-auto-enabled').checked,
+                automation_interval_seconds: parseInt(document.getElementById('odoo-interval').value, 10) || 60,
+                base_url: document.getElementById('odoo-url').value.trim(),
+                database: document.getElementById('odoo-db').value.trim(),
+                username: document.getElementById('odoo-user').value.trim(),
+                password: document.getElementById('odoo-password').value.trim(),
+                report_name: document.getElementById('odoo-report-name').value.trim() || 'sale.report_saleorder',
+                order_prefix: document.getElementById('odoo-order-prefix').value || 'ML ',
+                shipment_field: document.getElementById('odoo-shipment-field').value.trim(),
+                allowed_order_states: document.getElementById('odoo-order-states').value.trim() || 'draft,sent,sale',
+                automation_sync_limit: parseInt(document.getElementById('odoo-sync-limit').value, 10) || 20,
+                automation_order_to_label_delay_seconds: parseInt(document.getElementById('odoo-order-label-delay').value, 10) || 0,
+                automation_include_reprint: document.getElementById('odoo-include-reprint').checked,
+                confirm_order_on_print: document.getElementById('odoo-confirm-on-print').checked,
+                default_order_printer: document.getElementById('odoo-order-printer-primary').value.trim(),
+                fallback_order_printer: document.getElementById('odoo-order-printer-fallback').value.trim(),
+                default_order_copies: parseInt(document.getElementById('odoo-order-copies').value, 10) || 1,
+                force_order_grayscale: document.getElementById('odoo-force-order-grayscale').checked,
+                default_label_printer: document.getElementById('odoo-label-printer-primary').value.trim(),
+                fallback_label_printer: document.getElementById('odoo-label-printer-fallback').value.trim(),
+                default_label_copies: parseInt(document.getElementById('odoo-label-copies').value, 10) || 1
+            };
+
+            try {
+                const apiBase = await ensureApiPort();
+                const response = await fetch(`${apiBase}/api/odoo/config`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(config)
+                });
+
+                if (response.ok) {
+                    odooConfig = await response.json();
+                    updateOdooForm();
+                    await loadOdooPrinters();
+                    alert('OK: Configuracion Odoo guardada');
+                } else {
+                    const error = await response.text();
+                    alert(`Error guardando Odoo: ${response.status}`);
+                    console.error('Error Odoo config:', error);
+                }
+            } catch (error) {
+                alert(`Error de conexion: ${error.message}`);
+            }
+        }
+
+        async function testOdooConnection() {
+            try {
+                const apiBase = await ensureApiPort();
+                const config = {
+                    enabled: document.getElementById('odoo-enabled').checked,
+                    automation_enabled: document.getElementById('odoo-auto-enabled').checked,
+                    automation_interval_seconds: parseInt(document.getElementById('odoo-interval').value, 10) || 60,
+                    base_url: document.getElementById('odoo-url').value.trim(),
+                    database: document.getElementById('odoo-db').value.trim(),
+                    username: document.getElementById('odoo-user').value.trim(),
+                    password: document.getElementById('odoo-password').value.trim(),
+                    report_name: document.getElementById('odoo-report-name').value.trim() || 'sale.report_saleorder',
+                    order_prefix: document.getElementById('odoo-order-prefix').value || 'ML ',
+                    shipment_field: document.getElementById('odoo-shipment-field').value.trim(),
+                    allowed_order_states: document.getElementById('odoo-order-states').value.trim() || 'draft,sent,sale',
+                    automation_sync_limit: parseInt(document.getElementById('odoo-sync-limit').value, 10) || 20,
+                    automation_order_to_label_delay_seconds: parseInt(document.getElementById('odoo-order-label-delay').value, 10) || 0,
+                    automation_include_reprint: document.getElementById('odoo-include-reprint').checked,
+                    confirm_order_on_print: document.getElementById('odoo-confirm-on-print').checked,
+                    default_order_printer: document.getElementById('odoo-order-printer-primary').value.trim(),
+                    fallback_order_printer: document.getElementById('odoo-order-printer-fallback').value.trim(),
+                    default_order_copies: parseInt(document.getElementById('odoo-order-copies').value, 10) || 1,
+                    force_order_grayscale: document.getElementById('odoo-force-order-grayscale').checked,
+                    default_label_printer: document.getElementById('odoo-label-printer-primary').value.trim(),
+                    fallback_label_printer: document.getElementById('odoo-label-printer-fallback').value.trim(),
+                    default_label_copies: parseInt(document.getElementById('odoo-label-copies').value, 10) || 1
+                };
+                await fetch(`${apiBase}/api/odoo/config`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(config)
+                });
+                const response = await fetch(`${apiBase}/api/odoo/session/test`, { method: 'POST' });
+                const result = await response.json();
+                if (response.ok) {
+                    alert(`OK: Conectado a Odoo (uid=${result.uid})`);
+                    await loadOdooAutomationStatus();
+                } else {
+                    alert(`Error Odoo: ${result.detail || response.status}`);
+                }
+            } catch (error) {
+                alert(`Error de conexion: ${error.message}`);
+            }
+        }
+
+        async function saveOdooOperatorUser() {
+            try {
+                const appUsername = document.getElementById('odoo-operator-app-username').value.trim();
+                const odooUsername = document.getElementById('odoo-operator-odoo-username').value.trim();
+                const odooPassword = document.getElementById('odoo-operator-odoo-password').value.trim();
+                if (!appUsername || !odooUsername || !odooPassword) {
+                    alert('Completa usuario app, usuario Odoo y password Odoo');
+                    return;
+                }
+                const apiBase = await ensureApiPort();
+                const response = await fetch(`${apiBase}/api/odoo/operator-users`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        app_username: appUsername,
+                        odoo_username: odooUsername,
+                        odoo_password: odooPassword
+                    })
+                });
+                const result = await response.json();
+                if (!response.ok) {
+                    alert(`Error guardando usuario Odoo: ${result.detail || response.status}`);
+                    return;
+                }
+                odooOperatorUsers = Array.isArray(result.items) ? result.items : [];
+                renderOdooOperatorUsers();
+                document.getElementById('odoo-operator-odoo-password').value = '';
+                alert('OK: Usuario Odoo por operador guardado');
+            } catch (error) {
+                alert(`Error de conexion: ${error.message}`);
+            }
+        }
+
+        async function deleteOdooOperatorUser(appUsername) {
+            try {
+                const safeUser = decodeURIComponent(String(appUsername || '').trim());
+                if (!safeUser) return;
+                const apiBase = await ensureApiPort();
+                const response = await fetch(`${apiBase}/api/odoo/operator-users/${encodeURIComponent(safeUser)}`, {
+                    method: 'DELETE'
+                });
+                const result = await response.json();
+                if (!response.ok) {
+                    alert(`Error eliminando usuario Odoo: ${result.detail || response.status}`);
+                    return;
+                }
+                odooOperatorUsers = Array.isArray(result.items) ? result.items : [];
+                renderOdooOperatorUsers();
+            } catch (error) {
+                alert(`Error de conexion: ${error.message}`);
+            }
+        }
+
+        async function runOdooAutomationOnce() {
+            try {
+                const apiBase = await ensureApiPort();
+                const response = await fetch(`${apiBase}/api/odoo/automation/run-once`, { method: 'POST' });
+                const result = await response.json();
+                if (response.ok) {
+                    alert(`Ciclo ejecutado: checked=${result.checked || 0}, printed=${result.printed || 0}, errors=${result.errors || 0}`);
+                } else {
+                    alert(`Error ejecutando ciclo: ${result.detail || response.status}`);
+                }
+                await loadOdooAutomationStatus();
+            } catch (error) {
+                alert(`Error de conexion: ${error.message}`);
+            }
+        }
+
+        async function resetOdooAutomationProcessed() {
+            if (!confirm('Reiniciar la memoria de envios procesados?')) {
+                return;
+            }
+            try {
+                const apiBase = await ensureApiPort();
+                const response = await fetch(`${apiBase}/api/odoo/automation/reset-processed`, { method: 'POST' });
+                const result = await response.json();
+                if (response.ok) {
+                    alert('OK: Procesados reiniciados');
+                } else {
+                    alert(`Error reiniciando procesados: ${result.detail || response.status}`);
+                }
+                await loadOdooAutomationStatus();
+            } catch (error) {
+                alert(`Error de conexion: ${error.message}`);
             }
         }
 
@@ -1018,7 +1535,7 @@
             const tbody = document.getElementById('adm-sales-body');
             const summary = document.getElementById('adm-sync-summary');
             if (!administradoSales.length) {
-                tbody.innerHTML = '<tr><td colspan="3" class="empty-cell">Sincroniza para ver etiquetas detectadas</td></tr>';
+                tbody.innerHTML = '<tr><td colspan="4" class="empty-cell">Sincroniza para ver etiquetas detectadas</td></tr>';
                 summary.textContent = 'Sin datos';
                 summary.classList.add('is-empty');
                 return;
@@ -1033,12 +1550,42 @@
                         <span class="customer-user">${sale.customer_username ? '@' + sale.customer_username : '-'}</span>
                     </td>
                     <td>
-                        <button class="btn success sm" onclick="printAdministradoShipment('${sale.envio_id}')">
-                            ${sale.print_mode === 'reimprimir' ? 'Reimprimir' : 'Imprimir'}
+                        <button class="btn success sm" ${sale._printing ? 'disabled' : ''} onclick="printAdministradoShipment('${sale.envio_id}', 'both')">
+                            ${sale.print_mode === 'reimprimir' ? 'Reimprimir orden + etiqueta' : 'Imprimir orden + etiqueta'}
                         </button>
+                        ${sale.print_mode === 'reimprimir'
+                            ? `<button class="btn sm" ${sale._printing ? 'disabled' : ''} onclick="printAdministradoShipment('${sale.envio_id}', 'label_only')">Solo etiqueta</button>`
+                            : ''
+                        }
+                    </td>
+                    <td>
+                        ${sale._printing
+                            ? `<span class="status">${sale._printing_label || 'Procesando...'}</span><br><small>No cierres esta ventana</small>`
+                            : sale._last_print_result
+                            ? `<span class="status ${sale._last_success === false ? 'disabled' : 'enabled'}">${sale._last_print_result}</span><br>
+                               <small>${formatTime(sale._last_print_at)}</small>
+                               ${sale._last_print_actor ? `<br><small>Usuario: ${sale._last_print_actor}</small>` : ''}
+                               ${sale._last_order_printer ? `<br><small>Orden: ${sale._last_order_printer}</small>` : ''}
+                               ${sale._last_label_printer ? `<br><small>Etiqueta: ${sale._last_label_printer}</small>` : ''}
+                               ${sale._last_confirm_state_before || sale._last_confirm_state_after
+                                   ? `<br><small>Estado Odoo: ${sale._last_confirm_state_before || '-'} -> ${sale._last_confirm_state_after || '-'}</small>`
+                                   : ''
+                               }
+                               ${sale._last_error ? `<br><small style="color:#b91c1c;">${sale._last_error}</small>` : ''}`
+                            : '<span class="status">Pendiente</span>'
+                        }
                     </td>
                 </tr>
             `).join('');
+        }
+
+        function formatTime(value) {
+            if (!value) return '-';
+            try {
+                return new Date(value).toLocaleString();
+            } catch (error) {
+                return String(value);
+            }
         }
 
         async function syncAdministradoSales(options = {}) {
@@ -1095,35 +1642,127 @@
                 alert('Ingresa un envio ID');
                 return;
             }
-            await printAdministradoShipment(envioId);
+            await printAdministradoShipment(envioId, 'label_only');
         }
 
-        async function printAdministradoShipment(envioId) {
+        async function printAdministradoShipment(envioId, mode = 'both') {
+            const safeEnvioId = String(envioId || '').trim();
+            if (!safeEnvioId) {
+                alert('Envio invalido');
+                return;
+            }
+            if (administradoPrintInFlight.has(safeEnvioId)) {
+                alert(`El envio ${safeEnvioId} ya se esta procesando. Espera unos segundos.`);
+                return;
+            }
+
             try {
                 const apiBase = await ensureApiPort();
-                const response = await fetch(`${apiBase}/api/administrado/labels/print`, {
+                const selectedOrderPrinter = (
+                    (document.getElementById('odoo-order-printer-primary')?.value || '').trim()
+                );
+                const selectedLabelPrinter = (
+                    (document.getElementById('odoo-label-printer-primary')?.value || '').trim() ||
+                    document.getElementById('adm-default-printer-manual').value.trim() ||
+                    document.getElementById('adm-default-printer').value.trim()
+                );
+                const appUsername = (localStorage.getItem('username') || '').trim();
+                const modeText = mode === 'both' ? 'Orden + etiqueta' : 'Solo etiqueta';
+
+                const confirmText = [
+                    `Vas a enviar a imprimir:`,
+                    `- Envio: ${safeEnvioId}`,
+                    `- Accion: ${modeText}`,
+                    `- Impresora orden: ${selectedOrderPrinter || '(default configurada)'}`,
+                    `- Impresora etiqueta: ${selectedLabelPrinter || '(default configurada)'}`,
+                    `- Usuario app: ${appUsername || '-'}`,
+                    '',
+                    'Confirmar impresion?'
+                ].join('\n');
+                if (!confirm(confirmText)) {
+                    return;
+                }
+
+                administradoPrintInFlight.add(safeEnvioId);
+                const targetSale = administradoSales.find((sale) => String(sale.envio_id) === safeEnvioId);
+                if (targetSale) {
+                    targetSale._printing = true;
+                    targetSale._printing_label = modeText;
+                    renderAdministradoSales();
+                }
+
+                const response = await fetch(`${apiBase}/api/administrado/shipments/print`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
-                        envio_id: envioId,
-                        printer: (
-                            document.getElementById('adm-default-printer-manual').value.trim() ||
-                            document.getElementById('adm-default-printer').value.trim()
-                        )
+                        envio_id: safeEnvioId,
+                        mode,
+                        app_username: appUsername,
+                        order_printer: selectedOrderPrinter,
+                        label_printer: selectedLabelPrinter
                     })
                 });
                 const result = await response.json();
                 if (response.ok) {
-                    const verification = result.verification || {};
-                    const status = verification.new_job_detected
-                        ? `Detectado en spooler (${(verification.new_job_ids || []).join(', ')})`
-                        : 'Enviado a impresora, sin confirmacion de spooler';
-                    alert(`OK: Etiqueta de envio ${envioId} procesada para ${result.printer}. ${status}`);
+                    const orderPrinter = result.order_result && result.order_result.printer
+                        ? result.order_result.printer
+                        : '-';
+                    const labelPrinter = result.label_result && result.label_result.printer
+                        ? result.label_result.printer
+                        : '-';
+                    if (targetSale) {
+                        targetSale._last_print_at = new Date().toISOString();
+                        targetSale._last_print_result = modeText;
+                        targetSale._last_success = true;
+                        targetSale._last_print_actor = result.odoo_actor || appUsername || '';
+                        targetSale._last_order_printer = orderPrinter !== '-' ? orderPrinter : '';
+                        targetSale._last_label_printer = labelPrinter !== '-' ? labelPrinter : '';
+                        targetSale._last_error = '';
+                        const confirmResult = result.confirm_result || {};
+                        targetSale._last_confirm_state_before = confirmResult.state_before || '';
+                        targetSale._last_confirm_state_after = confirmResult.state_after || '';
+                        if (mode === 'both') {
+                            targetSale.print_mode = 'reimprimir';
+                        }
+                        targetSale._printing = false;
+                        targetSale._printing_label = '';
+                        renderAdministradoSales();
+                    }
+
+                    const confirmInfo = result.confirm_result
+                        ? ` | Odoo: ${result.confirm_result.state_before || '-'} -> ${result.confirm_result.state_after || '-'}`
+                        : '';
+                    alert(
+                        `OK: ${modeText} enviado para ${safeEnvioId}. ` +
+                        `Orden=${orderPrinter} Etiqueta=${labelPrinter} ` +
+                        `Actor=${result.odoo_actor || appUsername || '-'}${confirmInfo}`
+                    );
                 } else {
-                    alert(`Error imprimiendo etiqueta: ${result.detail || response.status}`);
+                    if (targetSale) {
+                        targetSale._printing = false;
+                        targetSale._printing_label = '';
+                        targetSale._last_success = false;
+                        targetSale._last_print_result = `ERROR: ${modeText}`;
+                        targetSale._last_error = result.detail || `HTTP ${response.status}`;
+                        targetSale._last_print_at = new Date().toISOString();
+                        renderAdministradoSales();
+                    }
+                    alert(`Error imprimiendo envio: ${result.detail || response.status}`);
                 }
             } catch (error) {
+                const targetSale = administradoSales.find((sale) => String(sale.envio_id) === String(safeEnvioId));
+                if (targetSale) {
+                    targetSale._printing = false;
+                    targetSale._printing_label = '';
+                    targetSale._last_success = false;
+                    targetSale._last_print_result = `ERROR: ${mode === 'both' ? 'Orden + etiqueta' : 'Solo etiqueta'}`;
+                    targetSale._last_error = error.message || 'Error de conexion';
+                    targetSale._last_print_at = new Date().toISOString();
+                    renderAdministradoSales();
+                }
                 alert(`Error de conexion: ${error.message}`);
+            } finally {
+                administradoPrintInFlight.delete(safeEnvioId);
             }
         }
 
@@ -1222,6 +1861,9 @@
         initViewMode();
         focusSectionFromHash();
         loadConfigs();
+        odooStatusTimer = setInterval(() => {
+            loadOdooAutomationStatus();
+        }, 15000);
         window.addEventListener('hashchange', () => {
             if (adminOnlyMode && window.location.hash !== '#administrado') {
                 window.location.hash = '#administrado';
@@ -1229,6 +1871,12 @@
             }
             focusSectionFromHash();
             autoSyncAdministradoIfNeeded(true);
+        });
+        window.addEventListener('beforeunload', () => {
+            if (odooStatusTimer) {
+                clearInterval(odooStatusTimer);
+                odooStatusTimer = null;
+            }
         });
     </script>
 </body>
