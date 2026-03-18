@@ -1554,7 +1554,10 @@
                             ${sale.print_mode === 'reimprimir' ? 'Reimprimir orden + etiqueta' : 'Imprimir orden + etiqueta'}
                         </button>
                         ${sale.print_mode === 'reimprimir'
-                            ? `<button class="btn sm" ${sale._printing ? 'disabled' : ''} onclick="printAdministradoShipment('${sale.envio_id}', 'label_only')">Solo etiqueta</button>`
+                            ? `
+                                <button class="btn sm" ${sale._printing ? 'disabled' : ''} onclick="printAdministradoShipment('${sale.envio_id}', 'order_only')">Solo orden Odoo</button>
+                                <button class="btn sm" ${sale._printing ? 'disabled' : ''} onclick="printAdministradoShipment('${sale.envio_id}', 'label_only')">Solo etiqueta</button>
+                              `
                             : ''
                         }
                     </td>
@@ -1655,6 +1658,11 @@
                 alert(`El envio ${safeEnvioId} ya se esta procesando. Espera unos segundos.`);
                 return;
             }
+            const modeTextMap = {
+                both: 'Orden + etiqueta',
+                label_only: 'Solo etiqueta',
+                order_only: 'Solo orden Odoo'
+            };
 
             try {
                 const apiBase = await ensureApiPort();
@@ -1667,7 +1675,7 @@
                     document.getElementById('adm-default-printer').value.trim()
                 );
                 const appUsername = (localStorage.getItem('username') || '').trim();
-                const modeText = mode === 'both' ? 'Orden + etiqueta' : 'Solo etiqueta';
+                const modeText = modeTextMap[mode] || mode;
 
                 const confirmText = [
                     `Vas a enviar a imprimir:`,
@@ -1755,7 +1763,7 @@
                     targetSale._printing = false;
                     targetSale._printing_label = '';
                     targetSale._last_success = false;
-                    targetSale._last_print_result = `ERROR: ${mode === 'both' ? 'Orden + etiqueta' : 'Solo etiqueta'}`;
+                    targetSale._last_print_result = `ERROR: ${(modeTextMap[mode] || mode)}`;
                     targetSale._last_error = error.message || 'Error de conexion';
                     targetSale._last_print_at = new Date().toISOString();
                     renderAdministradoSales();

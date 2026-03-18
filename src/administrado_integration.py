@@ -14,6 +14,7 @@ import os
 import sqlite3
 import time
 import html as html_lib
+import threading
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -33,6 +34,13 @@ class AdministradoIntegration:
         self.config_path = self._resolve_config_path()
         self.storage_state_path = self.config_path.with_name("administrado_storage_state.json")
         self.config = self._load_config()
+        self._playwright_runtime_lock = threading.Lock()
+        self._playwright_runtime: Dict[str, Any] = {
+            "driver": None,
+            "browser": None,
+            "context": None,
+            "storage_mtime": None,
+        }
 
     def _resolve_config_path(self) -> Path:
         try:
@@ -57,6 +65,8 @@ class AdministradoIntegration:
             "default_copies": 1,
             "auto_crop_pdf": True,
             "use_playwright": True,
+            "spooler_confirmation_timeout_seconds": 2.0,
+            "spooler_poll_interval_seconds": 0.4,
             "last_error": "",
         }
 
@@ -176,36 +186,45 @@ class AdministradoIntegration:
         if not self.storage_state_path.exists():
             raise ValueError("No hay sesion guardada de Playwright")
 
-        sync_playwright = self._get_playwright()
         sales_url = self.config.get("sales_url", f"{self.BASE_URL}/seller/ventas3")
+        items: List[Dict[str, str]] = []
 
-        with sync_playwright() as playwright:
-            browser = playwright.chromium.launch(headless=True)
-            context = browser.new_context(storage_state=str(self.storage_state_path))
-            page = context.new_page()
-            page.goto(sales_url, wait_until="networkidle", timeout=120000)
-            items = page.evaluate(
-                """
-                () => {
-                    const matches = [];
-                    const elements = Array.from(document.querySelectorAll('a, button'));
-                    for (const el of elements) {
-                        const href = el.getAttribute('href') || '';
-                        const text = (el.innerText || el.textContent || '').trim();
-                        const qualifies = href.includes('/seller/envios/') || /imprimir etiqueta|reimprimir etiqueta/i.test(text);
-                        if (!qualifies) continue;
-                        const container = el.closest('tr, li, article, .row, .item, .card') || el.parentElement || el;
-                        matches.push({
-                            href,
-                            text,
-                            context_text: (container.innerText || container.textContent || '').trim()
-                        });
-                    }
-                    return matches;
-                }
-                """
-            )
-            browser.close()
+        with self._playwright_runtime_lock:
+            for attempt in range(2):
+                page = None
+                try:
+                    context = self._ensure_playwright_context_locked()
+                    page = context.new_page()
+                    page.goto(sales_url, wait_until="networkidle", timeout=120000)
+                    items = page.evaluate(
+                        """
+                        () => {
+                            const matches = [];
+                            const elements = Array.from(document.querySelectorAll('a, button'));
+                            for (const el of elements) {
+                                const href = el.getAttribute('href') || '';
+                                const text = (el.innerText || el.textContent || '').trim();
+                                const qualifies = href.includes('/seller/envios/') || /imprimir etiqueta|reimprimir etiqueta/i.test(text);
+                                if (!qualifies) continue;
+                                const container = el.closest('tr, li, article, .row, .item, .card') || el.parentElement || el;
+                                matches.push({
+                                    href,
+                                    text,
+                                    context_text: (container.innerText || container.textContent || '').trim()
+                                });
+                            }
+                            return matches;
+                        }
+                        """
+                    )
+                    break
+                except Exception:
+                    self._close_playwright_runtime_locked()
+                    if attempt == 1:
+                        raise
+                finally:
+                    if page is not None:
+                        page.close()
 
         return self._extract_label_links_from_items(items, limit=limit)
 
@@ -482,10 +501,26 @@ class AdministradoIntegration:
             finally:
                 handler.shutdown()
 
-        time.sleep(2)
-        jobs_after = get_print_jobs_from_spooler(selected_printer, max_jobs=10)
-        after_ids = {str(job.get("job_id")) for job in jobs_after if job.get("job_id") is not None}
-        new_job_ids = sorted(after_ids - before_ids)
+        confirmation_timeout = self._as_float(
+            self.config.get("spooler_confirmation_timeout_seconds", 2.0),
+            default=2.0,
+            min_value=0.0,
+            max_value=10.0,
+        )
+        poll_interval = self._as_float(
+            self.config.get("spooler_poll_interval_seconds", 0.4),
+            default=0.4,
+            min_value=0.1,
+            max_value=2.0,
+        )
+        jobs_after, new_job_ids, waited_seconds, polls = self._wait_for_spooler_diff(
+            printer_name=selected_printer,
+            before_ids=before_ids,
+            timeout_seconds=confirmation_timeout,
+            poll_interval_seconds=poll_interval,
+            max_jobs=10,
+            get_jobs_fn=get_print_jobs_from_spooler,
+        )
 
         return {
             "envio_id": envio_id,
@@ -497,6 +532,8 @@ class AdministradoIntegration:
                 "jobs_after": len(jobs_after),
                 "new_job_detected": bool(new_job_ids),
                 "new_job_ids": new_job_ids,
+                "waited_seconds": round(waited_seconds, 2),
+                "polls": polls,
             },
         }
 
@@ -537,6 +574,7 @@ class AdministradoIntegration:
     def _persist_playwright_session(self, context, browser, current_url: str) -> Dict[str, Any]:
         context.storage_state(path=str(self.storage_state_path))
         browser.close()
+        self.close_playwright_runtime()
         self.save_config({"last_error": "", "cookie_header": ""})
         return {
             "success": True,
@@ -545,23 +583,116 @@ class AdministradoIntegration:
         }
 
     def _test_session_playwright(self) -> Dict[str, Any]:
-        sync_playwright = self._get_playwright()
         sales_url = self.config.get("sales_url", f"{self.BASE_URL}/seller/ventas3")
-
-        with sync_playwright() as playwright:
-            browser = playwright.chromium.launch(headless=True)
-            context = browser.new_context(storage_state=str(self.storage_state_path))
+        with self._playwright_runtime_lock:
+            context = self._ensure_playwright_context_locked()
             page = context.new_page()
-            page.goto(sales_url, wait_until="domcontentloaded", timeout=120000)
-            time.sleep(2)
-            current_url = page.url
-            browser.close()
+            try:
+                page.goto(sales_url, wait_until="domcontentloaded", timeout=120000)
+                time.sleep(2)
+                current_url = page.url
+            finally:
+                page.close()
 
         return {
             "ok": "login" not in current_url.lower() and "administrado.net" in current_url.lower(),
             "status_code": 200,
             "final_url": current_url,
         }
+
+    @staticmethod
+    def _as_float(value: Any, default: float, min_value: float, max_value: float) -> float:
+        try:
+            number = float(value)
+        except (TypeError, ValueError):
+            number = default
+        if number < min_value:
+            return min_value
+        if number > max_value:
+            return max_value
+        return number
+
+    def _wait_for_spooler_diff(
+        self,
+        *,
+        printer_name: str,
+        before_ids: set[str],
+        timeout_seconds: float,
+        poll_interval_seconds: float,
+        max_jobs: int,
+        get_jobs_fn,
+    ) -> Tuple[List[Dict[str, Any]], List[str], float, int]:
+        start = time.time()
+        jobs_after: List[Dict[str, Any]] = []
+        new_job_ids: List[str] = []
+        polls = 0
+
+        while True:
+            polls += 1
+            jobs_after = get_jobs_fn(printer_name, max_jobs=max_jobs)
+            after_ids = {str(job.get("job_id")) for job in jobs_after if job.get("job_id") is not None}
+            new_job_ids = sorted(after_ids - before_ids)
+            elapsed = time.time() - start
+            if new_job_ids or elapsed >= timeout_seconds:
+                return jobs_after, new_job_ids, elapsed, polls
+            time.sleep(poll_interval_seconds)
+
+    def _storage_state_mtime(self) -> Optional[float]:
+        try:
+            return self.storage_state_path.stat().st_mtime
+        except OSError:
+            return None
+
+    def _ensure_playwright_context_locked(self):
+        if not self.storage_state_path.exists():
+            raise ValueError("No hay sesion guardada de Playwright")
+
+        runtime = self._playwright_runtime
+        storage_mtime = self._storage_state_mtime()
+        if runtime.get("context") is not None and runtime.get("storage_mtime") == storage_mtime:
+            return runtime["context"]
+
+        self._close_playwright_runtime_locked()
+        sync_playwright = self._get_playwright()
+        driver = sync_playwright().start()
+        browser = driver.chromium.launch(headless=True)
+        context = browser.new_context(storage_state=str(self.storage_state_path))
+        runtime["driver"] = driver
+        runtime["browser"] = browser
+        runtime["context"] = context
+        runtime["storage_mtime"] = storage_mtime
+        return context
+
+    def _close_playwright_runtime_locked(self) -> None:
+        runtime = self._playwright_runtime
+        context = runtime.get("context")
+        browser = runtime.get("browser")
+        driver = runtime.get("driver")
+
+        if context is not None:
+            try:
+                context.close()
+            except Exception:
+                pass
+        if browser is not None:
+            try:
+                browser.close()
+            except Exception:
+                pass
+        if driver is not None:
+            try:
+                driver.stop()
+            except Exception:
+                pass
+
+        runtime["driver"] = None
+        runtime["browser"] = None
+        runtime["context"] = None
+        runtime["storage_mtime"] = None
+
+    def close_playwright_runtime(self) -> None:
+        with self._playwright_runtime_lock:
+            self._close_playwright_runtime_locked()
 
     def _extract_context_from_html(self, html: str, start_idx: int, end_idx: int, window: int = 700) -> str:
         left = max(0, start_idx - window)

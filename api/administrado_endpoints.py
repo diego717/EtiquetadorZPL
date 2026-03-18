@@ -17,6 +17,7 @@ from pydantic import BaseModel, Field
 
 from administrado_integration import administrado_integration
 from odoo_integration import odoo_integration
+from print_fallbacks import download_and_print_label_with_fallback, download_and_print_order_with_fallback
 
 router = APIRouter(prefix="/api/administrado", tags=["administrado"])
 PRINT_STATE_LOCK = threading.Lock()
@@ -42,7 +43,7 @@ class AdministradoPrintRequest(BaseModel):
 
 class AdministradoShipmentPrintRequest(BaseModel):
     envio_id: str
-    mode: str = Field(default="both", pattern="^(both|label_only)$")
+    mode: str = Field(default="both")
     order_printer: str = ""
     label_printer: str = ""
     app_username: str = ""
@@ -126,7 +127,11 @@ def _record_print_event(
         return {}
 
     timestamp = datetime.now(timezone.utc).isoformat()
-    mode_text = "Orden + etiqueta" if mode == "both" else "Solo etiqueta"
+    mode_text = {
+        "both": "Orden + etiqueta",
+        "label_only": "Solo etiqueta",
+        "order_only": "Solo orden Odoo",
+    }.get(mode, mode or "N/A")
     state_label = mode_text if success else f"ERROR: {mode_text}"
 
     event = {
@@ -360,77 +365,21 @@ def _print_order_with_fallback(
     preferred_printer: str = "",
     auth_override: Optional[Dict[str, str]] = None,
 ) -> Dict[str, Any]:
-    selected_report = str(odoo_integration.config.get("report_name", "")).strip()
-    pdf_bytes = odoo_integration.download_sale_order_report_pdf(
+    return download_and_print_order_with_fallback(
+        envio_id=envio_id,
         order_id=order_id,
-        report_name=selected_report,
+        preferred_printer=preferred_printer,
         auth_override=auth_override,
+        report_name=str(odoo_integration.config.get("report_name", "")).strip(),
     )
-
-    primary = preferred_printer.strip() or str(odoo_integration.config.get("default_order_printer", "")).strip()
-    fallback = str(odoo_integration.config.get("fallback_order_printer", "")).strip()
-    copies = _safe_int(odoo_integration.config.get("default_order_copies", 1))
-
-    if not primary:
-        raise ValueError("No hay impresora configurada para la orden Odoo")
-
-    try:
-        result = odoo_integration.print_order_pdf(pdf_bytes, envio_id, printer=primary, copies=copies)
-        if result.get("success"):
-            return result
-    except Exception as exc:
-        result = {"success": False, "printer": primary, "error": str(exc)}
-
-    if fallback and fallback != primary:
-        try:
-            fallback_result = odoo_integration.print_order_pdf(pdf_bytes, envio_id, printer=fallback, copies=copies)
-            if fallback_result.get("success"):
-                return fallback_result
-            result = fallback_result
-        except Exception as exc:
-            result = {"success": False, "printer": fallback, "error": str(exc)}
-
-    return result
 
 
 def _print_label_with_fallback(envio_id: str, preferred_printer: str = "") -> Dict[str, Any]:
-    primary = preferred_printer.strip() or str(odoo_integration.config.get("default_label_printer", "")).strip()
-    fallback = str(odoo_integration.config.get("fallback_label_printer", "")).strip()
-    copies = _safe_int(odoo_integration.config.get("default_label_copies", 1))
-
-    if not primary:
-        primary = str(administrado_integration.get_default_printer() or "").strip()
-
-    if not primary:
-        raise ValueError("No hay impresora configurada para etiqueta")
-
-    pdf_bytes = administrado_integration.download_label_pdf(envio_id)
-
-    def _print(printer_name: str) -> Dict[str, Any]:
-        previous_copies = administrado_integration.config.get("default_copies", 1)
-        try:
-            administrado_integration.config["default_copies"] = copies
-            return administrado_integration.process_downloaded_pdf(pdf_bytes, envio_id, printer=printer_name)
-        finally:
-            administrado_integration.config["default_copies"] = previous_copies
-
-    try:
-        result = _print(primary)
-        if result.get("success"):
-            return result
-    except Exception as exc:
-        result = {"success": False, "printer": primary, "error": str(exc)}
-
-    if fallback and fallback != primary:
-        try:
-            fallback_result = _print(fallback)
-            if fallback_result.get("success"):
-                return fallback_result
-            result = fallback_result
-        except Exception as exc:
-            result = {"success": False, "printer": fallback, "error": str(exc)}
-
-    return result
+    return download_and_print_label_with_fallback(
+        envio_id=envio_id,
+        preferred_printer=preferred_printer,
+        copies=_safe_int(odoo_integration.config.get("default_label_copies", 1)),
+    )
 
 
 @router.post("/shipments/print")
@@ -440,9 +389,19 @@ async def print_shipment(request: AdministradoShipmentPrintRequest) -> Dict[str,
         if not envio_id:
             raise ValueError("envio_id vacio")
 
-        mode = str(request.mode or "both").strip().lower()
-        if mode not in {"both", "label_only"}:
-            raise ValueError("mode invalido. Usa 'both' o 'label_only'")
+        mode_raw = str(request.mode or "both").strip().lower()
+        mode = mode_raw.replace("-", "_").replace(" ", "_")
+        mode_aliases = {
+            "orderonly": "order_only",
+            "only_order": "order_only",
+            "order": "order_only",
+            "labelonly": "label_only",
+            "only_label": "label_only",
+            "label": "label_only",
+        }
+        mode = mode_aliases.get(mode, mode)
+        if mode not in {"both", "label_only", "order_only"}:
+            raise ValueError("mode invalido. Usa 'both', 'label_only' o 'order_only'")
 
         app_username = str(request.app_username or "").strip()
         _register_print_inflight(envio_id, mode, app_username)
@@ -455,7 +414,7 @@ async def print_shipment(request: AdministradoShipmentPrintRequest) -> Dict[str,
 
         order_result = None
         confirm_result = None
-        if mode == "both":
+        if mode in {"both", "order_only"}:
             order = await asyncio.to_thread(
                 odoo_integration.find_sale_order_by_envio,
                 envio_id,
@@ -486,24 +445,27 @@ async def print_shipment(request: AdministradoShipmentPrintRequest) -> Dict[str,
                     f"No se pudo imprimir orden Odoo para envio {envio_id}: {order_result.get('error', 'sin detalle')}"
                 )
 
-            delay_seconds = _safe_int(
-                odoo_integration.config.get("automation_order_to_label_delay_seconds", 1),
-                default=1,
-                min_value=0,
-                max_value=30,
-            )
-            if delay_seconds > 0:
-                await asyncio.to_thread(time.sleep, delay_seconds)
+            if mode == "both":
+                delay_seconds = _safe_int(
+                    odoo_integration.config.get("automation_order_to_label_delay_seconds", 1),
+                    default=1,
+                    min_value=0,
+                    max_value=30,
+                )
+                if delay_seconds > 0:
+                    await asyncio.to_thread(time.sleep, delay_seconds)
 
-        label_result = await asyncio.to_thread(
-            _print_label_with_fallback,
-            envio_id,
-            request.label_printer,
-        )
-        if not label_result.get("success"):
-            raise ValueError(
-                f"No se pudo imprimir etiqueta para envio {envio_id}: {label_result.get('error', 'sin detalle')}"
+        label_result = None
+        if mode in {"both", "label_only"}:
+            label_result = await asyncio.to_thread(
+                _print_label_with_fallback,
+                envio_id,
+                request.label_printer,
             )
+            if not label_result.get("success"):
+                raise ValueError(
+                    f"No se pudo imprimir etiqueta para envio {envio_id}: {label_result.get('error', 'sin detalle')}"
+                )
 
         # Persistir estado para que sobreviva refresh de pantalla.
         _record_print_event(

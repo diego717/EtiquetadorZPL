@@ -62,6 +62,10 @@ class OdooIntegration:
             "automation_include_reprint": False,
             "automation_order_to_label_delay_seconds": 1,
             "confirm_order_on_print": False,
+            "order_spooler_timeout_seconds": 15,
+            "order_spooler_poll_interval_seconds": 1,
+            "order_print_submit_retries": 1,
+            "order_strict_spooler_confirmation": False,
             "operator_odoo_users": {},
             "last_error": "",
         }
@@ -409,6 +413,42 @@ class OdooIntegration:
         from handlers import PDFHandler
         from print_queue_monitor import get_print_jobs_from_spooler
 
+        def _as_int(value: Any, default: int, min_value: int, max_value: int) -> int:
+            try:
+                parsed = int(value)
+            except (TypeError, ValueError):
+                parsed = default
+            if parsed < min_value:
+                return min_value
+            if parsed > max_value:
+                return max_value
+            return parsed
+
+        def _as_float(value: Any, default: float, min_value: float, max_value: float) -> float:
+            try:
+                parsed = float(value)
+            except (TypeError, ValueError):
+                parsed = default
+            if parsed < min_value:
+                return min_value
+            if parsed > max_value:
+                return max_value
+            return parsed
+
+        def _extract_job_ids(items: List[Dict[str, Any]]) -> set[str]:
+            return {str(job.get("job_id")) for job in items if job.get("job_id") is not None}
+
+        def _add_stage(stage: str, status: str, message: str = "", **extra: Any) -> None:
+            stage_event: Dict[str, Any] = {
+                "stage": stage,
+                "status": status,
+                "at": time.time(),
+            }
+            if message:
+                stage_event["message"] = message
+            stage_event.update(extra)
+            stage_timeline.append(stage_event)
+
         selected_printer = (printer or self.config.get("default_order_printer") or "").strip()
         if not selected_printer:
             raise ValueError("No hay impresora configurada para orden de Odoo")
@@ -417,8 +457,49 @@ class OdooIntegration:
         if safe_copies < 1:
             safe_copies = 1
 
-        jobs_before = get_print_jobs_from_spooler(selected_printer, max_jobs=10)
-        before_ids = {str(job.get("job_id")) for job in jobs_before if job.get("job_id") is not None}
+        stage_timeline: List[Dict[str, Any]] = []
+        spooler_max_jobs = 20
+        confirmation_timeout_seconds = _as_int(
+            self.config.get("order_spooler_timeout_seconds", 15),
+            default=15,
+            min_value=3,
+            max_value=120,
+        )
+        poll_interval_seconds = _as_float(
+            self.config.get("order_spooler_poll_interval_seconds", 1),
+            default=1,
+            min_value=0.3,
+            max_value=5,
+        )
+        submit_retries = _as_int(
+            self.config.get("order_print_submit_retries", 1),
+            default=1,
+            min_value=0,
+            max_value=3,
+        )
+        strict_confirmation = bool(self.config.get("order_strict_spooler_confirmation", False))
+
+        spooler_checked = True
+        spooler_error = ""
+        jobs_before: List[Dict[str, Any]] = []
+        before_ids: set[str] = set()
+        try:
+            jobs_before = get_print_jobs_from_spooler(selected_printer, max_jobs=spooler_max_jobs)
+            before_ids = _extract_job_ids(jobs_before)
+            _add_stage(
+                "snapshot_before",
+                "ok",
+                jobs_before=len(jobs_before),
+                before_job_ids=sorted(before_ids),
+            )
+        except Exception as exc:
+            spooler_checked = False
+            spooler_error = str(exc)
+            _add_stage("snapshot_before", "error", message=spooler_error)
+
+        submission_success = False
+        submission_error = ""
+        submit_attempts = submit_retries + 1
 
         with tempfile.TemporaryDirectory(prefix="odoo_order_pdf_") as temp_dir:
             temp_path = Path(temp_dir)
@@ -427,39 +508,157 @@ class OdooIntegration:
             pdf_path = temp_path / f"odoo_order_{envio_id}.pdf"
             pdf_path.write_bytes(pdf_bytes)
 
-            handler = PDFHandler(
-                {
-                    "entrada": str(temp_path),
-                    "historial": str(history_dir),
-                    "impresora": selected_printer,
-                    "recortar_pdf": False,
-                    "force_grayscale": bool(self.config.get("force_order_grayscale", False)),
-                    "copias": safe_copies,
-                    "poppler": "",
-                },
-                observer=None,
-                root=None,
-            )
-            try:
-                success = handler.procesar_pdf(str(pdf_path))
-            finally:
-                handler.shutdown()
+            for attempt in range(1, submit_attempts + 1):
+                _add_stage(
+                    "submit_to_printer",
+                    "started",
+                    attempt=attempt,
+                    total_attempts=submit_attempts,
+                    printer=selected_printer,
+                )
+                handler = PDFHandler(
+                    {
+                        "entrada": str(temp_path),
+                        "historial": str(history_dir),
+                        "impresora": selected_printer,
+                        "recortar_pdf": False,
+                        "force_grayscale": bool(self.config.get("force_order_grayscale", False)),
+                        "copias": safe_copies,
+                        "poppler": "",
+                    },
+                    observer=None,
+                    root=None,
+                )
+                try:
+                    attempt_ok = bool(handler.procesar_pdf(str(pdf_path)))
+                except Exception as exc:
+                    attempt_ok = False
+                    submission_error = str(exc)
+                    _add_stage(
+                        "submit_to_printer",
+                        "error",
+                        message=submission_error,
+                        attempt=attempt,
+                    )
+                finally:
+                    handler.shutdown()
 
-        time.sleep(2)
-        jobs_after = get_print_jobs_from_spooler(selected_printer, max_jobs=10)
-        after_ids = {str(job.get("job_id")) for job in jobs_after if job.get("job_id") is not None}
-        new_job_ids = sorted(after_ids - before_ids)
+                if attempt_ok:
+                    submission_success = True
+                    submission_error = ""
+                    _add_stage("submit_to_printer", "ok", attempt=attempt)
+                    break
+
+                if not submission_error:
+                    submission_error = "PDFHandler no confirmo envio al spooler."
+                if attempt < submit_attempts:
+                    _add_stage(
+                        "submit_to_printer",
+                        "retry",
+                        message=submission_error,
+                        attempt=attempt,
+                    )
+                    time.sleep(1)
+                else:
+                    _add_stage(
+                        "submit_to_printer",
+                        "failed",
+                        message=submission_error,
+                        attempt=attempt,
+                    )
+
+        jobs_after: List[Dict[str, Any]] = jobs_before
+        after_ids: set[str] = set(before_ids)
+        new_job_ids: List[str] = []
+        spooler_polls = 0
+        waited_seconds = 0.0
+
+        if submission_success and spooler_checked:
+            _add_stage(
+                "confirm_spooler",
+                "started",
+                timeout_seconds=confirmation_timeout_seconds,
+                poll_interval_seconds=poll_interval_seconds,
+            )
+            deadline = time.time() + confirmation_timeout_seconds
+            while time.time() <= deadline:
+                spooler_polls += 1
+                try:
+                    jobs_after = get_print_jobs_from_spooler(selected_printer, max_jobs=spooler_max_jobs)
+                    after_ids = _extract_job_ids(jobs_after)
+                    new_job_ids = sorted(after_ids - before_ids)
+                    waited_seconds = max(0.0, confirmation_timeout_seconds - max(0.0, deadline - time.time()))
+                    if new_job_ids:
+                        _add_stage(
+                            "confirm_spooler",
+                            "ok",
+                            new_job_ids=new_job_ids,
+                            polls=spooler_polls,
+                            waited_seconds=round(waited_seconds, 2),
+                        )
+                        break
+                except Exception as exc:
+                    spooler_checked = False
+                    spooler_error = str(exc)
+                    _add_stage("confirm_spooler", "error", message=spooler_error, polls=spooler_polls)
+                    break
+                time.sleep(poll_interval_seconds)
+
+            if spooler_checked and not new_job_ids:
+                _add_stage(
+                    "confirm_spooler",
+                    "timeout",
+                    polls=spooler_polls,
+                    waited_seconds=round(waited_seconds, 2),
+                )
+        elif submission_success:
+            _add_stage("confirm_spooler", "skipped", message="Spooler no disponible para confirmar")
+        else:
+            _add_stage("confirm_spooler", "skipped", message="No se confirma spooler por fallo de envio local")
+
+        confirmation_state = "failed_submission"
+        if submission_success:
+            if new_job_ids:
+                confirmation_state = "confirmed"
+            elif spooler_checked:
+                confirmation_state = "timeout_unconfirmed"
+            else:
+                confirmation_state = "unverified_spooler_unavailable"
+
+        overall_success = bool(submission_success)
+        if strict_confirmation and not new_job_ids:
+            overall_success = False
+
+        error_message = ""
+        if not submission_success:
+            error_message = submission_error or "No se pudo enviar el PDF a la impresora."
+        elif strict_confirmation and not new_job_ids:
+            error_message = (
+                "Impresion enviada localmente pero no confirmada en spooler "
+                f"({confirmation_state})."
+            )
 
         return {
             "envio_id": envio_id,
             "printer": selected_printer,
-            "success": bool(success),
+            "success": overall_success,
+            "local_submission_ok": bool(submission_success),
+            "confirmation_state": confirmation_state,
+            "strict_confirmation_enabled": strict_confirmation,
+            "error": error_message,
             "verification": {
-                "spooler_checked": True,
+                "spooler_checked": spooler_checked,
+                "spooler_error": spooler_error,
                 "jobs_before": len(jobs_before),
                 "jobs_after": len(jobs_after),
                 "new_job_detected": bool(new_job_ids),
                 "new_job_ids": new_job_ids,
+                "confirmation_timeout_seconds": confirmation_timeout_seconds,
+                "poll_interval_seconds": poll_interval_seconds,
+                "polls": spooler_polls,
+                "waited_seconds": round(waited_seconds, 2),
+                "submit_attempts": submit_attempts,
+                "stages": stage_timeline,
             },
         }
 

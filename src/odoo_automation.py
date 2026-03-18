@@ -15,6 +15,7 @@ from typing import Any, Dict, List, Optional, Tuple
 
 from administrado_integration import administrado_integration
 from odoo_integration import odoo_integration
+from print_fallbacks import download_and_print_label_with_fallback, print_order_pdf_with_fallback
 
 logger = logging.getLogger(__name__)
 
@@ -190,68 +191,15 @@ class OdooAutomationWorker:
         return prioritized[:sync_limit], skipped_reprint
 
     def _print_order_with_fallback(self, pdf_bytes: bytes, envio_id: str) -> Tuple[bool, Dict[str, Any]]:
-        primary = str(odoo_integration.config.get("default_order_printer", "")).strip()
-        fallback = str(odoo_integration.config.get("fallback_order_printer", "")).strip()
-        copies = int(odoo_integration.config.get("default_order_copies", 1) or 1)
-
-        if not primary:
-            raise ValueError("Falta impresora principal para orden Odoo")
-
-        try:
-            result = odoo_integration.print_order_pdf(pdf_bytes, envio_id, printer=primary, copies=copies)
-            if result.get("success"):
-                return True, result
-        except Exception as exc:
-            result = {"success": False, "printer": primary, "error": str(exc)}
-
-        if fallback and fallback != primary:
-            try:
-                fallback_result = odoo_integration.print_order_pdf(pdf_bytes, envio_id, printer=fallback, copies=copies)
-                if fallback_result.get("success"):
-                    return True, fallback_result
-                result = fallback_result
-            except Exception as exc:
-                result = {"success": False, "printer": fallback, "error": str(exc)}
-
-        return False, result
+        result = print_order_pdf_with_fallback(
+            envio_id=envio_id,
+            pdf_bytes=pdf_bytes,
+        )
+        return bool(result.get("success")), result
 
     def _print_label_with_fallback(self, envio_id: str) -> Tuple[bool, Dict[str, Any]]:
-        primary = str(odoo_integration.config.get("default_label_printer", "")).strip()
-        fallback = str(odoo_integration.config.get("fallback_label_printer", "")).strip()
-        copies = int(odoo_integration.config.get("default_label_copies", 1) or 1)
-
-        pdf_bytes = administrado_integration.download_label_pdf(envio_id)
-
-        def _print(printer_name: str) -> Dict[str, Any]:
-            # Forzar copies para etiqueta respetando configuracion Odoo automation.
-            previous_copies = administrado_integration.config.get("default_copies", 1)
-            try:
-                administrado_integration.config["default_copies"] = copies
-                return administrado_integration.process_downloaded_pdf(pdf_bytes, envio_id, printer=printer_name)
-            finally:
-                administrado_integration.config["default_copies"] = previous_copies
-
-        first_printer = primary or administrado_integration.get_default_printer()
-        if not first_printer:
-            raise ValueError("No hay impresora principal para etiquetas (Administrado)")
-
-        try:
-            result = _print(first_printer)
-            if result.get("success"):
-                return True, result
-        except Exception as exc:
-            result = {"success": False, "printer": first_printer, "error": str(exc)}
-
-        if fallback and fallback != first_printer:
-            try:
-                fallback_result = _print(fallback)
-                if fallback_result.get("success"):
-                    return True, fallback_result
-                result = fallback_result
-            except Exception as exc:
-                result = {"success": False, "printer": fallback, "error": str(exc)}
-
-        return False, result
+        result = download_and_print_label_with_fallback(envio_id=envio_id)
+        return bool(result.get("success")), result
 
     def run_cycle(self, force: bool = False) -> Dict[str, Any]:
         with self._lock:
