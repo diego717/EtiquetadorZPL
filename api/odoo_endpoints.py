@@ -16,6 +16,10 @@ from odoo_integration import odoo_integration
 router = APIRouter(prefix="/api/odoo", tags=["odoo"])
 
 
+def _friendly_error(exc: Exception) -> str:
+    return odoo_integration.humanize_exception(exc)
+
+
 class OdooConfigRequest(BaseModel):
     enabled: bool = False
     base_url: str = ""
@@ -85,8 +89,9 @@ async def test_connection() -> Dict[str, Any]:
         odoo_integration.save_config({"last_error": ""})
         return result
     except Exception as exc:
-        odoo_integration.save_config({"last_error": str(exc)})
-        raise HTTPException(status_code=400, detail=str(exc))
+        message = _friendly_error(exc)
+        odoo_integration.save_config({"last_error": message})
+        raise HTTPException(status_code=400, detail=message)
 
 
 @router.post("/orders/find")
@@ -99,8 +104,9 @@ async def find_order(request: OdooSearchOrderRequest) -> Dict[str, Any]:
             "order": order,
         }
     except Exception as exc:
-        odoo_integration.save_config({"last_error": str(exc)})
-        raise HTTPException(status_code=400, detail=str(exc))
+        message = _friendly_error(exc)
+        odoo_integration.save_config({"last_error": message})
+        raise HTTPException(status_code=400, detail=message)
 
 
 @router.post("/orders/print")
@@ -129,8 +135,9 @@ async def print_order(request: OdooPrintOrderRequest) -> Dict[str, Any]:
     except HTTPException:
         raise
     except Exception as exc:
-        odoo_integration.save_config({"last_error": str(exc)})
-        raise HTTPException(status_code=400, detail=str(exc))
+        message = _friendly_error(exc)
+        odoo_integration.save_config({"last_error": message})
+        raise HTTPException(status_code=400, detail=message)
 
 
 @router.get("/automation/status")
@@ -144,8 +151,9 @@ async def run_automation_once() -> Dict[str, Any]:
         result = await asyncio.to_thread(odoo_automation_worker.run_once)
         return result
     except Exception as exc:
-        odoo_integration.save_config({"last_error": str(exc)})
-        raise HTTPException(status_code=400, detail=str(exc))
+        message = _friendly_error(exc)
+        odoo_integration.save_config({"last_error": message})
+        raise HTTPException(status_code=400, detail=message)
 
 
 @router.post("/automation/reset-processed")

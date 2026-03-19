@@ -104,9 +104,10 @@ class OdooAutomationWorker:
                 self.run_cycle()
             except Exception as exc:
                 logger.exception("Error inesperado en ciclo de automatizacion Odoo: %s", exc)
+                message = odoo_integration.humanize_exception(exc)
                 with self._lock:
-                    self.state["last_error"] = str(exc)
-                    self._push_event(f"Error general: {exc}")
+                    self.state["last_error"] = message
+                    self._push_event(f"Error general: {message}")
                     self._save_state()
 
             interval = int(odoo_integration.config.get("automation_interval_seconds", 60) or 60)
@@ -304,7 +305,8 @@ class OdooAutomationWorker:
             except Exception as exc:
                 errors += 1
                 logger.exception("Error procesando envio %s", envio_id)
-                self._push_event(f"Envio {envio_id}: error {exc}")
+                message = odoo_integration.humanize_exception(exc)
+                self._push_event(f"Envio {envio_id}: error {message}")
 
         result = {
             "ok": errors == 0,

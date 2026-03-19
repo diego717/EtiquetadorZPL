@@ -6,6 +6,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import logging
 import time
 from datetime import datetime, timezone
 from pathlib import Path
@@ -20,10 +21,17 @@ from odoo_integration import odoo_integration
 from print_fallbacks import download_and_print_label_with_fallback, download_and_print_order_with_fallback
 
 router = APIRouter(prefix="/api/administrado", tags=["administrado"])
+logger = logging.getLogger(__name__)
 PRINT_STATE_LOCK = threading.Lock()
 MAX_PRINT_HISTORY_ITEMS = 500
 PRINT_INFLIGHT_LOCK = threading.Lock()
 PRINT_INFLIGHT: Dict[str, Dict[str, Any]] = {}
+
+
+def _friendly_error(error: Any) -> str:
+    if isinstance(error, Exception):
+        return odoo_integration.humanize_exception(error)
+    return odoo_integration.humanize_exception(Exception(str(error or "")))
 
 
 class AdministradoConfigRequest(BaseModel):
@@ -219,6 +227,62 @@ def _merge_print_state_into_sales(sales: list[Dict[str, Any]]) -> list[Dict[str,
     return sales
 
 
+def _looks_cancelled_in_administrado(sale: Dict[str, Any]) -> bool:
+    haystack = " ".join(
+        str(sale.get(key) or "").strip().lower()
+        for key in ("shipping_status", "shipping_substatus", "context_text", "status", "state")
+    )
+    if not haystack:
+        return False
+    cancelled_tokens = (
+        "cancelad",
+        "cancelado",
+        "cancelada",
+        "cancelacion",
+        "anulad",
+        "anulado",
+        "anulada",
+        "anulacion",
+        "canceled",
+        "cancelled",
+    )
+    return any(token in haystack for token in cancelled_tokens)
+
+
+def _is_cancelled_in_odoo(envio_id: str) -> bool:
+    try:
+        order = odoo_integration.find_sale_order_by_envio(envio_id, include_all_states=True)
+    except Exception as exc:
+        logger.warning("No se pudo validar estado Odoo para envio %s: %s", envio_id, exc)
+        return False
+    if not order:
+        return False
+    return str(order.get("state") or "").strip().lower() == "cancel"
+
+
+def _filter_non_printable_sales(sales: list[Dict[str, Any]]) -> list[Dict[str, Any]]:
+    if not isinstance(sales, list):
+        return []
+
+    check_odoo_cancel = bool(odoo_integration.config.get("enabled")) and odoo_integration.is_configured()
+    filtered: list[Dict[str, Any]] = []
+
+    for sale in sales:
+        if not isinstance(sale, dict):
+            continue
+
+        if _looks_cancelled_in_administrado(sale):
+            continue
+
+        envio_id = str(sale.get("envio_id") or "").strip()
+        if check_odoo_cancel and envio_id and _is_cancelled_in_odoo(envio_id):
+            continue
+
+        filtered.append(sale)
+
+    return filtered
+
+
 def _register_print_inflight(envio_id: str, mode: str, app_username: str) -> None:
     key = str(envio_id or "").strip()
     if not key:
@@ -273,8 +337,9 @@ async def test_session() -> Dict[str, Any]:
     try:
         return await asyncio.to_thread(administrado_integration.test_session)
     except Exception as exc:
-        administrado_integration.save_config({"last_error": str(exc)})
-        raise HTTPException(status_code=400, detail=str(exc))
+        message = _friendly_error(exc)
+        administrado_integration.save_config({"last_error": message})
+        raise HTTPException(status_code=400, detail=message)
 
 
 @router.post("/cookies/import")
@@ -285,8 +350,9 @@ async def import_cookies(request: AdministradoCookieImportRequest) -> Dict[str, 
             profile=request.profile,
         )
     except Exception as exc:
-        administrado_integration.save_config({"last_error": str(exc)})
-        raise HTTPException(status_code=400, detail=str(exc))
+        message = _friendly_error(exc)
+        administrado_integration.save_config({"last_error": message})
+        raise HTTPException(status_code=400, detail=message)
 
 
 @router.post("/playwright/capture-session")
@@ -297,8 +363,9 @@ async def capture_playwright_session(request: AdministradoPlaywrightCaptureReque
             request.timeout_seconds,
         )
     except Exception as exc:
-        administrado_integration.save_config({"last_error": str(exc)})
-        raise HTTPException(status_code=400, detail=str(exc))
+        message = _friendly_error(exc)
+        administrado_integration.save_config({"last_error": message})
+        raise HTTPException(status_code=400, detail=message)
 
 
 @router.post("/sales/sync")
@@ -308,11 +375,13 @@ async def sync_sales(request: AdministradoSyncRequest) -> Dict[str, Any]:
             administrado_integration.list_label_links,
             request.limit,
         )
+        sales = await asyncio.to_thread(_filter_non_printable_sales, sales)
         sales = _merge_print_state_into_sales(sales)
         return {"sales": sales, "count": len(sales)}
     except Exception as exc:
-        administrado_integration.save_config({"last_error": str(exc)})
-        raise HTTPException(status_code=400, detail=str(exc))
+        message = _friendly_error(exc)
+        administrado_integration.save_config({"last_error": message})
+        raise HTTPException(status_code=400, detail=message)
 
 
 @router.post("/labels/print")
@@ -337,14 +406,15 @@ async def print_label(request: AdministradoPrintRequest) -> Dict[str, Any]:
         )
         return result
     except Exception as exc:
+        message = _friendly_error(exc)
         _record_print_event(
             envio_id=request.envio_id,
             mode="label_only",
             success=False,
-            error=str(exc),
+            error=message,
         )
-        administrado_integration.save_config({"last_error": str(exc)})
-        raise HTTPException(status_code=400, detail=str(exc))
+        administrado_integration.save_config({"last_error": message})
+        raise HTTPException(status_code=400, detail=message)
 
 
 def _safe_int(value: Any, default: int = 1, min_value: int = 1, max_value: int = 10) -> int:
@@ -494,19 +564,20 @@ async def print_shipment(request: AdministradoShipmentPrintRequest) -> Dict[str,
             mode=str(request.mode or "both"),
             success=False,
             app_username=str(request.app_username or ""),
-            error=str(exc.detail),
+            error=_friendly_error(exc.detail),
         )
         raise
     except Exception as exc:
+        message = _friendly_error(exc)
         _record_print_event(
             envio_id=str(request.envio_id or ""),
             mode=str(request.mode or "both"),
             success=False,
             app_username=str(request.app_username or ""),
-            error=str(exc),
+            error=message,
         )
-        administrado_integration.save_config({"last_error": str(exc)})
-        raise HTTPException(status_code=400, detail=str(exc))
+        administrado_integration.save_config({"last_error": message})
+        raise HTTPException(status_code=400, detail=message)
     finally:
         _release_print_inflight(str(request.envio_id or ""))
 

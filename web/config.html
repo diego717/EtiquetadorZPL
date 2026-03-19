@@ -648,6 +648,17 @@
             return window.location.hash === '#administrado';
         }
 
+        function compactErrorText(value, maxLen = 220) {
+            const text = String(value || '').replace(/\s+/g, ' ').trim();
+            if (!text) {
+                return '-';
+            }
+            if (text.length <= maxLen) {
+                return text;
+            }
+            return `${text.slice(0, Math.max(0, maxLen - 3))}...`;
+        }
+
         async function autoSyncAdministradoIfNeeded(force = false) {
             if (!isAdministradoHashActive()) {
                 return;
@@ -806,7 +817,7 @@
             document.getElementById('meli-user-id').textContent = config.user_id || '-';
             document.getElementById('meli-nickname').textContent = config.nickname || '-';
             document.getElementById('meli-config-path').textContent = config.config_path || '-';
-            document.getElementById('meli-last-error').textContent = config.last_error || '-';
+            document.getElementById('meli-last-error').textContent = compactErrorText(config.last_error);
         }
 
         async function loadMercadoLibreConfig() {
@@ -839,7 +850,7 @@
             document.getElementById('adm-playwright-session').textContent = config.playwright_session ? 'Guardada' : 'No';
             document.getElementById('adm-config-path').textContent = config.config_path || '-';
             document.getElementById('adm-storage-path').textContent = config.storage_state_path || '-';
-            document.getElementById('adm-last-error').textContent = config.last_error || '-';
+            document.getElementById('adm-last-error').textContent = compactErrorText(config.last_error);
         }
 
         async function loadAdministradoConfig() {
@@ -981,7 +992,7 @@
             } else {
                 document.getElementById('odoo-recent-processed').textContent = '-';
             }
-            document.getElementById('odoo-last-error').textContent = status.last_error || '-';
+            document.getElementById('odoo-last-error').textContent = compactErrorText(status.last_error);
         }
 
         async function loadOdooPrinters() {
@@ -1574,7 +1585,7 @@
                                    ? `<br><small>Estado Odoo: ${sale._last_confirm_state_before || '-'} -> ${sale._last_confirm_state_after || '-'}</small>`
                                    : ''
                                }
-                               ${sale._last_error ? `<br><small style="color:#b91c1c;">${sale._last_error}</small>` : ''}`
+                               ${sale._last_error ? `<br><small style="color:#b91c1c;">${compactErrorText(sale._last_error, 180)}</small>` : ''}`
                             : '<span class="status">Pendiente</span>'
                         }
                     </td>
@@ -1751,7 +1762,7 @@
                         targetSale._printing_label = '';
                         targetSale._last_success = false;
                         targetSale._last_print_result = `ERROR: ${modeText}`;
-                        targetSale._last_error = result.detail || `HTTP ${response.status}`;
+                        targetSale._last_error = compactErrorText(result.detail || `HTTP ${response.status}`, 180);
                         targetSale._last_print_at = new Date().toISOString();
                         renderAdministradoSales();
                     }
@@ -1764,7 +1775,7 @@
                     targetSale._printing_label = '';
                     targetSale._last_success = false;
                     targetSale._last_print_result = `ERROR: ${(modeTextMap[mode] || mode)}`;
-                    targetSale._last_error = error.message || 'Error de conexion';
+                    targetSale._last_error = compactErrorText(error.message || 'Error de conexion', 180);
                     targetSale._last_print_at = new Date().toISOString();
                     renderAdministradoSales();
                 }

@@ -277,6 +277,8 @@ class AdministradoIntegration:
                 context_text=context_text,
                 fallback_action=action,
             )
+            if self._is_cancelled_sale(context_text=context_text):
+                continue
             print_mode = self._action_to_mode(action)
             sales.append({
                 "envio_id": envio_id,
@@ -354,6 +356,15 @@ class AdministradoIntegration:
                 customer_name = customer_name or parsed_name
                 customer_username = customer_username or parsed_username
 
+            shipping_status = str(order.get("shipping_status", "") or "").strip()
+            shipping_substatus = str(order.get("shipping_substatus", "") or "").strip()
+            if self._is_cancelled_sale(
+                context_text=context_text,
+                shipping_status=shipping_status,
+                shipping_substatus=shipping_substatus,
+            ):
+                continue
+
             sales.append({
                 "envio_id": envio_id,
                 "action": action,
@@ -365,6 +376,8 @@ class AdministradoIntegration:
                 "customer_name": customer_name,
                 "customer_username": customer_username,
                 "context_text": context_text,
+                "shipping_status": shipping_status,
+                "shipping_substatus": shipping_substatus,
             })
 
             if len(sales) >= limit:
@@ -398,6 +411,8 @@ class AdministradoIntegration:
             if envio_id in seen:
                 continue
             seen.add(envio_id)
+            if self._is_cancelled_sale(context_text=str(href or "")):
+                continue
             print_mode = self._action_to_mode(action)
             sales.append({
                 "envio_id": envio_id,
@@ -437,6 +452,8 @@ class AdministradoIntegration:
             if envio_id in seen:
                 continue
             seen.add(envio_id)
+            if self._is_cancelled_sale(context_text=full_context):
+                continue
             customer_name, customer_username = self._extract_customer_fields(full_context)
             print_mode = self._action_to_mode(action)
 
@@ -706,6 +723,28 @@ class AdministradoIntegration:
 
     def _action_to_mode(self, action: str) -> str:
         return "reimprimir" if str(action).lower() == "reimprimir_etiqueta" else "imprimir"
+
+    def _is_cancelled_sale(
+        self,
+        *,
+        context_text: str = "",
+        shipping_status: str = "",
+        shipping_substatus: str = "",
+    ) -> bool:
+        haystack = " ".join(
+            part.strip()
+            for part in [context_text, shipping_status, shipping_substatus]
+            if str(part or "").strip()
+        ).lower()
+        if not haystack:
+            return False
+        return bool(
+            re.search(
+                r"(cancelad[oa]s?|cancelaci[oó]n|anulad[oa]s?|anulaci[oó]n|canceled|cancelled)",
+                haystack,
+                re.IGNORECASE,
+            )
+        )
 
     def _resolve_action(
         self,

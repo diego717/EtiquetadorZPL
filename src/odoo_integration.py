@@ -6,6 +6,7 @@ from __future__ import annotations
 
 import json
 import logging
+import re
 import tempfile
 import time
 import xmlrpc.client
@@ -18,9 +19,77 @@ logger = logging.getLogger(__name__)
 
 
 class OdooIntegration:
+    _MAX_PUBLIC_ERROR_LEN = 280
+
     def __init__(self) -> None:
         self.config_path = self._resolve_config_path()
         self.config = self._load_config()
+
+    @staticmethod
+    def _collapse_whitespace(text: Any) -> str:
+        raw = str(text or "")
+        return " ".join(raw.replace("\r", " ").replace("\n", " ").split()).strip()
+
+    @classmethod
+    def _truncate_public_error(cls, message: str) -> str:
+        compact = cls._collapse_whitespace(message)
+        if not compact:
+            return ""
+        if len(compact) <= cls._MAX_PUBLIC_ERROR_LEN:
+            return compact
+        return f"{compact[:cls._MAX_PUBLIC_ERROR_LEN - 3]}..."
+
+    def _humanize_fault(self, exc: xmlrpc.client.Fault) -> str:
+        fault_text = str(getattr(exc, "faultString", "") or "")
+
+        if "InFailedSqlTransaction" in fault_text:
+            return (
+                "Odoo no pudo confirmar la orden por un error de transaccion en stock/procurement. "
+                "Revisa el log del servidor para ver la causa inicial."
+            )
+
+        match = re.search(
+            r"(?:odoo\.exceptions\.)?(UserError|ValidationError|AccessError|MissingError):\s*(.+)",
+            fault_text,
+        )
+        if match:
+            err_type = match.group(1)
+            err_message = self._truncate_public_error(match.group(2))
+            return f"Odoo {err_type}: {err_message}"
+
+        db_match = re.search(r"psycopg2\.errors\.([A-Za-z0-9_]+):\s*(.+)", fault_text)
+        if db_match:
+            db_message = self._truncate_public_error(db_match.group(2))
+            return f"Odoo error de base de datos ({db_match.group(1)}): {db_message}"
+
+        lines = [line.strip() for line in fault_text.splitlines() if line.strip()]
+        for line in reversed(lines):
+            if line.lower().startswith("traceback"):
+                continue
+            if line.startswith("File "):
+                continue
+            if line.startswith("return ") or line.startswith("res = ") or line.startswith("result = "):
+                continue
+            short_line = self._truncate_public_error(line)
+            if short_line:
+                return f"Odoo XML-RPC error: {short_line}"
+
+        fallback = self._truncate_public_error(str(exc))
+        return fallback or "Error XML-RPC de Odoo"
+
+    def humanize_exception(self, exc: Exception) -> str:
+        if isinstance(exc, xmlrpc.client.Fault):
+            return self._humanize_fault(exc)
+
+        message = str(exc or "")
+        if "InFailedSqlTransaction" in message:
+            return (
+                "Odoo devolvio una transaccion abortada (InFailedSqlTransaction). "
+                "Revisa el log del servidor para la causa inicial."
+            )
+
+        compact = self._truncate_public_error(message)
+        return compact or "Error inesperado al comunicarse con Odoo"
 
     def _resolve_config_path(self) -> Path:
         try:
@@ -170,6 +239,7 @@ class OdooIntegration:
         self,
         envio_id: str,
         auth_override: Optional[Dict[str, str]] = None,
+        include_all_states: bool = False,
     ) -> Optional[Dict[str, Any]]:
         envio = str(envio_id or "").strip()
         if not envio:
@@ -196,7 +266,7 @@ class OdooIntegration:
                 ("origin", "ilike", envio),
             ]
 
-        if states:
+        if states and not include_all_states:
             domain.append(("state", "in", states))
 
         fields = [
@@ -312,14 +382,18 @@ class OdooIntegration:
 
         state_before = str(before_data[0].get("state") or "")
         if state_before not in {"sale", "done", "cancel"}:
-            models.execute_kw(
-                db,
-                uid,
-                password,
-                "sale.order",
-                "action_confirm",
-                [[int(order_id)]],
-            )
+            try:
+                models.execute_kw(
+                    db,
+                    uid,
+                    password,
+                    "sale.order",
+                    "action_confirm",
+                    [[int(order_id)]],
+                )
+            except Exception as exc:
+                logger.exception("Error confirmando sale.order id=%s", order_id)
+                raise ValueError(self.humanize_exception(exc)) from exc
 
         after_data = models.execute_kw(
             db,
