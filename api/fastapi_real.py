@@ -96,6 +96,13 @@ try:
 except ImportError as e:
     print(f"ADVERTENCIA: Endpoints de Cola Cloud no disponibles: {e}")
 
+# Incluir endpoints de observabilidad/control de cola de despacho
+try:
+    from dispatch_endpoints import router as dispatch_router
+    app.include_router(dispatch_router)
+except ImportError as e:
+    print(f"ADVERTENCIA: Endpoints de Dispatch no disponibles: {e}")
+
 # Montar archivos estáticos
 try:
     if Path("web").exists():

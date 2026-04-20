@@ -13,12 +13,14 @@ from pathlib import Path
 import threading
 from typing import Any, Dict, Optional
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 
 from administrado_integration import administrado_integration
+from auth_dependencies import get_optional_current_user
 from odoo_integration import odoo_integration
 from print_fallbacks import download_and_print_label_with_fallback, download_and_print_order_with_fallback
+from print_dispatch_queue import print_dispatch_queue
 
 router = APIRouter(prefix="/api/administrado", tags=["administrado"])
 logger = logging.getLogger(__name__)
@@ -26,6 +28,7 @@ PRINT_STATE_LOCK = threading.Lock()
 MAX_PRINT_HISTORY_ITEMS = 500
 PRINT_INFLIGHT_LOCK = threading.Lock()
 PRINT_INFLIGHT: Dict[str, Dict[str, Any]] = {}
+DISPATCH_MAX_ATTEMPTS = 3
 
 
 def _friendly_error(error: Any) -> str:
@@ -429,6 +432,39 @@ def _safe_int(value: Any, default: int = 1, min_value: int = 1, max_value: int =
     return number
 
 
+def _normalize_shipment_print_mode(mode_raw: Any) -> str:
+    mode = str(mode_raw or "both").strip().lower()
+    mode = mode.replace("-", "_").replace(" ", "_")
+    mode_aliases = {
+        "orderonly": "order_only",
+        "only_order": "order_only",
+        "order": "order_only",
+        "labelonly": "label_only",
+        "only_label": "label_only",
+        "label": "label_only",
+    }
+    mode = mode_aliases.get(mode, mode)
+    if mode not in {"both", "label_only", "order_only"}:
+        raise ValueError("mode invalido. Usa 'both', 'label_only' o 'order_only'")
+    return mode
+
+
+def _build_dispatch_task_view(task: Optional[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
+    if not isinstance(task, dict):
+        return None
+    return {
+        "id": task.get("id"),
+        "status": task.get("status"),
+        "attempt_count": task.get("attempt_count"),
+        "max_attempts": task.get("max_attempts"),
+        "last_error": task.get("last_error"),
+        "updated_at": task.get("updated_at"),
+        "completed_at": task.get("completed_at"),
+        "next_retry_at": task.get("next_retry_at"),
+        "idempotency_key": task.get("idempotency_key"),
+    }
+
+
 def _print_order_with_fallback(
     envio_id: str,
     order_id: int,
@@ -453,133 +489,189 @@ def _print_label_with_fallback(envio_id: str, preferred_printer: str = "") -> Di
 
 
 @router.post("/shipments/print")
-async def print_shipment(request: AdministradoShipmentPrintRequest) -> Dict[str, Any]:
+async def print_shipment(
+    request: AdministradoShipmentPrintRequest,
+    user: Optional[Dict[str, Any]] = Depends(get_optional_current_user),
+) -> Dict[str, Any]:
     try:
         envio_id = str(request.envio_id or "").strip()
         if not envio_id:
             raise ValueError("envio_id vacio")
 
-        mode_raw = str(request.mode or "both").strip().lower()
-        mode = mode_raw.replace("-", "_").replace(" ", "_")
-        mode_aliases = {
-            "orderonly": "order_only",
-            "only_order": "order_only",
-            "order": "order_only",
-            "labelonly": "label_only",
-            "only_label": "label_only",
-            "label": "label_only",
-        }
-        mode = mode_aliases.get(mode, mode)
-        if mode not in {"both", "label_only", "order_only"}:
-            raise ValueError("mode invalido. Usa 'both', 'label_only' o 'order_only'")
-
-        app_username = str(request.app_username or "").strip()
-        _register_print_inflight(envio_id, mode, app_username)
-        auth_override = odoo_integration.resolve_operator_auth(app_username)
-        active_odoo_user = (
-            str(auth_override.get("username", "")).strip()
-            if auth_override
-            else str(odoo_integration.config.get("username", "")).strip()
-        )
-
-        order_result = None
-        confirm_result = None
-        if mode in {"both", "order_only"}:
-            order = await asyncio.to_thread(
-                odoo_integration.find_sale_order_by_envio,
-                envio_id,
-                auth_override,
-            )
-            if not order:
-                raise HTTPException(
-                    status_code=404,
-                    detail=f"No se encontro orden Odoo para envio {envio_id}. Revisa campo shipment/report_name.",
-                )
-
-            if bool(odoo_integration.config.get("confirm_order_on_print")):
-                confirm_result = await asyncio.to_thread(
-                    odoo_integration.confirm_sale_order,
-                    int(order["id"]),
-                    auth_override,
-                )
-
-            order_result = await asyncio.to_thread(
-                _print_order_with_fallback,
-                envio_id,
-                int(order["id"]),
-                request.order_printer,
-                auth_override,
-            )
-            if not order_result.get("success"):
-                raise ValueError(
-                    f"No se pudo imprimir orden Odoo para envio {envio_id}: {order_result.get('error', 'sin detalle')}"
-                )
-
-            if mode == "both":
-                delay_seconds = _safe_int(
-                    odoo_integration.config.get("automation_order_to_label_delay_seconds", 1),
-                    default=1,
-                    min_value=0,
-                    max_value=30,
-                )
-                if delay_seconds > 0:
-                    await asyncio.to_thread(time.sleep, delay_seconds)
-
-        label_result = None
-        if mode in {"both", "label_only"}:
-            label_result = await asyncio.to_thread(
-                _print_label_with_fallback,
-                envio_id,
-                request.label_printer,
-            )
-            if not label_result.get("success"):
-                raise ValueError(
-                    f"No se pudo imprimir etiqueta para envio {envio_id}: {label_result.get('error', 'sin detalle')}"
-                )
-
-        # Persistir estado para que sobreviva refresh de pantalla.
-        _record_print_event(
-            envio_id=envio_id,
-            mode=mode,
-            success=True,
-            app_username=app_username,
-            odoo_actor=active_odoo_user,
-            order_result=order_result,
-            label_result=label_result,
-            confirm_result=confirm_result,
-        )
-        return {
-            "success": True,
+        mode = _normalize_shipment_print_mode(request.mode)
+        token_username = str((user or {}).get("username") or "").strip()
+        body_username = str(request.app_username or "").strip()
+        app_username = token_username or body_username
+        auth_source = "token" if token_username else ("body" if body_username else "none")
+        app_username_key = str(app_username).strip().lower() or "anon"
+        idempotency_key = f"administrado:{envio_id}:{mode}:{app_username_key}"
+        dispatch_payload = {
             "envio_id": envio_id,
             "mode": mode,
-            "app_username": app_username or None,
-            "odoo_actor": active_odoo_user or None,
-            "confirm_result": confirm_result,
-            "order_result": order_result,
-            "label_result": label_result,
+            "order_printer": str(request.order_printer or "").strip(),
+            "label_printer": str(request.label_printer or "").strip(),
+            "app_username": app_username,
+            "auth_source": auth_source,
         }
-    except HTTPException as exc:
-        _record_print_event(
-            envio_id=str(request.envio_id or ""),
-            mode=str(request.mode or "both"),
-            success=False,
-            app_username=str(request.app_username or ""),
-            error=_friendly_error(exc.detail),
+
+        def _executor() -> Dict[str, Any]:
+            _register_print_inflight(envio_id, mode, app_username)
+            try:
+                auth_override = odoo_integration.resolve_operator_auth(app_username)
+                confirm_on_print_enabled = bool(odoo_integration.config.get("confirm_order_on_print"))
+                requires_order_flow = mode in {"both", "order_only"}
+
+                if confirm_on_print_enabled and requires_order_flow:
+                    if not app_username:
+                        raise ValueError(
+                            "Falta usuario operador. Inicia sesion para confirmar en Odoo."
+                        )
+                    if auth_source != "token":
+                        raise ValueError(
+                            "La confirmacion Odoo requiere sesion autenticada. "
+                            "Inicia sesion del operador (token/cookie) y reintenta."
+                        )
+                    if not auth_override:
+                        raise ValueError(
+                            "No hay usuario Odoo configurado para el operador "
+                            f"'{app_username}'. Cargalo en Odoo > Usuarios Odoo por operador."
+                        )
+
+                active_odoo_user = (
+                    str(auth_override.get("username", "")).strip()
+                    if auth_override
+                    else str(odoo_integration.config.get("username", "")).strip()
+                )
+
+                order_result = None
+                confirm_result = None
+                if mode in {"both", "order_only"}:
+                    order = odoo_integration.find_sale_order_by_envio(envio_id, auth_override)
+                    if not order:
+                        raise ValueError(
+                            f"No se encontro orden Odoo para envio {envio_id}. Revisa campo shipment/report_name."
+                        )
+
+                    if confirm_on_print_enabled:
+                        confirm_result = odoo_integration.confirm_sale_order(int(order["id"]), auth_override)
+
+                    order_result = _print_order_with_fallback(
+                        envio_id,
+                        int(order["id"]),
+                        request.order_printer,
+                        auth_override,
+                    )
+                    if not order_result.get("success"):
+                        raise ValueError(
+                            f"No se pudo imprimir orden Odoo para envio {envio_id}: {order_result.get('error', 'sin detalle')}"
+                        )
+
+                    if mode == "both":
+                        delay_seconds = _safe_int(
+                            odoo_integration.config.get("automation_order_to_label_delay_seconds", 1),
+                            default=1,
+                            min_value=0,
+                            max_value=30,
+                        )
+                        if delay_seconds > 0:
+                            time.sleep(delay_seconds)
+
+                label_result = None
+                if mode in {"both", "label_only"}:
+                    label_result = _print_label_with_fallback(
+                        envio_id,
+                        request.label_printer,
+                    )
+                    if not label_result.get("success"):
+                        raise ValueError(
+                            f"No se pudo imprimir etiqueta para envio {envio_id}: {label_result.get('error', 'sin detalle')}"
+                        )
+
+                _record_print_event(
+                    envio_id=envio_id,
+                    mode=mode,
+                    success=True,
+                    app_username=app_username,
+                    odoo_actor=active_odoo_user,
+                    order_result=order_result,
+                    label_result=label_result,
+                    confirm_result=confirm_result,
+                )
+                return {
+                    "success": True,
+                    "envio_id": envio_id,
+                    "mode": mode,
+                    "app_username": app_username or None,
+                    "auth_source": auth_source,
+                    "odoo_actor": active_odoo_user or None,
+                    "confirm_result": confirm_result,
+                    "order_result": order_result,
+                    "label_result": label_result,
+                }
+            finally:
+                _release_print_inflight(envio_id)
+
+        outcome = await asyncio.to_thread(
+            print_dispatch_queue.execute_with_idempotency,
+            source="administrado",
+            entity_id=envio_id,
+            action=mode,
+            idempotency_key=idempotency_key,
+            request_payload=dispatch_payload,
+            executor=_executor,
+            max_attempts=DISPATCH_MAX_ATTEMPTS,
         )
+
+        if outcome.get("status") == "processing":
+            task_view = _build_dispatch_task_view(outcome.get("task"))
+            raise HTTPException(
+                status_code=409,
+                detail=f"El envio {envio_id} ya se esta procesando. task={task_view.get('id') if task_view else '-'}",
+            )
+
+        if outcome.get("status") == "completed":
+            result = outcome.get("result") or {}
+            if not isinstance(result, dict):
+                result = {
+                    "success": True,
+                    "envio_id": envio_id,
+                    "mode": mode,
+                    "result": result,
+                }
+            result["dispatch_task"] = _build_dispatch_task_view(outcome.get("task"))
+            result["idempotent_reused"] = bool(outcome.get("reused"))
+            return result
+
+        message = _friendly_error(outcome.get("error") or "No se pudo completar el despacho de impresion.")
+        if not outcome.get("reused"):
+            _record_print_event(
+                envio_id=envio_id,
+                mode=mode,
+                success=False,
+                app_username=app_username,
+                error=message,
+            )
+        administrado_integration.save_config({"last_error": message})
+        raise HTTPException(status_code=400, detail=message)
+    except HTTPException:
         raise
     except Exception as exc:
         message = _friendly_error(exc)
+        mode_for_event = str(request.mode or "both")
+        effective_app_username = str(locals().get("app_username") or request.app_username or "")
+        try:
+            mode_for_event = _normalize_shipment_print_mode(mode_for_event)
+        except Exception:
+            pass
         _record_print_event(
             envio_id=str(request.envio_id or ""),
-            mode=str(request.mode or "both"),
+            mode=mode_for_event,
             success=False,
-            app_username=str(request.app_username or ""),
+            app_username=effective_app_username,
             error=message,
         )
         administrado_integration.save_config({"last_error": message})
         raise HTTPException(status_code=400, detail=message)
-    finally:
-        _release_print_inflight(str(request.envio_id or ""))
 
 
 @router.get("/prints/history")

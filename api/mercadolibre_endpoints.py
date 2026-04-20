@@ -4,6 +4,7 @@ Endpoints para integracion con Mercado Libre.
 
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
 from pathlib import Path
@@ -14,8 +15,10 @@ from fastapi import APIRouter, HTTPException, Query, Request
 from pydantic import BaseModel, Field
 
 from mercadolibre_integration import mercadolibre_integration
+from print_dispatch_queue import print_dispatch_queue
 
 logger = logging.getLogger(__name__)
+DISPATCH_MAX_ATTEMPTS = 3
 
 router = APIRouter(prefix="/api/mercadolibre", tags=["mercadolibre"])
 
@@ -103,6 +106,85 @@ def _print_shipment_label(shipment_id: str, printer: str = "", copies: Optional[
     }
 
 
+def _build_dispatch_task_view(task: Optional[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
+    if not isinstance(task, dict):
+        return None
+    return {
+        "id": task.get("id"),
+        "status": task.get("status"),
+        "attempt_count": task.get("attempt_count"),
+        "max_attempts": task.get("max_attempts"),
+        "last_error": task.get("last_error"),
+        "updated_at": task.get("updated_at"),
+        "completed_at": task.get("completed_at"),
+        "next_retry_at": task.get("next_retry_at"),
+        "idempotency_key": task.get("idempotency_key"),
+    }
+
+
+async def _print_shipment_with_queue(
+    *,
+    shipment_id: str,
+    printer: str = "",
+    copies: Optional[int] = None,
+    response_type: str = "zpl2",
+    source_context: str = "manual",
+) -> Dict[str, Any]:
+    safe_shipment_id = str(shipment_id or "").strip()
+    if not safe_shipment_id:
+        raise HTTPException(status_code=400, detail="shipment_id vacio")
+
+    idempotency_key = f"mercadolibre:{safe_shipment_id}:label"
+    payload = {
+        "shipment_id": safe_shipment_id,
+        "printer": str(printer or "").strip(),
+        "copies": int(copies or mercadolibre_integration.get_default_copies()),
+        "response_type": response_type,
+        "source_context": source_context,
+    }
+
+    def _executor() -> Dict[str, Any]:
+        return _print_shipment_label(
+            shipment_id=safe_shipment_id,
+            printer=printer,
+            copies=copies,
+            response_type=response_type,
+        )
+
+    outcome = await asyncio.to_thread(
+        print_dispatch_queue.execute_with_idempotency,
+        source="mercadolibre",
+        entity_id=safe_shipment_id,
+        action="label_only",
+        idempotency_key=idempotency_key,
+        request_payload=payload,
+        executor=_executor,
+        max_attempts=DISPATCH_MAX_ATTEMPTS,
+    )
+
+    status = outcome.get("status")
+    if status == "processing":
+        task_view = _build_dispatch_task_view(outcome.get("task"))
+        raise HTTPException(
+            status_code=409,
+            detail=(
+                f"El shipment {safe_shipment_id} ya se esta procesando. "
+                f"task={task_view.get('id') if task_view else '-'}"
+            ),
+        )
+
+    if status == "completed":
+        result = outcome.get("result") or {}
+        if not isinstance(result, dict):
+            result = {"shipment_id": safe_shipment_id, "result": result}
+        result["dispatch_task"] = _build_dispatch_task_view(outcome.get("task"))
+        result["idempotent_reused"] = bool(outcome.get("reused"))
+        return result
+
+    error_message = str(outcome.get("error") or "No se pudo completar la impresion del shipment.")
+    raise HTTPException(status_code=500, detail=error_message)
+
+
 @router.get("/status")
 async def get_status() -> Dict[str, Any]:
     return mercadolibre_integration.get_public_config()
@@ -158,11 +240,12 @@ async def refresh_oauth_token() -> Dict[str, Any]:
 @router.post("/shipments/print")
 async def print_shipment(request: PrintShipmentRequest) -> Dict[str, Any]:
     try:
-        return _print_shipment_label(
+        return await _print_shipment_with_queue(
             shipment_id=request.shipment_id,
             printer=request.printer,
             copies=request.copies,
             response_type=request.response_type,
+            source_context="manual",
         )
     except HTTPException:
         raise
@@ -225,7 +308,10 @@ async def receive_webhook(request: Request) -> Dict[str, Any]:
         }
 
     try:
-        result = _print_shipment_label(shipment_id=shipment_id)
+        result = await _print_shipment_with_queue(
+            shipment_id=shipment_id,
+            source_context="webhook",
+        )
         return {
             "accepted": True,
             "auto_print": True,

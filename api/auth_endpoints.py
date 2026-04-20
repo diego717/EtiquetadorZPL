@@ -6,10 +6,10 @@ from __future__ import annotations
 
 from typing import Any, Dict, List
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Response
 from pydantic import BaseModel, Field
 
-from auth_dependencies import get_current_user, require_admin
+from auth_dependencies import AUTH_COOKIE_NAME, get_current_user, require_admin
 from cloud_auth import cloud_auth_service
 
 router = APIRouter(prefix="/api/auth", tags=["auth"])
@@ -32,17 +32,33 @@ class ChangePasswordRequest(BaseModel):
 
 
 @router.post("/login")
-async def login(request: LoginRequest) -> Dict[str, Any]:
+async def login(request: LoginRequest, response: Response) -> Dict[str, Any]:
     auth = cloud_auth_service.authenticate(request.username.strip(), request.password)
     if not auth:
         raise HTTPException(status_code=401, detail="Credenciales invalidas")
-    token = cloud_auth_service.issue_token(auth["username"], auth["role"])
+    token_ttl = int(cloud_auth_service.config.get("token_ttl_seconds", 8 * 60 * 60))
+    token = cloud_auth_service.issue_token(auth["username"], auth["role"], ttl_seconds=token_ttl)
+    response.set_cookie(
+        key=AUTH_COOKIE_NAME,
+        value=token,
+        httponly=True,
+        secure=False,
+        samesite="lax",
+        max_age=token_ttl,
+        path="/",
+    )
     return {
         "access_token": token,
         "token_type": "bearer",
         "username": auth["username"],
         "role": auth["role"],
     }
+
+
+@router.post("/logout")
+async def logout(response: Response) -> Dict[str, Any]:
+    response.delete_cookie(key=AUTH_COOKIE_NAME, path="/")
+    return {"ok": True}
 
 
 @router.get("/me")

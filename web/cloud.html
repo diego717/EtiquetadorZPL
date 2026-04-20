@@ -6,38 +6,145 @@
     <title>EtiquetadorZPL - Cloud</title>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
-        body { font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif; background: #f5f5f5; }
+        body {
+            font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+            background: #f5f5f5;
+            color: #1f2937;
+            line-height: 1.35;
+        }
         .container { max-width: 1100px; margin: 0 auto; padding: 20px; }
         .header { background: #2c3e50; color: white; border-radius: 8px; padding: 20px; margin-bottom: 20px; }
+        .header h1 { font-size: 2.4rem; line-height: 1.1; margin-bottom: 4px; }
         .header-top { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; }
         .card { background: white; border-radius: 8px; padding: 20px; box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1); margin-bottom: 20px; }
-        .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
-        .btn { background: #3498db; color: white; border: none; border-radius: 4px; padding: 10px 16px; cursor: pointer; text-decoration: none; display: inline-block; }
+        .card h2 { margin-bottom: 12px; font-size: 1.7rem; line-height: 1.15; color: #111827; }
+        .card h3 { margin-bottom: 8px; font-size: 1.25rem; line-height: 1.2; color: #111827; }
+        .grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 20px; }
+        .grid > * { min-width: 0; }
+        .btn {
+            background: #3498db;
+            color: white;
+            border: none;
+            border-radius: 6px;
+            padding: 9px 14px;
+            cursor: pointer;
+            text-decoration: none;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 14px;
+            font-weight: 600;
+            min-height: 36px;
+            line-height: 1.2;
+        }
         .btn:hover { background: #2980b9; }
+        .btn:focus-visible {
+            outline: none;
+            box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.22);
+        }
         .btn.success { background: #27ae60; }
         .btn.success:hover { background: #229954; }
         .btn.danger { background: #e74c3c; }
         .btn.danger:hover { background: #c0392b; }
-        .btn.secondary { background: #7f8c8d; }
-        .btn.secondary:hover { background: #6f7b7c; }
-        .form-group { margin-bottom: 12px; }
+        .btn.secondary { background: #64748b; }
+        .btn.secondary:hover { background: #475569; }
+        #theme-toggle-btn { min-width: 132px; }
+        .form-group { margin-bottom: 14px; }
         .form-group label { display: block; margin-bottom: 6px; font-weight: 600; }
-        .form-group input, .form-group select { width: 100%; padding: 9px; border: 1px solid #d8d8d8; border-radius: 4px; }
-        .status { display: inline-block; padding: 4px 8px; border-radius: 4px; font-size: 12px; font-weight: 600; }
+        .form-group input, .form-group select {
+            width: 100%;
+            padding: 9px 10px;
+            border: 1px solid #d1d5db;
+            border-radius: 6px;
+            background: #fff;
+            color: #111827;
+            font-size: 14px;
+        }
+        .form-group input:focus-visible, .form-group select:focus-visible {
+            outline: none;
+            border-color: #60a5fa;
+            box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.18);
+        }
+        .status { display: inline-block; padding: 4px 8px; border-radius: 6px; font-size: 12px; font-weight: 600; }
         .status.ok { background: #d4edda; color: #155724; }
         .status.bad { background: #f8d7da; color: #721c24; }
         .status.warn { background: #fff3cd; color: #856404; }
-        .message { margin-top: 10px; padding: 10px; border-radius: 4px; display: none; }
+        .message { margin-top: 10px; padding: 10px; border-radius: 6px; display: none; }
         .message.ok { display: block; background: #d4edda; color: #155724; }
         .message.bad { display: block; background: #f8d7da; color: #721c24; }
         .muted { color: #666; font-size: 14px; }
         table { width: 100%; border-collapse: collapse; margin-top: 10px; }
         th, td { border-bottom: 1px solid #e6e6e6; text-align: left; padding: 10px; font-size: 14px; }
-        th { background: #f8f9fa; }
+        th { background: #f8f9fa; color: #4b5563; font-size: 12px; text-transform: uppercase; letter-spacing: .02em; }
+        td { overflow-wrap: anywhere; word-break: break-word; }
         .hidden { display: none !important; }
         .actions { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 10px; }
+        #users-list-card { overflow-x: auto; }
+        #users-list-card table { min-width: 520px; }
+
+        html[data-theme="dark"] body {
+            background: #0b1220;
+            color: #e5edf8;
+        }
+        html[data-theme="dark"] .header {
+            background: #0f1c33;
+            border: 1px solid #2f435f;
+        }
+        html[data-theme="dark"] .muted {
+            color: #9fb2ce;
+        }
+        html[data-theme="dark"] .card {
+            background: #111c31;
+            border: 1px solid #2a3f5b;
+            box-shadow: 0 10px 24px rgba(0, 0, 0, 0.35);
+        }
+        html[data-theme="dark"] .card h2,
+        html[data-theme="dark"] .card h3,
+        html[data-theme="dark"] .form-group label {
+            color: #eef4ff;
+        }
+        html[data-theme="dark"] .form-group input,
+        html[data-theme="dark"] .form-group select {
+            background: #0f182b;
+            border-color: #334963;
+            color: #dbe7f9;
+        }
+        html[data-theme="dark"] .form-group input::placeholder,
+        html[data-theme="dark"] .form-group select::placeholder {
+            color: #9fb4cf;
+        }
+        html[data-theme="dark"] .btn.secondary {
+            background: #2f415b;
+            color: #e3ecfb;
+        }
+        html[data-theme="dark"] .btn.secondary:hover {
+            background: #3b526f;
+        }
+        html[data-theme="dark"] table {
+            background: #0f182b;
+        }
+        html[data-theme="dark"] th,
+        html[data-theme="dark"] td {
+            border-bottom-color: #2c3f5a;
+        }
+        html[data-theme="dark"] th {
+            background: #1a2942;
+            color: #a6bbd8;
+        }
+        html[data-theme="dark"] td {
+            color: #d9e5f7;
+        }
+        html[data-theme="dark"] .status.ok { background: #1f4630; color: #9ce0bc; }
+        html[data-theme="dark"] .status.bad { background: #4b212a; color: #f4b9c0; }
+        html[data-theme="dark"] .status.warn { background: #4a3a1a; color: #f3d79d; }
+        html[data-theme="dark"] .message.ok { background: #1f4630; color: #9ce0bc; }
+        html[data-theme="dark"] .message.bad { background: #4b212a; color: #f4b9c0; }
         @media (max-width: 860px) {
             .grid { grid-template-columns: 1fr; }
+            .container { padding: 14px; }
+            .header { padding: 16px; }
+            .header h1 { font-size: 2rem; }
+            .card { padding: 16px; }
         }
     </style>
 </head>
@@ -47,9 +154,10 @@
             <div class="header-top">
                 <div>
                     <h1>Panel Cloud</h1>
-                    <p class="muted" style="color: #d8e0e8;">Login y gestion de usuarios para modo cloud</p>
+                    <p class="muted">Login y gestion de usuarios para modo cloud</p>
                 </div>
                 <div class="actions">
+                    <button id="theme-toggle-btn" class="btn secondary" onclick="toggleTheme()">Tema oscuro</button>
                     <a class="btn secondary" href="config.html#administrado">Volver a Administrado</a>
                     <button id="logout-btn" class="btn danger hidden" onclick="logout()">Cerrar sesion</button>
                 </div>
@@ -156,6 +264,41 @@
         const TOKEN_KEY = 'cloud_access_token';
         const USER_KEY = 'cloud_username';
         const ROLE_KEY = 'cloud_role';
+        const THEME_STORAGE_KEY = 'etiquetador_ui_theme';
+        let currentTheme = 'light';
+
+        function updateThemeToggleButton() {
+            const btn = document.getElementById('theme-toggle-btn');
+            if (!btn) return;
+            btn.textContent = currentTheme === 'dark' ? 'Tema claro' : 'Tema oscuro';
+            btn.setAttribute('aria-label', currentTheme === 'dark' ? 'Cambiar a tema claro' : 'Cambiar a tema oscuro');
+        }
+
+        function applyTheme(theme, persist = true) {
+            currentTheme = theme === 'dark' ? 'dark' : 'light';
+            document.documentElement.setAttribute('data-theme', currentTheme);
+            updateThemeToggleButton();
+            if (!persist) return;
+            try {
+                localStorage.setItem(THEME_STORAGE_KEY, currentTheme);
+            } catch (e) {
+                // Ignorar si localStorage no esta disponible.
+            }
+        }
+
+        function initTheme() {
+            let stored = null;
+            try {
+                stored = localStorage.getItem(THEME_STORAGE_KEY);
+            } catch (e) {
+                stored = null;
+            }
+            applyTheme(stored === 'dark' ? 'dark' : 'light', false);
+        }
+
+        function toggleTheme() {
+            applyTheme(currentTheme === 'dark' ? 'light' : 'dark', true);
+        }
 
         function setMessage(elementId, text, type) {
             const el = document.getElementById(elementId);
@@ -413,6 +556,7 @@
             await loadMe();
         }
 
+        initTheme();
         init();
     </script>
 </body>

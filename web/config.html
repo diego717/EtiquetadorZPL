@@ -5,101 +5,913 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>EtiquetadorZPL - Configuracion</title>
     <style>
-        * { margin: 0; padding: 0; box-sizing: border-box; }
-        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: #f5f5f5; }
-        .container { max-width: 1000px; margin: 0 auto; padding: 20px; }
-        .header { background: #2c3e50; color: white; padding: 20px; border-radius: 8px; margin-bottom: 20px; }
-        .nav { display: flex; gap: 10px; margin-bottom: 20px; }
-        .nav a { padding: 10px 20px; background: #3498db; color: white; text-decoration: none; border-radius: 4px; }
-        .nav a.active { background: #2980b9; }
-        .card { background: white; border-radius: 8px; padding: 20px; margin-bottom: 20px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
-        .form-group { margin-bottom: 15px; }
-        .form-group label { display: block; margin-bottom: 5px; font-weight: bold; }
-        .form-group input, .form-group select, .form-group textarea { 
-            width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px; 
+        @import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Manrope:wght@400;500;600;700&display=swap');
+
+        :root {
+            --bg-0: #050c16;
+            --bg-1: #0b1728;
+            --panel: rgba(10, 21, 37, 0.76);
+            --panel-strong: rgba(8, 17, 31, 0.9);
+            --line: rgba(124, 148, 182, 0.28);
+            --line-strong: rgba(124, 148, 182, 0.45);
+            --text-0: #e6edf8;
+            --text-1: #bdd0ea;
+            --accent: #42d0c7;
+            --accent-strong: #1fb8cf;
+            --danger: #ef6a6a;
+            --success: #34c38f;
+            --warn: #f0c674;
+            --shadow-soft: 0 14px 40px rgba(1, 6, 14, 0.4);
+            --shadow-strong: 0 20px 64px rgba(1, 6, 14, 0.6);
+            --radius-lg: 16px;
+            --radius-md: 12px;
+            --radius-sm: 10px;
         }
-        .btn { background: #3498db; color: white; border: none; padding: 10px 20px; border-radius: 4px; cursor: pointer; }
-        .btn:hover { background: #2980b9; }
-        .btn.danger { background: #e74c3c; }
-        .btn.danger:hover { background: #c0392b; }
-        .btn.success { background: #27ae60; }
-        .btn.success:hover { background: #229954; }
-        .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
-        .status { padding: 4px 8px; border-radius: 4px; font-size: 12px; }
-        .status.enabled { background: #d4edda; color: #155724; }
-        .status.disabled { background: #f8d7da; color: #721c24; }
-        .backup-item { display: flex; justify-content: space-between; align-items: center; padding: 10px; border: 1px solid #ddd; margin-bottom: 5px; border-radius: 4px; }
-        .status.ready { background: #d4edda; color: #155724; }
-        .status.not-ready { background: #fff3cd; color: #856404; }
-        .header-actions { margin-top: 12px; display: flex; gap: 10px; flex-wrap: wrap; }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            font-family: 'Manrope', 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            color: var(--text-0);
+            line-height: 1.4;
+            background:
+                radial-gradient(1200px 700px at 80% -10%, rgba(66, 208, 199, 0.17), transparent 58%),
+                radial-gradient(900px 500px at -10% 20%, rgba(30, 138, 255, 0.18), transparent 55%),
+                linear-gradient(160deg, var(--bg-0) 0%, var(--bg-1) 100%);
+            min-height: 100vh;
+            position: relative;
+            overflow-x: hidden;
+        }
+
+        body::before,
+        body::after {
+            content: "";
+            position: fixed;
+            pointer-events: none;
+            z-index: 0;
+        }
+
+        body::before {
+            width: 44rem;
+            height: 44rem;
+            border-radius: 999px;
+            top: -18rem;
+            right: -14rem;
+            background: radial-gradient(circle at 32% 34%, rgba(66, 208, 199, 0.32), rgba(4, 9, 18, 0));
+            filter: blur(12px);
+            animation: drift 14s ease-in-out infinite alternate;
+        }
+
+        body::after {
+            inset: 0;
+            background-image: linear-gradient(rgba(148, 163, 184, 0.08) 1px, transparent 1px), linear-gradient(90deg, rgba(148, 163, 184, 0.06) 1px, transparent 1px);
+            background-size: 44px 44px;
+            mask-image: radial-gradient(circle at 50% 30%, black 15%, transparent 85%);
+            opacity: 0.25;
+        }
+
+        @keyframes drift {
+            from { transform: translate3d(0, 0, 0) scale(1); }
+            to { transform: translate3d(-70px, 35px, 0) scale(1.07); }
+        }
+
+        .container {
+            position: relative;
+            z-index: 1;
+            max-width: 1120px;
+            margin: 0 auto;
+            padding: 22px 20px 48px;
+        }
+
+        .header {
+            background: linear-gradient(140deg, rgba(9, 21, 38, 0.94), rgba(13, 32, 58, 0.86));
+            border: 1px solid var(--line-strong);
+            color: var(--text-0);
+            padding: 24px;
+            border-radius: var(--radius-lg);
+            margin-bottom: 18px;
+            box-shadow: var(--shadow-soft);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .header::after {
+            content: "";
+            position: absolute;
+            inset: auto -120px -120px auto;
+            width: 280px;
+            height: 280px;
+            border-radius: 999px;
+            background: radial-gradient(circle, rgba(66, 208, 199, 0.26) 0%, rgba(66, 208, 199, 0) 72%);
+        }
+
+        .header h1 {
+            font-family: 'Space Grotesk', 'Manrope', sans-serif;
+            font-size: clamp(2rem, 3.8vw, 3rem);
+            letter-spacing: 0.01em;
+            line-height: 1.06;
+            margin-bottom: 4px;
+            position: relative;
+            z-index: 1;
+        }
+
+        .header p {
+            font-size: 1rem;
+            color: var(--text-1);
+            position: relative;
+            z-index: 1;
+        }
+
+        .header-actions { margin-top: 14px; display: flex; gap: 10px; flex-wrap: wrap; position: relative; z-index: 1; }
+        #theme-toggle-btn { min-width: 132px; }
+        .muted { color: var(--text-1); }
+
+        .nav {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 18px;
+            flex-wrap: wrap;
+        }
+
+        .nav a {
+            padding: 8px 14px;
+            border-radius: 999px;
+            border: 1px solid var(--line);
+            color: var(--text-1);
+            background: rgba(11, 24, 41, 0.7);
+            text-decoration: none;
+            font-size: 13px;
+            font-weight: 600;
+            transition: border-color 0.2s ease, color 0.2s ease, background 0.2s ease;
+        }
+
+        .nav a.active {
+            border-color: rgba(66, 208, 199, 0.58);
+            color: #ddfffc;
+            background: rgba(17, 43, 65, 0.82);
+        }
+
+        .card {
+            background: var(--panel);
+            border: 1px solid var(--line);
+            border-radius: var(--radius-lg);
+            padding: 20px;
+            margin-bottom: 18px;
+            box-shadow: var(--shadow-soft);
+            backdrop-filter: blur(8px);
+        }
+
+        .card h2 {
+            margin-bottom: 14px;
+            font-family: 'Space Grotesk', 'Manrope', sans-serif;
+            font-size: clamp(1.5rem, 2.1vw, 1.95rem);
+            line-height: 1.1;
+            color: #f3f7ff;
+            letter-spacing: 0.01em;
+        }
+
+        .card h3 {
+            margin-bottom: 10px;
+            font-family: 'Space Grotesk', 'Manrope', sans-serif;
+            font-size: 1.2rem;
+            line-height: 1.15;
+            color: #e9f2ff;
+        }
+
+        .grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 18px; }
+        .grid > * { min-width: 0; }
+
+        .form-group { margin-bottom: 13px; }
+        .form-group label { display: block; margin-bottom: 5px; font-weight: 600; color: #dce8f9; }
+
+        .form-group input,
+        .form-group select,
+        .form-group textarea {
+            width: 100%;
+            padding: 9px 10px;
+            border: 1px solid rgba(126, 151, 186, 0.42);
+            border-radius: var(--radius-sm);
+            background: rgba(6, 14, 26, 0.72);
+            color: #eaf3ff;
+            font-size: 14px;
+        }
+
+        .form-group input::placeholder,
+        .form-group textarea::placeholder {
+            color: #90a8c7;
+        }
+
+        .form-group textarea { resize: vertical; min-height: 96px; }
+
+        .form-group input:focus-visible,
+        .form-group select:focus-visible,
+        .form-group textarea:focus-visible {
+            outline: none;
+            border-color: rgba(66, 208, 199, 0.82);
+            box-shadow: 0 0 0 3px rgba(66, 208, 199, 0.2);
+        }
+
+        .form-group input[type="checkbox"] {
+            width: auto;
+            padding: 0;
+            margin-right: 7px;
+            border: none;
+            vertical-align: middle;
+            accent-color: var(--accent);
+        }
+
+        .btn {
+            border: 1px solid transparent;
+            padding: 9px 14px;
+            border-radius: var(--radius-sm);
+            cursor: pointer;
+            font-size: 13px;
+            font-weight: 700;
+            letter-spacing: 0.01em;
+            text-decoration: none;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            min-height: 36px;
+            line-height: 1.15;
+            color: #041018;
+            background: linear-gradient(135deg, var(--accent), #5af0d2);
+            box-shadow: 0 10px 20px rgba(28, 177, 184, 0.2);
+            transition: transform 0.18s ease, box-shadow 0.18s ease, filter 0.18s ease;
+        }
+
+        .btn:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 12px 24px rgba(28, 177, 184, 0.3);
+            filter: brightness(1.04);
+        }
+
+        .btn:focus-visible {
+            outline: none;
+            box-shadow: 0 0 0 3px rgba(66, 208, 199, 0.3), 0 12px 24px rgba(28, 177, 184, 0.28);
+        }
+
+        .btn.secondary {
+            color: #dce8f9;
+            background: rgba(16, 33, 56, 0.84);
+            border-color: var(--line-strong);
+            box-shadow: none;
+        }
+
+        .btn.secondary:hover {
+            background: rgba(20, 41, 70, 0.92);
+            box-shadow: none;
+        }
+
+        .btn.danger {
+            color: #ffe9e9;
+            background: linear-gradient(140deg, #bc394a, #e05967);
+        }
+
+        .btn.success {
+            color: #05160c;
+            background: linear-gradient(140deg, #2cb97e, #6cf6c0);
+        }
+
+        .btn.sm {
+            padding: 7px 11px;
+            font-size: 12px;
+            min-height: 31px;
+        }
+
+        .status {
+            padding: 4px 8px;
+            border-radius: 999px;
+            font-size: 11px;
+            font-weight: 700;
+            letter-spacing: 0.01em;
+            border: 1px solid transparent;
+            display: inline-block;
+        }
+
+        .status.enabled,
+        .status.ready,
+        .status.completed { background: rgba(52, 195, 143, 0.17); color: #7af0c2; border-color: rgba(52, 195, 143, 0.36); }
+        .status.disabled,
+        .status.failed { background: rgba(239, 106, 106, 0.14); color: #ffb8b8; border-color: rgba(239, 106, 106, 0.34); }
+        .status.not-ready,
+        .status.pending { background: rgba(240, 198, 116, 0.14); color: #ffdca2; border-color: rgba(240, 198, 116, 0.38); }
+        .status.processing { background: rgba(103, 160, 255, 0.16); color: #b7d5ff; border-color: rgba(103, 160, 255, 0.44); }
+
+        .backup-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 10px;
+            padding: 10px;
+            border: 1px solid var(--line);
+            margin-bottom: 6px;
+            border-radius: var(--radius-sm);
+            background: rgba(6, 15, 28, 0.62);
+        }
+
         body.admin-only .admin-hide { display: none !important; }
-        body.admin-only .container { max-width: 900px; }
+        body.admin-only .container { max-width: 960px; }
         body.admin-only #administrado-section { margin-top: 0; }
-        .inline-toolbar { display: flex; gap: 10px; align-items: end; flex-wrap: wrap; margin: 20px 0 15px; }
+
+        .inline-toolbar { display: flex; gap: 10px; align-items: end; flex-wrap: wrap; margin: 18px 0 14px; }
+
+        .adm-ops-shell {
+            border: 1px solid var(--line);
+            border-radius: var(--radius-md);
+            background: rgba(7, 17, 31, 0.5);
+            padding: 14px;
+            margin-bottom: 14px;
+        }
+
+        .adm-ops-head {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 10px;
+            flex-wrap: wrap;
+            margin-bottom: 8px;
+        }
+
+        .adm-ops-note {
+            margin-bottom: 10px;
+        }
+
+        .adm-quick-print {
+            display: flex;
+            gap: 10px;
+            align-items: end;
+            flex-wrap: wrap;
+        }
+
+        .adm-advanced-panel {
+            border: 1px solid var(--line);
+            border-radius: var(--radius-md);
+            background: rgba(8, 19, 34, 0.55);
+            padding: 10px 12px;
+            margin-bottom: 14px;
+        }
+
+        .adm-advanced-panel > summary {
+            cursor: pointer;
+            font-weight: 700;
+            color: #dce8f9;
+            outline: none;
+            user-select: none;
+        }
+
+        .adm-advanced-panel > summary::-webkit-details-marker {
+            filter: brightness(1.2);
+        }
+
+        .dispatch-panel {
+            margin-top: 16px;
+            border: 1px solid var(--line);
+            border-radius: var(--radius-md);
+            background: rgba(7, 17, 31, 0.54);
+            padding: 14px;
+        }
+
+        .dispatch-toolbar {
+            display: flex;
+            gap: 10px;
+            justify-content: space-between;
+            align-items: end;
+            flex-wrap: wrap;
+            margin-bottom: 10px;
+        }
+
+        .dispatch-filter-group {
+            display: flex;
+            gap: 10px;
+            align-items: end;
+            flex-wrap: wrap;
+        }
+
+        .dispatch-filter-group .form-group {
+            margin-bottom: 0;
+            min-width: 140px;
+        }
+
+        .dispatch-toggle {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 13px;
+            color: #c8d9f2;
+            font-weight: 600;
+        }
+
+        .dispatch-toggle input[type="checkbox"] {
+            accent-color: var(--accent);
+            width: 15px;
+            height: 15px;
+        }
+
+        .dispatch-stats {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            margin-bottom: 10px;
+        }
+
+        .dispatch-table { min-width: 980px; }
+
+        .dispatch-id {
+            font-family: Consolas, "Courier New", monospace;
+            font-size: 11px;
+            color: #98b3d9;
+            margin-top: 3px;
+        }
+
+        .dispatch-error {
+            color: #ffb3b3;
+            font-size: 12px;
+            line-height: 1.28;
+        }
+
+        .dispatch-actions {
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+            align-items: flex-start;
+        }
+
+        .dispatch-actions .btn {
+            min-width: 94px;
+        }
+
+        .dispatch-detail-row td {
+            background: rgba(9, 22, 39, 0.72);
+        }
+
+        .dispatch-detail-wrap {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        .dispatch-detail-pre {
+            margin: 0;
+            max-height: 220px;
+            overflow: auto;
+            white-space: pre-wrap;
+            font-family: Consolas, "Courier New", monospace;
+            font-size: 12px;
+            line-height: 1.35;
+            color: #d5e6fb;
+            background: rgba(3, 10, 20, 0.66);
+            border: 1px solid rgba(122, 146, 179, 0.35);
+            border-radius: var(--radius-sm);
+            padding: 10px;
+        }
+
         .summary-pill {
             display: inline-block;
             padding: 6px 10px;
             border-radius: 999px;
-            border: 1px solid #dbeafe;
-            background: #eff6ff;
-            color: #1d4ed8;
-            font-size: 13px;
+            border: 1px solid rgba(66, 208, 199, 0.5);
+            background: rgba(66, 208, 199, 0.16);
+            color: #bdf8f0;
+            font-size: 12px;
             line-height: 1.2;
+            font-weight: 700;
         }
+
         .summary-pill.is-empty {
-            border-color: #e5e7eb;
-            background: #f3f4f6;
-            color: #6b7280;
+            border-color: rgba(122, 146, 179, 0.3);
+            background: rgba(17, 35, 58, 0.62);
+            color: #9ab0cd;
         }
+
         .table-scroll {
             overflow-x: auto;
-            border: 1px solid #e5e7eb;
-            border-radius: 8px;
+            border: 1px solid var(--line);
+            border-radius: var(--radius-md);
+            background: rgba(6, 15, 27, 0.6);
         }
+
+        #meli-sales-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 14px;
+            border: 1px solid var(--line);
+            border-radius: var(--radius-md);
+            overflow: hidden;
+            min-width: 840px;
+        }
+
+        #meli-sales-table th {
+            background: rgba(18, 36, 60, 0.86);
+            color: #9fb6d6;
+            font-size: 11px;
+            text-transform: uppercase;
+            letter-spacing: .04em;
+            text-align: left;
+            padding: 10px 12px;
+            border-bottom: 1px solid var(--line);
+            font-weight: 700;
+        }
+
+        #meli-sales-table td {
+            padding: 10px 12px;
+            border-bottom: 1px solid rgba(122, 146, 179, 0.2);
+            color: #d9e6fa;
+            background: rgba(6, 15, 28, 0.52);
+            overflow-wrap: anywhere;
+            word-break: break-word;
+        }
+
+        #meli-sales-table tr:hover td {
+            background: rgba(26, 54, 88, 0.35);
+        }
+
         .table-clean {
             width: 100%;
             border-collapse: collapse;
             font-size: 14px;
         }
+
         .table-clean thead th {
-            background: #f8fafc;
-            color: #4b5563;
-            font-size: 12px;
+            background: rgba(18, 36, 60, 0.86);
+            color: #9fb6d6;
+            font-size: 11px;
             text-transform: uppercase;
-            letter-spacing: .02em;
+            letter-spacing: .04em;
             text-align: left;
             padding: 10px 12px;
-            border-bottom: 1px solid #e5e7eb;
+            border-bottom: 1px solid var(--line);
+            font-weight: 700;
         }
+
         .table-clean tbody td {
-            padding: 12px;
-            border-bottom: 1px solid #eef2f7;
+            padding: 11px 12px;
+            border-bottom: 1px solid rgba(122, 146, 179, 0.2);
             vertical-align: middle;
+            color: #d9e6fa;
         }
+
         .table-clean tbody tr:last-child td { border-bottom: none; }
-        .table-clean tbody tr:hover { background: #f9fbff; }
+        .table-clean tbody tr:hover { background: rgba(26, 54, 88, 0.35); }
+
+        #administrado-section .table-clean th:nth-child(3),
+        #administrado-section .table-clean td:nth-child(3) {
+            width: 184px;
+            min-width: 184px;
+        }
+
+        #administrado-section .table-clean th:nth-child(4),
+        #administrado-section .table-clean td:nth-child(4) {
+            min-width: 260px;
+        }
+
         .mono-id {
             font-family: Consolas, "Courier New", monospace;
-            color: #1f2937;
+            color: #d4f5f2;
             font-size: 13px;
         }
+
         .customer-name {
-            font-weight: 600;
-            color: #111827;
+            font-weight: 700;
+            color: #f2f7ff;
         }
+
         .customer-user {
             display: block;
             margin-top: 2px;
-            color: #6b7280;
+            color: #9fb3cf;
             font-size: 12px;
         }
+
         .empty-cell {
-            color: #6b7280;
+            color: #9ab0cc;
             font-style: italic;
         }
-        .btn.sm {
-            padding: 7px 14px;
-            font-size: 13px;
+
+        .action-stack {
+            display: flex;
+            flex-direction: column;
+            align-items: flex-start;
+            gap: 4px;
+        }
+
+        .action-stack .btn {
+            min-width: 98px;
+            line-height: 1.12;
+        }
+
+        .status-block p {
+            margin-bottom: 6px;
+            overflow-wrap: anywhere;
+            word-break: break-word;
+            color: #c4d6ef;
+        }
+
+        .status-block p:last-child { margin-bottom: 0; }
+
+        .status-cell {
+            overflow-wrap: anywhere;
+            word-break: break-word;
+            color: #cfddf2;
+        }
+
+        #odoo-automation-section {
+            background: linear-gradient(180deg, rgba(11, 25, 43, 0.84) 0%, rgba(8, 19, 34, 0.84) 100%);
+            border: 1px solid var(--line-strong);
+            box-shadow: var(--shadow-strong);
+        }
+
+        .odoo-grid {
+            display: grid;
+            grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr);
+            gap: 18px;
+            align-items: start;
+        }
+
+        .odoo-panel {
+            background: var(--panel-strong);
+            border: 1px solid var(--line);
+            border-radius: var(--radius-md);
+            padding: 14px;
+        }
+
+        .odoo-panel h3 { margin-bottom: 10px; }
+
+        .odoo-toggles {
+            display: grid;
+            gap: 10px;
+            margin-bottom: 12px;
+        }
+
+        .odoo-toggle {
+            display: inline-flex;
+            align-items: center;
+            gap: 10px;
+            font-weight: 600;
+            line-height: 1.2;
+            color: #d9e8fc;
+        }
+
+        .odoo-toggle input[type="checkbox"] {
+            width: 16px;
+            height: 16px;
+            margin: 0;
+            accent-color: var(--accent);
+        }
+
+        .odoo-actions {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+            margin-top: 2px;
+        }
+
+        .odoo-actions .btn { padding: 8px 14px; }
+
+        .odoo-muted {
+            color: #9cb2d1;
+            margin-bottom: 10px;
+        }
+
+        .odoo-worker p {
+            margin-bottom: 7px;
+            word-break: break-word;
+            color: #c5d6ed;
+        }
+
+        .odoo-worker p:last-child { margin-bottom: 0; }
+
+        html[data-theme="light"] body {
+            color: #16253a;
+            background:
+                radial-gradient(1000px 560px at 84% -8%, rgba(80, 142, 219, 0.22), transparent 58%),
+                radial-gradient(860px 520px at -8% 16%, rgba(66, 208, 199, 0.2), transparent 55%),
+                linear-gradient(160deg, #edf4fb 0%, #dfeaf6 100%);
+        }
+
+        html[data-theme="light"] body::before {
+            background: radial-gradient(circle at 32% 34%, rgba(74, 128, 207, 0.28), rgba(74, 128, 207, 0));
+            filter: blur(14px);
+        }
+
+        html[data-theme="light"] body::after {
+            background-image: linear-gradient(rgba(65, 93, 132, 0.11) 1px, transparent 1px), linear-gradient(90deg, rgba(65, 93, 132, 0.09) 1px, transparent 1px);
+            opacity: 0.35;
+        }
+
+        html[data-theme="light"] .header {
+            background: linear-gradient(140deg, rgba(255, 255, 255, 0.96), rgba(233, 242, 252, 0.95));
+            border-color: rgba(120, 149, 189, 0.42);
+            color: #11243a;
+        }
+
+        html[data-theme="light"] .header p,
+        html[data-theme="light"] .muted {
+            color: #3b587c;
+        }
+
+        html[data-theme="light"] .nav a {
+            border-color: rgba(123, 147, 181, 0.5);
+            color: #274567;
+            background: rgba(246, 251, 255, 0.84);
+        }
+
+        html[data-theme="light"] .nav a.active {
+            border-color: rgba(52, 123, 205, 0.58);
+            color: #12365f;
+            background: rgba(219, 236, 253, 0.94);
+        }
+
+        html[data-theme="light"] .card {
+            background: rgba(255, 255, 255, 0.88);
+            border-color: rgba(123, 147, 181, 0.34);
+            box-shadow: 0 12px 28px rgba(66, 91, 126, 0.12);
+        }
+
+        html[data-theme="light"] .card h2,
+        html[data-theme="light"] .card h3,
+        html[data-theme="light"] .form-group label,
+        html[data-theme="light"] .odoo-toggle {
+            color: #153150;
+        }
+
+        html[data-theme="light"] .form-group input,
+        html[data-theme="light"] .form-group select,
+        html[data-theme="light"] .form-group textarea {
+            color: #17314f;
+            border-color: rgba(110, 139, 176, 0.5);
+            background: rgba(247, 251, 255, 0.92);
+        }
+
+        html[data-theme="light"] .form-group input::placeholder,
+        html[data-theme="light"] .form-group textarea::placeholder {
+            color: #6b88ad;
+        }
+
+        html[data-theme="light"] .btn {
+            color: #f8fcff;
+            background: linear-gradient(135deg, #2f7dd2, #399ad6);
+            box-shadow: 0 10px 20px rgba(56, 126, 202, 0.24);
+        }
+
+        html[data-theme="light"] .btn.secondary {
+            color: #244160;
+            background: rgba(240, 247, 255, 0.95);
+            border-color: rgba(123, 147, 181, 0.58);
+            box-shadow: none;
+        }
+
+        html[data-theme="light"] .btn.success {
+            color: #f8fff9;
+            background: linear-gradient(140deg, #2e9f6e, #38b57e);
+        }
+
+        html[data-theme="light"] .btn.danger {
+            color: #fff6f6;
+            background: linear-gradient(140deg, #c44757, #d95d6b);
+        }
+
+        html[data-theme="light"] .summary-pill {
+            border-color: rgba(56, 126, 202, 0.45);
+            background: rgba(214, 234, 255, 0.86);
+            color: #1b4f84;
+        }
+
+        html[data-theme="light"] .summary-pill.is-empty {
+            border-color: rgba(123, 147, 181, 0.4);
+            background: rgba(238, 246, 255, 0.88);
+            color: #5b789c;
+        }
+
+        html[data-theme="light"] .status.enabled,
+        html[data-theme="light"] .status.ready,
+        html[data-theme="light"] .status.completed {
+            background: #cbeedc;
+            color: #0f5132;
+            border-color: #5aa57c;
+        }
+
+        html[data-theme="light"] .status.disabled,
+        html[data-theme="light"] .status.failed {
+            background: #f7d7dc;
+            color: #7a1f2c;
+            border-color: #c86c7b;
+        }
+
+        html[data-theme="light"] .status.not-ready,
+        html[data-theme="light"] .status.pending {
+            background: #f9e7c4;
+            color: #7a4b00;
+            border-color: #c59a3d;
+        }
+
+        html[data-theme="light"] .status.processing {
+            background: #dce9fb;
+            color: #123a66;
+            border-color: #6894ca;
+        }
+
+        html[data-theme="light"] .table-scroll {
+            border-color: rgba(123, 147, 181, 0.42);
+            background: rgba(248, 252, 255, 0.88);
+        }
+
+        html[data-theme="light"] .table-clean thead th,
+        html[data-theme="light"] #meli-sales-table th {
+            background: rgba(228, 239, 251, 0.94);
+            color: #3f5f84;
+            border-bottom-color: rgba(123, 147, 181, 0.42);
+        }
+
+        html[data-theme="light"] .table-clean tbody td,
+        html[data-theme="light"] #meli-sales-table td {
+            color: #183652;
+            border-bottom-color: rgba(123, 147, 181, 0.28);
+            background: rgba(252, 255, 255, 0.92);
+        }
+
+        html[data-theme="light"] .table-clean tbody tr:hover,
+        html[data-theme="light"] #meli-sales-table tr:hover td {
+            background: rgba(230, 241, 252, 0.94);
+        }
+
+        html[data-theme="light"] .mono-id,
+        html[data-theme="light"] .customer-name {
+            color: #163252;
+        }
+
+        html[data-theme="light"] .customer-user,
+        html[data-theme="light"] .empty-cell,
+        html[data-theme="light"] .status-block p,
+        html[data-theme="light"] .status-cell,
+        html[data-theme="light"] .odoo-muted,
+        html[data-theme="light"] .odoo-worker p {
+            color: #4b688c;
+        }
+
+        html[data-theme="light"] .backup-item,
+        html[data-theme="light"] .odoo-panel {
+            background: rgba(248, 252, 255, 0.94);
+            border-color: rgba(123, 147, 181, 0.38);
+        }
+
+        html[data-theme="light"] .dispatch-panel {
+            background: rgba(244, 250, 255, 0.94);
+            border-color: rgba(123, 147, 181, 0.4);
+        }
+
+        html[data-theme="light"] .dispatch-id {
+            color: #57789f;
+        }
+
+        html[data-theme="light"] .dispatch-error {
+            color: #922d38;
+        }
+
+        html[data-theme="light"] .dispatch-toggle {
+            color: #325579;
+        }
+
+        html[data-theme="light"] .adm-ops-shell,
+        html[data-theme="light"] .adm-advanced-panel {
+            background: rgba(244, 250, 255, 0.94);
+            border-color: rgba(123, 147, 181, 0.4);
+        }
+
+        html[data-theme="light"] .adm-advanced-panel > summary {
+            color: #17314f;
+        }
+
+        html[data-theme="light"] .dispatch-detail-row td {
+            background: rgba(235, 244, 254, 0.9);
+        }
+
+        html[data-theme="light"] .dispatch-detail-pre {
+            color: #17314f;
+            background: rgba(249, 253, 255, 0.96);
+            border-color: rgba(123, 147, 181, 0.45);
+        }
+
+        html[data-theme="light"] #odoo-automation-section {
+            background: linear-gradient(180deg, rgba(252, 255, 255, 0.9) 0%, rgba(238, 246, 255, 0.92) 100%);
+            border-color: rgba(123, 147, 181, 0.52);
+            box-shadow: 0 16px 40px rgba(66, 91, 126, 0.14);
+        }
+
+        @media (max-width: 980px) {
+            .grid { grid-template-columns: 1fr; }
+            .container { padding: 14px 12px 30px; }
+            .header { padding: 18px; }
+            .card { padding: 16px; }
+        }
+
+        @media (max-width: 900px) {
+            .odoo-grid { grid-template-columns: 1fr; }
+        }
+
+        @media (prefers-reduced-motion: reduce) {
+            body::before { animation: none; }
+            .btn { transition: none; }
         }
     </style>
 </head>
@@ -110,6 +922,7 @@
             <p>Panel de administracion del sistema</p>
             <div class="header-actions">
                 <button id="toggle-admin-view-btn" class="btn" onclick="toggleAdminOnlyMode()">Mostrar panel completo</button>
+                <button id="theme-toggle-btn" class="btn secondary" onclick="toggleTheme()">Tema claro</button>
                 <a class="btn secondary" href="cloud.html">Panel Cloud</a>
             </div>
         </div>
@@ -268,88 +1081,92 @@
                     <input type="number" id="meli-sync-limit" min="1" max="50" value="20">
                 </div>
                 <button class="btn" onclick="syncMercadoLibreSales()">Sincronizar ventas</button>
-                <span id="meli-sync-summary" style="color: #666;">Sin datos</span>
+                <span id="meli-sync-summary" class="summary-pill is-empty">Sin datos</span>
             </div>
-            <table id="meli-sales-table">
-                <thead>
-                    <tr>
-                        <th>Order</th>
-                        <th>Shipment</th>
-                        <th>Comprador</th>
-                        <th>Titulo</th>
-                        <th>Estado envio</th>
-                        <th>Lista</th>
-                        <th>Accion</th>
-                    </tr>
-                </thead>
-                <tbody id="meli-sales-body">
-                    <tr><td colspan="7">Sincroniza para ver ventas</td></tr>
-                </tbody>
-            </table>
+            <div class="table-scroll">
+                <table id="meli-sales-table">
+                    <thead>
+                        <tr>
+                            <th>Order</th>
+                            <th>Shipment</th>
+                            <th>Comprador</th>
+                            <th>Titulo</th>
+                            <th>Estado envio</th>
+                            <th>Lista</th>
+                            <th>Accion</th>
+                        </tr>
+                    </thead>
+                    <tbody id="meli-sales-body">
+                        <tr><td colspan="7">Sincroniza para ver ventas</td></tr>
+                    </tbody>
+                </table>
+            </div>
         </div>
 
         <div class="card" id="administrado-section">
             <h2>Administrado</h2>
-            <div class="grid">
-                <div>
-                    <div class="form-group">
-                        <label>
-                            <input type="checkbox" id="adm-enabled"> Habilitar integracion
-                        </label>
-                    </div>
-                    <div class="form-group">
-                        <label>URL ventas:</label>
-                        <input type="text" id="adm-sales-url" placeholder="https://www.administrado.net/seller/ventas3">
-                    </div>
-                    <div class="form-group">
-                        <label>Impresora por defecto:</label>
-                        <select id="adm-default-printer">
-                            <option value="">Cargando impresoras...</option>
-                        </select>
-                    </div>
-                    <div class="form-group">
-                        <label>Impresora manual o ruta compartida:</label>
-                        <input type="text" id="adm-default-printer-manual" placeholder="\\\\PC-SERVIDOR\\Godex o nombre exacto de la impresora">
-                    </div>
-                    <div class="form-group">
-                        <label>Copias por defecto:</label>
-                        <input type="number" id="adm-default-copies" min="1" max="10" value="1">
-                    </div>
-                    <div class="form-group">
-                        <label>
-                            <input type="checkbox" id="adm-auto-crop-pdf" checked> Recortar PDF antes de imprimir
-                        </label>
-                    </div>
-                    <div class="form-group">
-                        <label>Cookie de sesion:</label>
-                        <textarea id="adm-cookie-header" rows="5" placeholder="Pega aqui el header Cookie completo del navegador"></textarea>
-                    </div>
-                    <div style="display: flex; gap: 10px; flex-wrap: wrap;">
-                        <button class="btn" onclick="saveAdministradoConfig()">Guardar Administrado</button>
-                        <button class="btn success" onclick="testAdministradoSession()">Probar sesion</button>
-                    </div>
-                    <div style="display: flex; gap: 10px; flex-wrap: wrap; margin-top: 10px;">
-                        <button class="btn" onclick="importAdministradoCookies('chrome')">Importar desde Chrome</button>
-                        <button class="btn" onclick="importAdministradoCookies('edge')">Importar desde Edge</button>
-                    </div>
-                    <div style="display: flex; gap: 10px; flex-wrap: wrap; margin-top: 10px;">
-                        <button class="btn success" onclick="captureAdministradoPlaywrightSession()">Capturar sesion con navegador</button>
-                    </div>
+            <div class="adm-ops-shell">
+                <div class="adm-ops-head">
+                    <label>
+                        <input type="checkbox" id="adm-enabled"> Habilitar integracion
+                    </label>
+                    <span>Estado: <span class="status" id="adm-configured-status">-</span></span>
                 </div>
-                <div>
-                    <h3>Estado</h3>
-                    <p>Configurado: <span class="status" id="adm-configured-status">-</span></p>
-                    <p>Sesion Playwright: <span id="adm-playwright-session">-</span></p>
-                    <p>Ruta config: <span id="adm-config-path">-</span></p>
-                    <p>Ruta sesion: <span id="adm-storage-path">-</span></p>
-                    <p>Ultimo error: <span id="adm-last-error">-</span></p>
-                    <div class="form-group" style="margin-top: 20px;">
+                <p class="muted adm-ops-note">
+                    Modo operativo: sincroniza envios e imprime orden + etiqueta. Las impresoras se gestionan en
+                    <strong>Automatizacion Odoo + Administrado</strong>.
+                </p>
+                <div class="adm-quick-print">
+                    <div class="form-group" style="margin-bottom: 0; min-width: 210px;">
                         <label>Envio ID para prueba:</label>
                         <input type="text" id="adm-test-envio-id" placeholder="46624465730">
                     </div>
-                    <button class="btn success" onclick="printAdministradoLabel()">Descargar e imprimir etiqueta</button>
+                    <button class="btn success" onclick="printAdministradoLabel()">Imprimir solo etiqueta (prueba)</button>
                 </div>
             </div>
+
+            <details class="adm-advanced-panel">
+                <summary>Configuracion y diagnostico avanzado</summary>
+                <div class="grid" style="margin-top: 12px;">
+                    <div>
+                        <div class="form-group">
+                            <label>URL ventas:</label>
+                            <input type="text" id="adm-sales-url" placeholder="https://www.administrado.net/seller/ventas3">
+                        </div>
+                        <div class="form-group">
+                            <label>Copias por defecto:</label>
+                            <input type="number" id="adm-default-copies" min="1" max="10" value="1">
+                        </div>
+                        <div class="form-group">
+                            <label>
+                                <input type="checkbox" id="adm-auto-crop-pdf" checked> Recortar PDF antes de imprimir
+                            </label>
+                        </div>
+                        <div class="form-group">
+                            <label>Cookie de sesion:</label>
+                            <textarea id="adm-cookie-header" rows="5" placeholder="Pega aqui el header Cookie completo del navegador"></textarea>
+                        </div>
+                        <div style="display: flex; gap: 10px; flex-wrap: wrap;">
+                            <button class="btn" onclick="saveAdministradoConfig()">Guardar Administrado</button>
+                            <button class="btn success" onclick="testAdministradoSession()">Probar sesion</button>
+                        </div>
+                        <div style="display: flex; gap: 10px; flex-wrap: wrap; margin-top: 10px;">
+                            <button class="btn" onclick="importAdministradoCookies('chrome')">Importar desde Chrome</button>
+                            <button class="btn" onclick="importAdministradoCookies('edge')">Importar desde Edge</button>
+                        </div>
+                        <div style="display: flex; gap: 10px; flex-wrap: wrap; margin-top: 10px;">
+                            <button class="btn success" onclick="captureAdministradoPlaywrightSession()">Capturar sesion con navegador</button>
+                        </div>
+                    </div>
+                    <div class="status-block">
+                        <h3>Diagnostico tecnico</h3>
+                        <p>Sesion Playwright: <span id="adm-playwright-session">-</span></p>
+                        <p>Ruta config: <span id="adm-config-path">-</span></p>
+                        <p>Ruta sesion: <span id="adm-storage-path">-</span></p>
+                        <p>Ultimo error: <span id="adm-last-error">-</span></p>
+                    </div>
+                </div>
+            </details>
 
             <div class="inline-toolbar">
                 <div class="form-group" style="margin-bottom: 0; min-width: 180px;">
@@ -374,23 +1191,91 @@
                     </tbody>
                 </table>
             </div>
+
+            <div class="dispatch-panel">
+                <h3>Cola de despacho de impresion</h3>
+                <p class="muted" style="margin-bottom: 10px;">
+                    Historial de tareas de impresion con estado, reintentos y acceso rapido a reencolar fallidas.
+                </p>
+                <div class="dispatch-toolbar">
+                    <div class="dispatch-filter-group">
+                        <div class="form-group">
+                            <label>Origen:</label>
+                            <select id="dispatch-source-filter" onchange="refreshDispatchPanel({ silent: true })">
+                                <option value="">Todos</option>
+                                <option value="administrado">Administrado</option>
+                                <option value="mercadolibre">Mercado Libre</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label>Estado:</label>
+                            <select id="dispatch-status-filter" onchange="refreshDispatchPanel({ silent: true })">
+                                <option value="">Todos</option>
+                                <option value="pending">Pendiente</option>
+                                <option value="processing">En proceso</option>
+                                <option value="completed">Completada</option>
+                                <option value="failed">Fallida</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label>Limite:</label>
+                            <input type="number" id="dispatch-limit" min="5" max="200" value="30" onchange="refreshDispatchPanel({ silent: true })">
+                        </div>
+                        <div class="form-group" style="min-width: 220px;">
+                            <label>Buscar:</label>
+                            <input type="text" id="dispatch-query" placeholder="Envio, task ID o accion" oninput="renderDispatchTasks()">
+                        </div>
+                    </div>
+                    <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
+                        <button id="dispatch-refresh-btn" class="btn" onclick="refreshDispatchPanel()">Actualizar cola</button>
+                        <button id="dispatch-retry-failed-btn" class="btn secondary" onclick="retryFailedVisibleDispatchTasks()">Reintentar fallidas visibles</button>
+                        <label class="dispatch-toggle">
+                            <input type="checkbox" id="dispatch-auto-refresh" checked>
+                            Auto-actualizar
+                        </label>
+                        <span id="dispatch-summary" class="summary-pill is-empty">Sin datos</span>
+                    </div>
+                </div>
+                <div id="dispatch-stats" class="dispatch-stats">
+                    <span class="status">Sin datos</span>
+                </div>
+                <div class="table-scroll">
+                    <table class="table-clean dispatch-table">
+                        <thead>
+                        <tr>
+                            <th>Fecha</th>
+                            <th>Origen</th>
+                            <th>Entidad</th>
+                            <th>Accion</th>
+                            <th>Estado</th>
+                            <th>Intentos</th>
+                            <th>Detalle</th>
+                            <th>Accion</th>
+                        </tr>
+                        </thead>
+                        <tbody id="dispatch-tasks-body">
+                            <tr><td colspan="8" class="empty-cell">Actualiza para ver tareas de despacho</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
         </div>
 
         <div class="card" id="odoo-automation-section">
             <h2>Automatizacion Odoo + Administrado</h2>
-            <p style="margin-bottom: 12px; color: #4b5563;">
+            <p class="muted" style="margin-bottom: 12px;">
                 Flujo separado: detecta envios en Administrado, busca la cotizacion en Odoo y luego imprime orden + etiqueta.
             </p>
-            <div class="grid">
-                <div>
-                    <div class="form-group">
-                        <label>
-                            <input type="checkbox" id="odoo-enabled"> Habilitar integracion Odoo
+            <div class="odoo-grid">
+                <div class="odoo-panel">
+                    <div class="odoo-toggles">
+                        <label class="odoo-toggle">
+                            <input type="checkbox" id="odoo-enabled">
+                            <span>Habilitar integracion Odoo</span>
                         </label>
-                    </div>
-                    <div class="form-group">
-                        <label>
-                            <input type="checkbox" id="odoo-auto-enabled"> Habilitar automatizacion en background
+                        <label class="odoo-toggle">
+                            <input type="checkbox" id="odoo-auto-enabled">
+                            <span>Habilitar automatizacion en background</span>
                         </label>
                     </div>
                     <div class="form-group">
@@ -437,25 +1322,25 @@
                         <label>Delay orden -> etiqueta (segundos):</label>
                         <input type="number" id="odoo-order-label-delay" min="0" max="30" value="1">
                     </div>
-                    <div class="form-group">
-                        <label>
-                            <input type="checkbox" id="odoo-include-reprint"> Incluir "reimprimir etiqueta"
+                    <div class="odoo-toggles">
+                        <label class="odoo-toggle">
+                            <input type="checkbox" id="odoo-include-reprint">
+                            <span>Incluir "reimprimir etiqueta"</span>
+                        </label>
+                        <label class="odoo-toggle">
+                            <input type="checkbox" id="odoo-confirm-on-print">
+                            <span>Confirmar cotizacion al imprimir orden + etiqueta</span>
                         </label>
                     </div>
-                    <div class="form-group">
-                        <label>
-                            <input type="checkbox" id="odoo-confirm-on-print"> Confirmar cotizacion al imprimir orden + etiqueta
-                        </label>
-                    </div>
-                    <div style="display: flex; gap: 10px; flex-wrap: wrap;">
+                    <div class="odoo-actions">
                         <button class="btn" onclick="saveOdooConfig()">Guardar Odoo</button>
                         <button class="btn success" onclick="testOdooConnection()">Probar conexion</button>
                         <button class="btn" onclick="runOdooAutomationOnce()">Ejecutar ciclo ahora</button>
                         <button class="btn danger" onclick="resetOdooAutomationProcessed()">Reset procesados</button>
                     </div>
                     <h3 style="margin-top: 18px;">Usuarios Odoo por operador</h3>
-                    <p style="color: #6b7280; margin-bottom: 10px;">
-                        Si se carga un usuario, la confirmacion en Odoo queda registrada con ese usuario.
+                    <p class="odoo-muted">
+                        Si esta activada la confirmacion al imprimir, cada operador debe iniciar sesion y tener usuario Odoo mapeado.
                     </p>
                     <div class="form-group">
                         <label>Usuario en Administrado:</label>
@@ -469,7 +1354,7 @@
                         <label>Password Odoo:</label>
                         <input type="password" id="odoo-operator-odoo-password" placeholder="password usuario Odoo">
                     </div>
-                    <div style="display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 10px;">
+                    <div class="odoo-actions" style="margin-bottom: 10px;">
                         <button class="btn" onclick="saveOdooOperatorUser()">Guardar usuario Odoo</button>
                         <button class="btn" onclick="loadOdooOperatorUsers()">Actualizar lista</button>
                     </div>
@@ -489,7 +1374,7 @@
                         </table>
                     </div>
                 </div>
-                <div>
+                <div class="odoo-panel">
                     <h3>Impresoras para orden y etiqueta</h3>
                     <div class="form-group">
                         <label>Orden Odoo - principal:</label>
@@ -507,9 +1392,10 @@
                         <label>Copias orden:</label>
                         <input type="number" id="odoo-order-copies" min="1" max="10" value="1">
                     </div>
-                    <div class="form-group">
-                        <label>
-                            <input type="checkbox" id="odoo-force-order-grayscale"> Forzar orden en blanco y negro
+                    <div class="odoo-toggles">
+                        <label class="odoo-toggle">
+                            <input type="checkbox" id="odoo-force-order-grayscale">
+                            <span>Forzar orden en blanco y negro</span>
                         </label>
                     </div>
                     <div class="form-group">
@@ -529,13 +1415,15 @@
                         <input type="number" id="odoo-label-copies" min="1" max="10" value="1">
                     </div>
                     <h3>Estado worker</h3>
-                    <p>Worker activo: <span id="odoo-worker-running">-</span></p>
-                    <p>Envios procesados: <span id="odoo-processed-count">0</span></p>
-                    <p>Ultimo ciclo: <span id="odoo-last-cycle">-</span></p>
-                    <p>Resultado: <span id="odoo-last-result">-</span></p>
-                    <p>Ultimos impresos: <span id="odoo-recent-processed">-</span></p>
-                    <p>Ultimo error: <span id="odoo-last-error">-</span></p>
-                    <p>Config path: <span id="odoo-config-path">-</span></p>
+                    <div class="odoo-worker">
+                        <p>Worker activo: <span id="odoo-worker-running">-</span></p>
+                        <p>Envios procesados: <span id="odoo-processed-count">0</span></p>
+                        <p>Ultimo ciclo: <span id="odoo-last-cycle">-</span></p>
+                        <p>Resultado: <span id="odoo-last-result">-</span></p>
+                        <p>Ultimos impresos: <span id="odoo-recent-processed">-</span></p>
+                        <p>Ultimo error: <span id="odoo-last-error">-</span></p>
+                        <p>Config path: <span id="odoo-config-path">-</span></p>
+                    </div>
                 </div>
             </div>
         </div>
@@ -579,12 +1467,58 @@
         let administradoSyncInProgress = false;
         let administradoAutoSyncDone = false;
         const administradoPrintInFlight = new Set();
+        let dispatchTasks = [];
+        let dispatchTasksRaw = [];
+        let dispatchStats = null;
+        let dispatchRefreshInProgress = false;
+        let dispatchBulkRetryInProgress = false;
+        const dispatchExpandedTaskIds = new Set();
         let odooConfig = {};
         let odooOperatorUsers = [];
         let odooAutomationStatus = {};
         let odooStatusTimer = null;
         const ADMIN_ONLY_STORAGE_KEY = 'etiquetador_admin_only_mode';
+        const THEME_STORAGE_KEY = 'etiquetador_ui_theme';
+        const CLOUD_TOKEN_STORAGE_KEY = 'cloud_access_token';
+        const CLOUD_USERNAME_STORAGE_KEY = 'cloud_username';
         let adminOnlyMode = true;
+        let currentTheme = 'dark';
+
+        function updateThemeToggleButton() {
+            const btn = document.getElementById('theme-toggle-btn');
+            if (!btn) return;
+            btn.textContent = currentTheme === 'light' ? 'Tema oscuro' : 'Tema claro';
+            btn.setAttribute('aria-label', currentTheme === 'light' ? 'Cambiar a tema oscuro' : 'Cambiar a tema claro');
+        }
+
+        function applyTheme(theme, persist = true) {
+            currentTheme = theme === 'light' ? 'light' : 'dark';
+            document.documentElement.setAttribute('data-theme', currentTheme);
+            updateThemeToggleButton();
+            if (!persist) {
+                return;
+            }
+            try {
+                localStorage.setItem(THEME_STORAGE_KEY, currentTheme);
+            } catch (e) {
+                // Ignorar si localStorage no esta disponible.
+            }
+        }
+
+        function initTheme() {
+            let stored = null;
+            try {
+                stored = localStorage.getItem(THEME_STORAGE_KEY);
+            } catch (e) {
+                stored = null;
+            }
+            applyTheme(stored === 'light' ? 'light' : 'dark', false);
+        }
+
+        function toggleTheme() {
+            const nextTheme = currentTheme === 'dark' ? 'light' : 'dark';
+            applyTheme(nextTheme, true);
+        }
 
         function applyAdminOnlyMode() {
             document.body.classList.toggle('admin-only', adminOnlyMode);
@@ -628,7 +1562,7 @@
                 const section = document.getElementById('mercadolibre-section');
                 if (section) {
                     section.scrollIntoView({ behavior: 'smooth', block: 'start' });
-                    section.style.outline = '2px solid #3498db';
+                    section.style.outline = '2px solid var(--accent-strong)';
                     section.style.outlineOffset = '4px';
                     setTimeout(() => {
                         section.style.outline = '';
@@ -739,6 +1673,7 @@
                 await autoSyncAdministradoIfNeeded();
                 await loadOdooConfig();
                 await loadOdooAutomationStatus();
+                await refreshDispatchPanel({ silent: true });
                 loadBackups();
             } catch (error) {
                 console.error('Error cargando configuraciones:', error);
@@ -749,6 +1684,96 @@
                 updateAdministradoForm();
                 updateOdooForm();
             }
+        }
+
+        function getCloudAccessToken() {
+            try {
+                return String(localStorage.getItem(CLOUD_TOKEN_STORAGE_KEY) || '').trim();
+            } catch (e) {
+                return '';
+            }
+        }
+
+        function decodeTokenPayload(token) {
+            const raw = String(token || '').trim();
+            if (!raw || !raw.includes('.')) {
+                return null;
+            }
+            try {
+                const payloadB64 = raw.split('.', 1)[0];
+                const normalized = payloadB64.replace(/-/g, '+').replace(/_/g, '/');
+                const padded = normalized + '='.repeat((4 - (normalized.length % 4)) % 4);
+                const jsonText = atob(padded);
+                return JSON.parse(jsonText);
+            } catch (error) {
+                return null;
+            }
+        }
+
+        function getSessionAppUsername() {
+            const token = getCloudAccessToken();
+            const tokenPayload = decodeTokenPayload(token);
+            const fromToken = String(tokenPayload?.sub || '').trim();
+            if (fromToken) {
+                return fromToken;
+            }
+            try {
+                return (
+                    String(localStorage.getItem(CLOUD_USERNAME_STORAGE_KEY) || '').trim() ||
+                    String(localStorage.getItem('username') || '').trim()
+                );
+            } catch (e) {
+                return '';
+            }
+        }
+
+        async function resolveOperatorCloudSession(apiBase) {
+            const localToken = getCloudAccessToken();
+            const localUsername = getSessionAppUsername();
+            if (localToken) {
+                return {
+                    authenticated: true,
+                    token: localToken,
+                    username: localUsername,
+                    source: 'token'
+                };
+            }
+
+            try {
+                const response = await fetch(`${apiBase}/api/auth/me`, {
+                    method: 'GET',
+                    credentials: 'include'
+                });
+                if (response.ok) {
+                    const me = await response.json();
+                    const cookieUsername = String(me?.username || '').trim();
+                    if (cookieUsername) {
+                        try {
+                            localStorage.setItem(CLOUD_USERNAME_STORAGE_KEY, cookieUsername);
+                            if (!String(localStorage.getItem('username') || '').trim()) {
+                                localStorage.setItem('username', cookieUsername);
+                            }
+                        } catch (e) {
+                            // Ignorar si localStorage no esta disponible.
+                        }
+                        return {
+                            authenticated: true,
+                            token: '',
+                            username: cookieUsername,
+                            source: 'cookie'
+                        };
+                    }
+                }
+            } catch (error) {
+                // Ignorar y usar fallback local.
+            }
+
+            return {
+                authenticated: false,
+                token: '',
+                username: localUsername,
+                source: 'none'
+            };
         }
 
         function updateNotificationForm() {
@@ -841,7 +1866,6 @@
             document.getElementById('adm-default-copies').value = config.default_copies || 1;
             document.getElementById('adm-auto-crop-pdf').checked = config.auto_crop_pdf !== false;
             document.getElementById('adm-cookie-header').value = '';
-            document.getElementById('adm-default-printer-manual').value = config.default_printer || '';
 
             const configured = config.configured === true;
             const status = document.getElementById('adm-configured-status');
@@ -857,33 +1881,6 @@
             const response = await fetchAPI('/api/administrado/config');
             administradoConfig = response || {};
             updateAdministradoForm();
-            await loadAdministradoPrinters();
-        }
-
-        async function loadAdministradoPrinters() {
-            const select = document.getElementById('adm-default-printer');
-            const selected = administradoConfig.default_printer || '';
-            const data = await fetchAPI('/api/printers');
-            let printers = data && data.printers ? data.printers : [];
-            // Priorizar Godex, pero no ocultar el resto de impresoras disponibles.
-            printers = printers.sort((a, b) => {
-                const aGodex = a.toLowerCase().includes('godex') ? 1 : 0;
-                const bGodex = b.toLowerCase().includes('godex') ? 1 : 0;
-                return bGodex - aGodex;
-            });
-
-            if (!printers.length) {
-                select.innerHTML = '<option value=\"\">No se encontraron impresoras</option>';
-                return;
-            }
-
-            select.innerHTML = printers.map(printer =>
-                `<option value="${printer}" ${printer === selected ? 'selected' : ''}>${printer}</option>`
-            ).join('');
-
-            if (selected && !printers.includes(selected)) {
-                select.innerHTML += `<option value="${selected}" selected>${selected}</option>`;
-            }
         }
 
         function mergeUniqueStrings(arrays) {
@@ -962,6 +1959,16 @@
                 </tr>
             `;
             }).join('');
+        }
+
+        function resolveMappedOdooUser(appUsername) {
+            const key = String(appUsername || '').trim().toLowerCase();
+            if (!key) return '';
+            const items = Array.isArray(odooOperatorUsers) ? odooOperatorUsers : [];
+            const match = items.find(
+                (item) => String(item?.app_username || '').trim().toLowerCase() === key
+            );
+            return String(match?.odoo_username || '').trim();
         }
 
         async function loadOdooOperatorUsers() {
@@ -1400,11 +2407,13 @@
             if (!mercadoLibreSales.length) {
                 tbody.innerHTML = '<tr><td colspan="7">Sincroniza para ver ventas</td></tr>';
                 summary.textContent = 'Sin datos';
+                summary.classList.add('is-empty');
                 return;
             }
 
             const readyCount = mercadoLibreSales.filter(sale => sale.ready_to_print).length;
             summary.textContent = `${readyCount} listas de ${mercadoLibreSales.length} ventas revisadas`;
+            summary.classList.remove('is-empty');
 
             tbody.innerHTML = mercadoLibreSales.map(sale => `
                 <tr>
@@ -1451,15 +2460,14 @@
         }
 
         async function saveAdministradoConfig() {
+            const odooLabelPrimary = (document.getElementById('odoo-label-printer-primary')?.value || '').trim();
+            const odooLabelFallback = (document.getElementById('odoo-label-printer-fallback')?.value || '').trim();
             const config = {
                 enabled: document.getElementById('adm-enabled').checked,
                 base_url: 'https://www.administrado.net',
                 sales_url: document.getElementById('adm-sales-url').value.trim(),
                 cookie_header: document.getElementById('adm-cookie-header').value.trim(),
-                default_printer: (
-                    document.getElementById('adm-default-printer-manual').value.trim() ||
-                    document.getElementById('adm-default-printer').value.trim()
-                ),
+                default_printer: (odooLabelPrimary || odooLabelFallback || (administradoConfig.default_printer || '')).trim(),
                 default_copies: parseInt(document.getElementById('adm-default-copies').value, 10) || 1,
                 auto_crop_pdf: document.getElementById('adm-auto-crop-pdf').checked
             };
@@ -1561,6 +2569,7 @@
                         <span class="customer-user">${sale.customer_username ? '@' + sale.customer_username : '-'}</span>
                     </td>
                     <td>
+                        <div class="action-stack">
                         <button class="btn success sm" ${sale._printing ? 'disabled' : ''} onclick="printAdministradoShipment('${sale.envio_id}', 'both')">
                             ${sale.print_mode === 'reimprimir' ? 'Reimprimir orden + etiqueta' : 'Imprimir orden + etiqueta'}
                         </button>
@@ -1571,8 +2580,9 @@
                               `
                             : ''
                         }
+                        </div>
                     </td>
-                    <td>
+                    <td class="status-cell">
                         ${sale._printing
                             ? `<span class="status">${sale._printing_label || 'Procesando...'}</span><br><small>No cierres esta ventana</small>`
                             : sale._last_print_result
@@ -1585,7 +2595,7 @@
                                    ? `<br><small>Estado Odoo: ${sale._last_confirm_state_before || '-'} -> ${sale._last_confirm_state_after || '-'}</small>`
                                    : ''
                                }
-                               ${sale._last_error ? `<br><small style="color:#b91c1c;">${compactErrorText(sale._last_error, 180)}</small>` : ''}`
+                               ${sale._last_error ? `<br><small style="color:#ffb3b3;">${compactErrorText(sale._last_error, 180)}</small>` : ''}`
                             : '<span class="status">Pendiente</span>'
                         }
                     </td>
@@ -1599,6 +2609,416 @@
                 return new Date(value).toLocaleString();
             } catch (error) {
                 return String(value);
+            }
+        }
+
+        function escapeHtml(value) {
+            return String(value ?? '')
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#39;');
+        }
+
+        function decodeDispatchToken(token) {
+            try {
+                return decodeURIComponent(String(token || ''));
+            } catch (error) {
+                return String(token || '');
+            }
+        }
+
+        function toPrettyJson(value) {
+            if (value === null || value === undefined) {
+                return '-';
+            }
+            if (typeof value === 'string') {
+                return value;
+            }
+            try {
+                return JSON.stringify(value, null, 2);
+            } catch (error) {
+                return String(value);
+            }
+        }
+
+        function buildDispatchDetailText(task) {
+            const lines = [
+                `Task ID: ${task?.id || '-'}`,
+                `Idempotency: ${task?.idempotency_key || '-'}`,
+                `Estado: ${dispatchStatusLabel(task?.status)}`,
+                `Origen: ${task?.source || '-'}`,
+                `Entidad: ${task?.entity_id || '-'}`,
+                `Accion: ${task?.action || '-'}`,
+                `Intentos: ${Number(task?.attempt_count || 0)}/${Number(task?.max_attempts || 0)}`,
+                `Creada: ${formatTime(task?.created_at || '')}`,
+                `Actualizada: ${formatTime(task?.updated_at || '')}`,
+                `Ultimo intento: ${formatTime(task?.last_attempt_at || '')}`,
+                `Proximo retry: ${formatTime(task?.next_retry_at || '')}`,
+                `Completada: ${formatTime(task?.completed_at || '')}`,
+                '',
+                'Last Error:',
+                toPrettyJson(task?.last_error),
+                '',
+                'Request Payload:',
+                toPrettyJson(task?.request_payload),
+                '',
+                'Result Payload:',
+                toPrettyJson(task?.result_payload)
+            ];
+            return lines.join('\n');
+        }
+
+        function dispatchStatusLabel(status) {
+            const normalized = String(status || '').trim().toLowerCase();
+            if (normalized === 'pending') return 'Pendiente';
+            if (normalized === 'processing') return 'En proceso';
+            if (normalized === 'completed') return 'Completada';
+            if (normalized === 'failed') return 'Fallida';
+            return normalized || 'Desconocido';
+        }
+
+        function dispatchStatusClass(status) {
+            const normalized = String(status || '').trim().toLowerCase();
+            if (normalized === 'completed') return 'completed';
+            if (normalized === 'failed') return 'failed';
+            if (normalized === 'processing') return 'processing';
+            if (normalized === 'pending') return 'pending';
+            return '';
+        }
+
+        function renderDispatchStats() {
+            const container = document.getElementById('dispatch-stats');
+            if (!container) return;
+            const counts = (dispatchStats && dispatchStats.counts) || {};
+            const total = Number((dispatchStats && dispatchStats.total) || 0);
+            const pending = Number(counts.pending || 0);
+            const processing = Number(counts.processing || 0);
+            const completed = Number(counts.completed || 0);
+            const failed = Number(counts.failed || 0);
+
+            if (total <= 0) {
+                container.innerHTML = '<span class="status">Sin tareas registradas</span>';
+                return;
+            }
+
+            container.innerHTML = `
+                <span class="status">Total: ${total}</span>
+                <span class="status pending">Pendientes: ${pending}</span>
+                <span class="status processing">En proceso: ${processing}</span>
+                <span class="status completed">Completadas: ${completed}</span>
+                <span class="status failed">Fallidas: ${failed}</span>
+            `;
+        }
+
+        function isDispatchAutoRefreshEnabled() {
+            const checkbox = document.getElementById('dispatch-auto-refresh');
+            return !checkbox || checkbox.checked === true;
+        }
+
+        function applyDispatchClientFilter(tasks) {
+            const query = (document.getElementById('dispatch-query')?.value || '').trim().toLowerCase();
+            if (!query) {
+                return Array.isArray(tasks) ? tasks.slice() : [];
+            }
+            const base = Array.isArray(tasks) ? tasks : [];
+            return base.filter((task) => {
+                const haystack = [
+                    task && task.id,
+                    task && task.entity_id,
+                    task && task.action,
+                    task && task.source
+                ]
+                    .map((v) => String(v || '').toLowerCase())
+                    .join(' ');
+                return haystack.includes(query);
+            });
+        }
+
+        function getVisibleFailedDispatchTaskIds() {
+            return (dispatchTasks || [])
+                .filter((task) => String(task?.status || '').toLowerCase() === 'failed')
+                .map((task) => String(task?.id || '').trim())
+                .filter(Boolean);
+        }
+
+        function toggleDispatchTaskDetail(taskId) {
+            const safeTaskId = String(taskId || '').trim();
+            if (!safeTaskId) {
+                return;
+            }
+            if (dispatchExpandedTaskIds.has(safeTaskId)) {
+                dispatchExpandedTaskIds.delete(safeTaskId);
+            } else {
+                dispatchExpandedTaskIds.add(safeTaskId);
+            }
+            renderDispatchTasks();
+        }
+
+        async function copyDispatchTaskId(taskId) {
+            const safeTaskId = String(taskId || '').trim();
+            if (!safeTaskId) {
+                return;
+            }
+            try {
+                await navigator.clipboard.writeText(safeTaskId);
+                alert(`Task ID copiado: ${safeTaskId}`);
+            } catch (error) {
+                try {
+                    const textarea = document.createElement('textarea');
+                    textarea.value = safeTaskId;
+                    textarea.style.position = 'fixed';
+                    textarea.style.opacity = '0';
+                    document.body.appendChild(textarea);
+                    textarea.focus();
+                    textarea.select();
+                    document.execCommand('copy');
+                    document.body.removeChild(textarea);
+                    alert(`Task ID copiado: ${safeTaskId}`);
+                } catch (fallbackError) {
+                    alert(`No se pudo copiar el Task ID: ${safeTaskId}`);
+                }
+            }
+        }
+
+        function updateDispatchBulkRetryButton() {
+            const button = document.getElementById('dispatch-retry-failed-btn');
+            if (!button) return;
+            const failedCount = getVisibleFailedDispatchTaskIds().length;
+            button.disabled = dispatchBulkRetryInProgress || failedCount === 0;
+            button.textContent = failedCount > 0
+                ? `Reintentar fallidas visibles (${failedCount})`
+                : 'Reintentar fallidas visibles';
+        }
+
+        function renderDispatchTasks() {
+            const tbody = document.getElementById('dispatch-tasks-body');
+            const summary = document.getElementById('dispatch-summary');
+            if (!tbody || !summary) return;
+            dispatchTasks = applyDispatchClientFilter(dispatchTasksRaw);
+
+            if (!dispatchTasks.length) {
+                tbody.innerHTML = '<tr><td colspan="8" class="empty-cell">No hay tareas para los filtros actuales</td></tr>';
+                summary.textContent = 'Sin datos';
+                summary.classList.add('is-empty');
+                updateDispatchBulkRetryButton();
+                return;
+            }
+
+            if (dispatchTasksRaw.length !== dispatchTasks.length) {
+                summary.textContent = `${dispatchTasks.length} visibles de ${dispatchTasksRaw.length}`;
+            } else {
+                summary.textContent = `${dispatchTasks.length} tareas`;
+            }
+            summary.classList.remove('is-empty');
+
+            tbody.innerHTML = dispatchTasks.map((task) => {
+                const status = String(task.status || '').trim().toLowerCase();
+                const canRetry = status === 'failed';
+                const entityId = task.entity_id || '-';
+                const action = task.action || '-';
+                const source = task.source || '-';
+                const lastError = task.last_error ? compactErrorText(task.last_error, 160) : '';
+                const attempts = `${Number(task.attempt_count || 0)}/${Number(task.max_attempts || 0)}`;
+                const when = formatTime(task.updated_at || task.created_at || '');
+                const taskId = String(task.id || '');
+                const taskToken = encodeURIComponent(taskId);
+                const isExpanded = dispatchExpandedTaskIds.has(taskId);
+                const detailBlock = lastError
+                    ? `<div class="dispatch-error">${escapeHtml(lastError)}</div>`
+                    : '<span class="muted">Sin error</span>';
+                const detailRow = isExpanded
+                    ? `
+                    <tr class="dispatch-detail-row">
+                        <td colspan="8">
+                            <div class="dispatch-detail-wrap">
+                                <pre class="dispatch-detail-pre">${escapeHtml(buildDispatchDetailText(task))}</pre>
+                            </div>
+                        </td>
+                    </tr>
+                    `
+                    : '';
+                return `
+                    <tr>
+                        <td>${escapeHtml(when)}</td>
+                        <td>${escapeHtml(source)}</td>
+                        <td>
+                            <span class="mono-id">${escapeHtml(entityId)}</span>
+                            <div class="dispatch-id">${escapeHtml(taskId || '-')}</div>
+                        </td>
+                        <td>${escapeHtml(action)}</td>
+                        <td><span class="status ${dispatchStatusClass(status)}">${escapeHtml(dispatchStatusLabel(status))}</span></td>
+                        <td>${escapeHtml(attempts)}</td>
+                        <td>${detailBlock}</td>
+                        <td>
+                            <div class="dispatch-actions">
+                                <button class="btn sm secondary dispatch-copy-id-btn" data-task-token="${escapeHtml(taskToken)}">Copiar ID</button>
+                                <button class="btn sm secondary dispatch-detail-btn" data-task-token="${escapeHtml(taskToken)}">${isExpanded ? 'Ocultar' : 'Detalle'}</button>
+                                ${canRetry && taskId
+                                    ? `<button class="btn sm dispatch-retry-btn" data-task-token="${escapeHtml(taskToken)}">Reintentar</button>`
+                                    : ''
+                                }
+                            </div>
+                        </td>
+                    </tr>
+                ${detailRow}
+                `;
+            }).join('');
+
+            tbody.querySelectorAll('.dispatch-retry-btn').forEach((btn) => {
+                btn.addEventListener('click', () => retryDispatchTask(decodeDispatchToken(btn.getAttribute('data-task-token') || '')));
+            });
+            tbody.querySelectorAll('.dispatch-copy-id-btn').forEach((btn) => {
+                btn.addEventListener('click', () => copyDispatchTaskId(decodeDispatchToken(btn.getAttribute('data-task-token') || '')));
+            });
+            tbody.querySelectorAll('.dispatch-detail-btn').forEach((btn) => {
+                btn.addEventListener('click', () => toggleDispatchTaskDetail(decodeDispatchToken(btn.getAttribute('data-task-token') || '')));
+            });
+            updateDispatchBulkRetryButton();
+        }
+
+        function getDispatchPanelFilters() {
+            const source = (document.getElementById('dispatch-source-filter')?.value || '').trim();
+            const status = (document.getElementById('dispatch-status-filter')?.value || '').trim();
+            const rawLimit = parseInt(document.getElementById('dispatch-limit')?.value || '30', 10);
+            const limit = Number.isFinite(rawLimit) ? Math.min(200, Math.max(5, rawLimit)) : 30;
+            return { source, status, limit };
+        }
+
+        async function refreshDispatchPanel(options = {}) {
+            const silent = Boolean(options.silent);
+            if (dispatchRefreshInProgress) return;
+            dispatchRefreshInProgress = true;
+            const refreshBtn = document.getElementById('dispatch-refresh-btn');
+            const summary = document.getElementById('dispatch-summary');
+            if (refreshBtn) refreshBtn.disabled = true;
+            if (summary && dispatchTasks.length === 0) {
+                summary.textContent = 'Actualizando...';
+                summary.classList.remove('is-empty');
+            }
+
+            try {
+                const apiBase = await ensureApiPort();
+                const { source, status, limit } = getDispatchPanelFilters();
+
+                const taskParams = new URLSearchParams();
+                taskParams.set('limit', String(limit));
+                if (source) taskParams.set('source', source);
+                if (status) taskParams.set('status', status);
+
+                const statsParams = new URLSearchParams();
+                if (source) statsParams.set('source', source);
+                const statsQuery = statsParams.toString();
+
+                const [tasksResponse, statsResponse] = await Promise.all([
+                    fetch(`${apiBase}/api/dispatch/tasks?${taskParams.toString()}`),
+                    fetch(`${apiBase}/api/dispatch/stats${statsQuery ? `?${statsQuery}` : ''}`)
+                ]);
+
+                const tasksPayload = await tasksResponse.json().catch(() => ({}));
+                const statsPayload = await statsResponse.json().catch(() => ({}));
+
+                if (tasksResponse.ok) {
+                    dispatchTasksRaw = Array.isArray(tasksPayload.items) ? tasksPayload.items : [];
+                } else {
+                    dispatchTasksRaw = [];
+                    if (!silent) {
+                        alert(`Error cargando tareas de dispatch: ${tasksPayload.detail || tasksResponse.status}`);
+                    }
+                }
+
+                if (statsResponse.ok) {
+                    dispatchStats = statsPayload || null;
+                } else {
+                    dispatchStats = null;
+                }
+            } catch (error) {
+                dispatchTasksRaw = [];
+                dispatchStats = null;
+                if (!silent) {
+                    alert(`Error de conexion en cola de despacho: ${error.message}`);
+                }
+            } finally {
+                renderDispatchStats();
+                renderDispatchTasks();
+                if (refreshBtn) refreshBtn.disabled = false;
+                dispatchRefreshInProgress = false;
+            }
+        }
+
+        async function retryDispatchTask(taskId) {
+            const safeTaskId = String(taskId || '').trim();
+            if (!safeTaskId) return;
+            if (!confirm(`Reencolar tarea ${safeTaskId}?`)) {
+                return;
+            }
+            try {
+                const apiBase = await ensureApiPort();
+                const response = await fetch(`${apiBase}/api/dispatch/tasks/${encodeURIComponent(safeTaskId)}/retry`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        reset_attempts: true,
+                        clear_result: false
+                    })
+                });
+                const result = await response.json().catch(() => ({}));
+                if (response.ok) {
+                    await refreshDispatchPanel({ silent: true });
+                    alert(`Tarea ${safeTaskId} reencolada`);
+                } else {
+                    alert(`No se pudo reintentar ${safeTaskId}: ${result.detail || response.status}`);
+                }
+            } catch (error) {
+                alert(`Error de conexion reintentando tarea: ${error.message}`);
+            }
+        }
+
+        async function retryFailedVisibleDispatchTasks() {
+            if (dispatchBulkRetryInProgress) {
+                return;
+            }
+            const taskIds = getVisibleFailedDispatchTaskIds();
+            if (!taskIds.length) {
+                alert('No hay tareas fallidas visibles para reintentar.');
+                return;
+            }
+            if (!confirm(`Se reintentaran ${taskIds.length} tareas fallidas visibles. Continuar?`)) {
+                return;
+            }
+            dispatchBulkRetryInProgress = true;
+            updateDispatchBulkRetryButton();
+            let okCount = 0;
+            let failCount = 0;
+            try {
+                const apiBase = await ensureApiPort();
+                for (const taskId of taskIds) {
+                    try {
+                        const response = await fetch(`${apiBase}/api/dispatch/tasks/${encodeURIComponent(taskId)}/retry`, {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({
+                                reset_attempts: true,
+                                clear_result: false
+                            })
+                        });
+                        if (response.ok) {
+                            okCount += 1;
+                        } else {
+                            failCount += 1;
+                        }
+                    } catch (error) {
+                        failCount += 1;
+                    }
+                }
+                await refreshDispatchPanel({ silent: true });
+                alert(`Reintentos finalizados. OK=${okCount} | Error=${failCount}`);
+            } catch (error) {
+                alert(`Error durante reintentos masivos: ${error.message}`);
+            } finally {
+                dispatchBulkRetryInProgress = false;
+                updateDispatchBulkRetryButton();
             }
         }
 
@@ -1677,16 +3097,43 @@
 
             try {
                 const apiBase = await ensureApiPort();
+                const operatorSession = await resolveOperatorCloudSession(apiBase);
                 const selectedOrderPrinter = (
                     (document.getElementById('odoo-order-printer-primary')?.value || '').trim()
                 );
                 const selectedLabelPrinter = (
                     (document.getElementById('odoo-label-printer-primary')?.value || '').trim() ||
-                    document.getElementById('adm-default-printer-manual').value.trim() ||
-                    document.getElementById('adm-default-printer').value.trim()
+                    (document.getElementById('odoo-label-printer-fallback')?.value || '').trim() ||
+                    (administradoConfig.default_printer || '').trim()
                 );
-                const appUsername = (localStorage.getItem('username') || '').trim();
+                const appUsername = String(operatorSession.username || '').trim();
+                const cloudToken = String(operatorSession.token || '').trim();
+                const hasSecureSession = operatorSession.authenticated === true;
                 const modeText = modeTextMap[mode] || mode;
+                const confirmOnPrintEnabled = Boolean(odooConfig && odooConfig.confirm_order_on_print === true);
+                const requiresOrderFlow = mode === 'both' || mode === 'order_only';
+                const mappedOdooActor = resolveMappedOdooUser(appUsername);
+
+                if (confirmOnPrintEnabled && requiresOrderFlow) {
+                    if (!hasSecureSession) {
+                        alert(
+                            'La confirmacion Odoo ahora requiere sesion autenticada. ' +
+                            'Inicia sesion del operador (modo cloud) y vuelve a intentar.'
+                        );
+                        return;
+                    }
+                    if (!appUsername) {
+                        alert('No se pudo identificar al operador autenticado. Vuelve a iniciar sesion.');
+                        return;
+                    }
+                    if (!mappedOdooActor) {
+                        alert(
+                            `No hay usuario Odoo mapeado para '${appUsername}'. ` +
+                            'Configuralo en Odoo > Usuarios Odoo por operador.'
+                        );
+                        return;
+                    }
+                }
 
                 const confirmText = [
                     `Vas a enviar a imprimir:`,
@@ -1695,6 +3142,8 @@
                     `- Impresora orden: ${selectedOrderPrinter || '(default configurada)'}`,
                     `- Impresora etiqueta: ${selectedLabelPrinter || '(default configurada)'}`,
                     `- Usuario app: ${appUsername || '-'}`,
+                    `- Usuario Odoo mapeado: ${mappedOdooActor || '-'}`,
+                    `- Sesion segura: ${hasSecureSession ? 'Si' : 'No'}${operatorSession.source !== 'none' ? ` (${operatorSession.source})` : ''}`,
                     '',
                     'Confirmar impresion?'
                 ].join('\n');
@@ -1712,7 +3161,11 @@
 
                 const response = await fetch(`${apiBase}/api/administrado/shipments/print`, {
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
+                    credentials: 'include',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        ...(cloudToken ? { Authorization: `Bearer ${cloudToken}` } : {})
+                    },
                     body: JSON.stringify({
                         envio_id: safeEnvioId,
                         mode,
@@ -1782,6 +3235,7 @@
                 alert(`Error de conexion: ${error.message}`);
             } finally {
                 administradoPrintInFlight.delete(safeEnvioId);
+                refreshDispatchPanel({ silent: true });
             }
         }
 
@@ -1877,11 +3331,15 @@
         }
 
         // Cargar configuraciones al iniciar
+        initTheme();
         initViewMode();
         focusSectionFromHash();
         loadConfigs();
         odooStatusTimer = setInterval(() => {
             loadOdooAutomationStatus();
+            if (isDispatchAutoRefreshEnabled()) {
+                refreshDispatchPanel({ silent: true });
+            }
         }, 15000);
         window.addEventListener('hashchange', () => {
             if (adminOnlyMode && window.location.hash !== '#administrado') {
@@ -1890,6 +3348,9 @@
             }
             focusSectionFromHash();
             autoSyncAdministradoIfNeeded(true);
+            if (isDispatchAutoRefreshEnabled()) {
+                refreshDispatchPanel({ silent: true });
+            }
         });
         window.addEventListener('beforeunload', () => {
             if (odooStatusTimer) {

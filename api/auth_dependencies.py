@@ -4,11 +4,13 @@ Shared auth dependencies for cloud endpoints.
 
 from __future__ import annotations
 
-from typing import Any, Dict
+from typing import Any, Dict, Optional
 
-from fastapi import Depends, Header, HTTPException
+from fastapi import Cookie, Depends, Header, HTTPException
 
 from cloud_auth import cloud_auth_service
+
+AUTH_COOKIE_NAME = "etiq_access_token"
 
 
 def _extract_bearer_token(authorization_header: str) -> str:
@@ -24,8 +26,7 @@ def _extract_bearer_token(authorization_header: str) -> str:
     return token
 
 
-def get_current_user(authorization: str = Header(default="")) -> Dict[str, Any]:
-    token = _extract_bearer_token(authorization)
+def _verify_token_to_user(token: str) -> Dict[str, Any]:
     payload = cloud_auth_service.verify_token(token)
     if not payload:
         raise HTTPException(status_code=401, detail="Token invalido o expirado")
@@ -34,6 +35,36 @@ def get_current_user(authorization: str = Header(default="")) -> Dict[str, Any]:
         "role": payload.get("role"),
         "token_payload": payload,
     }
+
+
+def get_optional_current_user(
+    authorization: str = Header(default=""),
+    etiq_access_token: str = Cookie(default=""),
+) -> Optional[Dict[str, Any]]:
+    auth_value = (authorization or "").strip()
+    cookie_value = (etiq_access_token or "").strip()
+
+    if auth_value:
+        token = _extract_bearer_token(auth_value)
+        return _verify_token_to_user(token)
+
+    if cookie_value:
+        return _verify_token_to_user(cookie_value)
+
+    return None
+
+
+def get_current_user(
+    authorization: str = Header(default=""),
+    etiq_access_token: str = Cookie(default=""),
+) -> Dict[str, Any]:
+    user = get_optional_current_user(
+        authorization=authorization,
+        etiq_access_token=etiq_access_token,
+    )
+    if not user:
+        raise HTTPException(status_code=401, detail="No hay sesion autenticada")
+    return user
 
 
 def require_admin(user: Dict[str, Any] = Depends(get_current_user)) -> Dict[str, Any]:

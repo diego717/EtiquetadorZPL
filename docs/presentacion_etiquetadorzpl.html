@@ -1,0 +1,399 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>EtiquetadorZPL - Slides</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Archivo+Black&family=Space+Grotesk:wght@400;500;700&display=swap" rel="stylesheet">
+  <style>
+    /* === Theme === */
+    :root {
+      --bg: #1a1a1a;
+      --bg2: #2d2d2d;
+      --accent: #ff5722;
+      --accent2: #ff9f1c;
+      --text: #ffffff;
+      --muted: #d8d8d8;
+      --ink: #1a1a1a;
+      --line: rgba(255,255,255,.15);
+      --display: "Archivo Black", sans-serif;
+      --body: "Space Grotesk", sans-serif;
+      --ease: cubic-bezier(.16,1,.3,1);
+      --dur: .6s;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: var(--body); color: var(--text); background: linear-gradient(135deg,var(--bg),var(--bg2),var(--bg)); }
+
+    /* ===========================================
+       VIEWPORT FITTING: MANDATORY BASE STYLES
+       Include this ENTIRE file in every presentation.
+       These styles ensure slides fit exactly in the viewport.
+       =========================================== */
+
+    /* 1. Lock html/body to viewport */
+    html, body {
+        height: 100%;
+        overflow-x: hidden;
+    }
+
+    html {
+        scroll-snap-type: y mandatory;
+        scroll-behavior: smooth;
+    }
+
+    /* 2. Each slide = exact viewport height */
+    .slide {
+        width: 100vw;
+        height: 100vh;
+        height: 100dvh; /* Dynamic viewport height for mobile browsers */
+        overflow: hidden; /* CRITICAL: Prevent ANY overflow */
+        scroll-snap-align: start;
+        display: flex;
+        flex-direction: column;
+        position: relative;
+    }
+
+    /* 3. Content container with flex for centering */
+    .slide-content {
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        max-height: 100%;
+        overflow: hidden; /* Double-protection against overflow */
+        padding: var(--slide-padding);
+    }
+
+    /* 4. ALL typography uses clamp() for responsive scaling */
+    :root {
+        /* Titles scale from mobile to desktop */
+        --title-size: clamp(1.5rem, 5vw, 4rem);
+        --h2-size: clamp(1.25rem, 3.5vw, 2.5rem);
+        --h3-size: clamp(1rem, 2.5vw, 1.75rem);
+
+        /* Body text */
+        --body-size: clamp(0.75rem, 1.5vw, 1.125rem);
+        --small-size: clamp(0.65rem, 1vw, 0.875rem);
+
+        /* Spacing scales with viewport */
+        --slide-padding: clamp(1rem, 4vw, 4rem);
+        --content-gap: clamp(0.5rem, 2vw, 2rem);
+        --element-gap: clamp(0.25rem, 1vw, 1rem);
+    }
+
+    /* 5. Cards/containers use viewport-relative max sizes */
+    .card, .container, .content-box {
+        max-width: min(90vw, 1000px);
+        max-height: min(80vh, 700px);
+    }
+
+    /* 6. Lists auto-scale with viewport */
+    .feature-list, .bullet-list {
+        gap: clamp(0.4rem, 1vh, 1rem);
+    }
+
+    .feature-list li, .bullet-list li {
+        font-size: var(--body-size);
+        line-height: 1.4;
+    }
+
+    /* 7. Grids adapt to available space */
+    .grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(min(100%, 250px), 1fr));
+        gap: clamp(0.5rem, 1.5vw, 1rem);
+    }
+
+    /* 8. Images constrained to viewport */
+    img, .image-container {
+        max-width: 100%;
+        max-height: min(50vh, 400px);
+        object-fit: contain;
+    }
+
+    /* ===========================================
+       RESPONSIVE BREAKPOINTS
+       Aggressive scaling for smaller viewports
+       =========================================== */
+
+    /* Short viewports (< 700px height) */
+    @media (max-height: 700px) {
+        :root {
+            --slide-padding: clamp(0.75rem, 3vw, 2rem);
+            --content-gap: clamp(0.4rem, 1.5vw, 1rem);
+            --title-size: clamp(1.25rem, 4.5vw, 2.5rem);
+            --h2-size: clamp(1rem, 3vw, 1.75rem);
+        }
+    }
+
+    /* Very short viewports (< 600px height) */
+    @media (max-height: 600px) {
+        :root {
+            --slide-padding: clamp(0.5rem, 2.5vw, 1.5rem);
+            --content-gap: clamp(0.3rem, 1vw, 0.75rem);
+            --title-size: clamp(1.1rem, 4vw, 2rem);
+            --body-size: clamp(0.7rem, 1.2vw, 0.95rem);
+        }
+
+        /* Hide non-essential elements */
+        .nav-dots, .keyboard-hint, .decorative {
+            display: none;
+        }
+    }
+
+    /* Extremely short (landscape phones, < 500px height) */
+    @media (max-height: 500px) {
+        :root {
+            --slide-padding: clamp(0.4rem, 2vw, 1rem);
+            --title-size: clamp(1rem, 3.5vw, 1.5rem);
+            --h2-size: clamp(0.9rem, 2.5vw, 1.25rem);
+            --body-size: clamp(0.65rem, 1vw, 0.85rem);
+        }
+    }
+
+    /* Narrow viewports (< 600px width) */
+    @media (max-width: 600px) {
+        :root {
+            --title-size: clamp(1.25rem, 7vw, 2.5rem);
+        }
+
+        /* Stack grids vertically */
+        .grid {
+            grid-template-columns: 1fr;
+        }
+    }
+
+    /* ===========================================
+       REDUCED MOTION
+       Respect user preferences
+       =========================================== */
+    @media (prefers-reduced-motion: reduce) {
+        *, *::before, *::after {
+            animation-duration: 0.01ms !important;
+            transition-duration: 0.2s !important;
+        }
+
+        html {
+            scroll-behavior: auto;
+        }
+    }
+
+    /* === Layout === */
+    .progress { position: fixed; inset: 0 auto auto 0; width: 100%; height: clamp(4px,.55vh,7px); background: rgba(255,255,255,.1); z-index: 10; }
+    .bar { height: 100%; width: 0; background: linear-gradient(90deg,var(--accent),var(--accent2)); transition: width .25s ease; }
+    .nav-dots { position: fixed; right: clamp(.45rem,1.5vw,1.2rem); top: 50%; transform: translateY(-50%); display: flex; flex-direction: column; gap: clamp(.3rem,1vh,.75rem); z-index: 10; list-style: none; }
+    .dot { width: clamp(9px,1.2vw,12px); height: clamp(9px,1.2vw,12px); border: 0; border-radius: 999px; background: rgba(255,255,255,.28); cursor: pointer; }
+    .dot.active { background: var(--accent); transform: scale(1.2); }
+    .hint { position: fixed; left: clamp(.75rem,2vw,1.4rem); bottom: clamp(.65rem,1.8vw,1.2rem); font-size: var(--small-size); color: rgba(255,255,255,.75); z-index: 10; }
+    .section { position: absolute; left: clamp(.8rem,2.3vw,1.8rem); top: clamp(.7rem,2.1vw,1.5rem); font-family: var(--display); font-size: clamp(1.2rem,3.6vw,2.4rem); color: rgba(255,255,255,.15); }
+    .crumb { position: absolute; right: clamp(1rem,3vw,2.2rem); top: clamp(.75rem,2.3vw,1.6rem); font-size: var(--small-size); letter-spacing: .06em; text-transform: uppercase; color: rgba(255,255,255,.8); }
+    .slide-content { width: min(94vw,1200px); margin: 0 auto; gap: var(--content-gap); }
+    .panel { width: 100%; max-width: min(92vw,1060px); max-height: min(80vh,700px); margin: 0 auto; border-radius: clamp(14px,2vw,22px); padding: clamp(1rem,2.4vw,2.1rem); overflow: hidden; border: 1px solid var(--line); box-shadow: 0 26px 50px rgba(0,0,0,.4); }
+    .panel.main { background: linear-gradient(128deg,#ff5d29,#ff8a4c,#ffb077); color: var(--ink); }
+    .panel.dark { background: rgba(22,22,22,.82); }
+    .kicker { font-size: clamp(.72rem,1.1vw,.95rem); letter-spacing: .16em; text-transform: uppercase; font-weight: 700; opacity: .86; }
+    .title { font-family: var(--display); font-size: var(--title-size); line-height: .96; letter-spacing: -.02em; max-width: min(90vw,980px); }
+    .heading { font-family: var(--display); font-size: var(--h2-size); line-height: 1; letter-spacing: -.015em; max-width: min(92vw,900px); }
+    .sub { font-size: clamp(.95rem,1.7vw,1.45rem); line-height: 1.34; max-width: min(86vw,860px); }
+    .bullet-list { list-style: none; display: grid; gap: clamp(.36rem,.9vh,.8rem); max-width: min(92vw,970px); }
+    .bullet-list li { display: grid; grid-template-columns: clamp(14px,2.2vw,18px) 1fr; gap: clamp(.48rem,1vw,.8rem); align-items: start; font-size: var(--body-size); line-height: 1.32; color: var(--muted); }
+    .bullet-list li::before { content: ""; width: clamp(8px,1vw,10px); height: clamp(8px,1vw,10px); margin-top: clamp(.25rem,.6vh,.4rem); border-radius: 2px; transform: rotate(45deg); background: linear-gradient(45deg,var(--accent),var(--accent2)); }
+    .grid6 { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap: clamp(.5rem,1vw,.95rem); max-height: min(56vh,430px); overflow: hidden; }
+    .card-mini { border: 1px solid var(--line); border-radius: clamp(10px,1.4vw,14px); padding: clamp(.65rem,1.3vw,1rem); background: rgba(255,255,255,.03); min-height: clamp(92px,13vh,130px); overflow: hidden; }
+    .card-mini h3 { font-family: var(--display); font-size: clamp(.74rem,1.05vw,.95rem); margin-bottom: clamp(.24rem,.8vh,.45rem); }
+    .card-mini p { color: var(--muted); font-size: clamp(.66rem,.96vw,.82rem); line-height: 1.28; }
+    .reveal { opacity: 0; transform: translateY(32px); transition: opacity var(--dur) var(--ease), transform var(--dur) var(--ease); transition-delay: var(--delay,0s); }
+    .slide.visible .reveal { opacity: 1; transform: translateY(0); }
+    @media (max-width: 980px) { .grid6 { grid-template-columns: repeat(2,minmax(0,1fr)); } }
+  </style>
+</head>
+<body>
+  <div class="progress"><div class="bar" id="bar"></div></div>
+  <nav class="nav-dots" id="dots" aria-label="Navegacion de diapositivas"></nav>
+  <div class="hint">Flechas / Espacio / Scroll / Swipe</div>
+
+  <!-- === Slide 1 === -->
+  <section class="slide" data-title="Portada">
+    <span class="section">01</span><span class="crumb">ETIQUETADORZPL / VISION</span>
+    <div class="slide-content">
+      <article class="panel main">
+        <p class="kicker reveal" style="--delay:.08s;">Automatizacion de impresion para deposito</p>
+        <h1 class="title reveal" style="--delay:.16s;">EtiquetadorZPL con flujo Odoo + etiquetas</h1>
+        <p class="sub reveal" style="--delay:.24s;">Plataforma local para recibir archivos, convertir a ZPL, enviar a impresoras y controlar todo desde GUI y dashboard web.</p>
+      </article>
+    </div>
+  </section>
+
+  <!-- === Slide 2 === -->
+  <section class="slide" data-title="Valor">
+    <span class="section">02</span><span class="crumb">POR QUE EXISTE</span>
+    <div class="slide-content">
+      <article class="panel dark">
+        <h2 class="heading reveal" style="--delay:.05s;">Valor operativo inmediato</h2>
+        <ul class="bullet-list">
+          <li class="reveal" style="--delay:.12s;">Procesa PDF, ZPL, TXT y ZIP automaticamente desde carpetas monitoreadas.</li>
+          <li class="reveal" style="--delay:.18s;">Hasta 3 flujos paralelos con impresora, historial y copias por carpeta.</li>
+          <li class="reveal" style="--delay:.24s;">Reduce trabajo manual y errores de operador en deposito.</li>
+          <li class="reveal" style="--delay:.30s;">Muestra estado, logs y metricas en dashboard web y GUI.</li>
+          <li class="reveal" style="--delay:.36s;">Integra orden Odoo + etiqueta de envio en un circuito unico.</li>
+        </ul>
+      </article>
+    </div>
+  </section>
+
+  <!-- === Slide 3 === -->
+  <section class="slide" data-title="Arquitectura">
+    <span class="section">03</span><span class="crumb">MODULOS</span>
+    <div class="slide-content">
+      <article class="panel dark">
+        <h2 class="heading reveal" style="--delay:.06s;">Arquitectura modular orientada a operacion</h2>
+        <div class="grid6">
+          <article class="card-mini reveal" style="--delay:.12s;"><h3>API FastAPI</h3><p>Estado, acciones y configuraciones para web y automatizaciones.</p></article>
+          <article class="card-mini reveal" style="--delay:.16s;"><h3>Servicio monitor</h3><p>Observa carpetas de entrada y dispara impresiones continuas.</p></article>
+          <article class="card-mini reveal" style="--delay:.20s;"><h3>GUI local</h3><p>Setup rapido de carpetas, impresoras, historial y copias.</p></article>
+          <article class="card-mini reveal" style="--delay:.24s;"><h3>Dashboard web</h3><p>Visibilidad de trabajos, metricas y mantenimiento remoto por LAN.</p></article>
+          <article class="card-mini reveal" style="--delay:.28s;"><h3>Integracion Odoo</h3><p>XML-RPC + descarga PDF de ordenes con manejo de errores.</p></article>
+          <article class="card-mini reveal" style="--delay:.32s;"><h3>Worker Odoo</h3><p>Sincroniza envios y ejecuta orden + etiqueta con fallback.</p></article>
+        </div>
+      </article>
+    </div>
+  </section>
+
+  <!-- === Slide 4 === -->
+  <section class="slide" data-title="Odoo">
+    <span class="section">04</span><span class="crumb">INTEGRACION ODOO</span>
+    <div class="slide-content">
+      <article class="panel dark">
+        <h2 class="heading reveal" style="--delay:.05s;">Capacidades implementadas en codigo</h2>
+        <ul class="bullet-list">
+          <li class="reveal" style="--delay:.12s;">Autenticacion XML-RPC contra <code>/xmlrpc/2/common</code> y <code>/xmlrpc/2/object</code>.</li>
+          <li class="reveal" style="--delay:.18s;">Busqueda de <code>sale.order</code> por envio, prefijo y estados permitidos.</li>
+          <li class="reveal" style="--delay:.24s;">Descarga de PDF de orden via sesion web autenticada.</li>
+          <li class="reveal" style="--delay:.30s;">Confirmacion de orden (<code>action_confirm</code>) con verificacion before/after.</li>
+          <li class="reveal" style="--delay:.36s;">Impresion con verificacion de spooler, timeout y timeline de etapas.</li>
+        </ul>
+      </article>
+    </div>
+  </section>
+
+  <!-- === Slide 5 === -->
+  <section class="slide" data-title="Confiabilidad">
+    <span class="section">05</span><span class="crumb">ROBUSTEZ</span>
+    <div class="slide-content">
+      <article class="panel dark">
+        <h2 class="heading reveal" style="--delay:.05s;">Confiabilidad y operacion diaria</h2>
+        <ul class="bullet-list">
+          <li class="reveal" style="--delay:.12s;">Mensajes de error humanizados para XML-RPC y base de datos Odoo.</li>
+          <li class="reveal" style="--delay:.18s;">Enmascarado de credenciales y configuracion segura publicada.</li>
+          <li class="reveal" style="--delay:.24s;">Worker con memoria de envios procesados para evitar duplicados.</li>
+          <li class="reveal" style="--delay:.30s;">Backups, logs, notificaciones y metricas de rendimiento desde dashboard.</li>
+          <li class="reveal" style="--delay:.36s;">Roadmap 1.1: constants/exceptions/utils/rate-limiter/circuit-breaker.</li>
+        </ul>
+      </article>
+    </div>
+  </section>
+
+  <!-- === Slide 6 === -->
+  <section class="slide" data-title="Cierre">
+    <span class="section">06</span><span class="crumb">SIGUIENTE ITERACION</span>
+    <div class="slide-content">
+      <article class="panel main">
+        <p class="kicker reveal" style="--delay:.08s;">Resumen ejecutivo</p>
+        <h2 class="title reveal" style="--delay:.15s;">Motor de impresion trazable y listo para escalar</h2>
+        <p class="sub reveal" style="--delay:.22s;">Siguiente paso recomendado: demo interna de 15 minutos con casos reales de deposito y priorizacion de Fase 2.</p>
+      </article>
+    </div>
+  </section>
+
+  <script>
+    /* === Slide controller === */
+    class SlidePresentation {
+      constructor() {
+        this.slides = Array.from(document.querySelectorAll(".slide"));
+        this.current = 0;
+        this.lastWheel = 0;
+        this.startY = 0;
+        this.endY = 0;
+        this.reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+        this.bar = document.getElementById("bar");
+        this.dots = document.getElementById("dots");
+        this.setupNavDots();
+        this.setupIntersectionObserver();
+        this.setupKeyboardNav();
+        this.setupTouchNav();
+        this.setupWheelNav();
+        this.updateProgress(0);
+      }
+
+      setupIntersectionObserver() {
+        const obs = new IntersectionObserver((entries) => {
+          entries.forEach((e) => { if (e.isIntersecting && e.intersectionRatio > .18) e.target.classList.add("visible"); });
+          const top = entries.filter((e) => e.isIntersecting).sort((a, b) => b.intersectionRatio - a.intersectionRatio)[0];
+          if (!top) return;
+          const i = this.slides.indexOf(top.target);
+          if (i >= 0) { this.current = i; this.updateProgress(i); }
+        }, { threshold: [.2, .45, .7] });
+        this.slides.forEach((s) => obs.observe(s));
+      }
+
+      setupKeyboardNav() {
+        document.addEventListener("keydown", (e) => {
+          const t = (e.target?.tagName || "").toLowerCase();
+          if (t === "input" || t === "textarea" || e.target?.isContentEditable) return;
+          if (["ArrowDown","ArrowRight","PageDown"," "].includes(e.key)) { e.preventDefault(); this.go(this.current + 1); }
+          else if (["ArrowUp","ArrowLeft","PageUp"].includes(e.key)) { e.preventDefault(); this.go(this.current - 1); }
+          else if (e.key === "Home") { e.preventDefault(); this.go(0); }
+          else if (e.key === "End") { e.preventDefault(); this.go(this.slides.length - 1); }
+        });
+      }
+
+      setupTouchNav() {
+        window.addEventListener("touchstart", (e) => { this.startY = e.changedTouches[0].screenY; }, { passive: true });
+        window.addEventListener("touchend", (e) => {
+          this.endY = e.changedTouches[0].screenY;
+          const d = this.startY - this.endY;
+          if (Math.abs(d) < 55) return;
+          this.go(d > 0 ? this.current + 1 : this.current - 1);
+        }, { passive: true });
+      }
+
+      setupWheelNav() {
+        window.addEventListener("wheel", (e) => {
+          if (Math.abs(e.deltaY) < 22) return;
+          const now = Date.now();
+          if (now - this.lastWheel < 720) return;
+          this.lastWheel = now;
+          this.go(e.deltaY > 0 ? this.current + 1 : this.current - 1);
+        }, { passive: true });
+      }
+
+      setupNavDots() {
+        this.dots.innerHTML = "";
+        this.slides.forEach((slide, i) => {
+          const b = document.createElement("button");
+          b.className = "dot";
+          b.type = "button";
+          b.title = slide.dataset.title || `Slide ${i + 1}`;
+          b.setAttribute("aria-label", `Ir a diapositiva ${i + 1}`);
+          b.addEventListener("click", () => this.go(i));
+          this.dots.appendChild(b);
+        });
+      }
+
+      go(i) {
+        if (i < 0 || i >= this.slides.length) return;
+        this.slides[i].scrollIntoView({ behavior: this.reduced ? "auto" : "smooth", block: "start" });
+      }
+
+      updateProgress(i) {
+        const p = (i / Math.max(this.slides.length - 1, 1)) * 100;
+        this.bar.style.width = `${p}%`;
+        this.dots.querySelectorAll(".dot").forEach((d, idx) => d.classList.toggle("active", idx === i));
+      }
+    }
+    new SlidePresentation();
+  </script>
+</body>
+</html>

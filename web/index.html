@@ -6,22 +6,142 @@
     <title>EtiquetadorZPL - Dashboard</title>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
-        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: #f5f5f5; }
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: #f5f5f5;
+            color: #1f2937;
+            line-height: 1.35;
+        }
         .container { max-width: 1200px; margin: 0 auto; padding: 20px; }
         .header { background: #2c3e50; color: white; padding: 20px; border-radius: 8px; margin-bottom: 20px; }
+        .header h1 { font-size: 2.5rem; line-height: 1.1; margin-bottom: 4px; }
+        .header p { color: #e2e8f0; font-size: 1.05rem; }
         .card { background: white; border-radius: 8px; padding: 20px; margin-bottom: 20px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+        .card h2 { margin-bottom: 12px; font-size: 1.7rem; line-height: 1.15; color: #111827; }
         .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 20px; margin-bottom: 20px; }
-        .btn { background: #3498db; color: white; border: none; padding: 10px 20px; border-radius: 4px; cursor: pointer; text-decoration: none; display: inline-block; }
+        .grid > * { min-width: 0; }
+        .btn {
+            background: #3498db;
+            color: white;
+            border: none;
+            padding: 9px 14px;
+            border-radius: 6px;
+            cursor: pointer;
+            text-decoration: none;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            min-height: 36px;
+            line-height: 1.2;
+            font-size: 14px;
+            font-weight: 600;
+        }
         .btn:hover { background: #2980b9; }
-        .status { padding: 4px 8px; border-radius: 4px; font-size: 12px; }
+        .btn:focus-visible {
+            outline: none;
+            box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.22);
+        }
+        .btn.secondary { background: #64748b; }
+        .btn.secondary:hover { background: #475569; }
+        .btn-row { margin-top: 14px; display: flex; gap: 10px; flex-wrap: wrap; }
+        .header-actions { margin-top: 12px; display: flex; gap: 10px; flex-wrap: wrap; }
+        #theme-toggle-btn { min-width: 132px; }
+        .muted { color: #666; font-size: 14px; }
+        .status { padding: 4px 8px; border-radius: 6px; font-size: 12px; font-weight: 600; }
         .status.completed { background: #d4edda; color: #155724; }
         .status.processing { background: #fff3cd; color: #856404; }
         .status.failed { background: #f8d7da; color: #721c24; }
+        .status.queued { background: #eef2ff; color: #3730a3; }
         table { width: 100%; border-collapse: collapse; }
-        th, td { padding: 12px; text-align: left; border-bottom: 1px solid #ddd; }
-        th { background: #f8f9fa; }
+        th, td { padding: 11px 12px; text-align: left; border-bottom: 1px solid #e5e7eb; font-size: 14px; }
+        th { background: #f8f9fa; color: #4b5563; font-size: 12px; text-transform: uppercase; letter-spacing: .02em; }
+        td { overflow-wrap: anywhere; word-break: break-word; }
+        .table-scroll { overflow-x: auto; border: 1px solid #e5e7eb; border-radius: 8px; }
+        .table-scroll table { min-width: 860px; }
         .stats { display: flex; justify-content: space-around; text-align: center; gap: 20px; }
         .stat-item h3 { color: #3498db; font-size: 2em; margin-bottom: 5px; }
+        .stat-item p { color: #475569; }
+        .printer-item {
+            padding: 6px 8px;
+            border-left: 3px solid #3498db;
+            margin: 5px 0;
+            background: #f8f9fa;
+            border-radius: 0 4px 4px 0;
+            overflow-wrap: anywhere;
+            word-break: break-word;
+        }
+        .network-box {
+            margin-bottom: 15px;
+            padding: 10px;
+            background: #e8f4f8;
+            border-radius: 6px;
+            border: 1px solid #cfe6ef;
+        }
+
+        html[data-theme="dark"] body {
+            background: #0b1220;
+            color: #e5edf8;
+        }
+        html[data-theme="dark"] .header {
+            background: #0f1c33;
+            border: 1px solid #2e435f;
+        }
+        html[data-theme="dark"] .header p,
+        html[data-theme="dark"] .muted {
+            color: #9fb2ce;
+        }
+        html[data-theme="dark"] .card {
+            background: #111c31;
+            border: 1px solid #2a3f5b;
+            box-shadow: 0 10px 24px rgba(0,0,0,0.35);
+        }
+        html[data-theme="dark"] .card h2 {
+            color: #eef4ff;
+        }
+        html[data-theme="dark"] .btn.secondary {
+            background: #2f415b;
+            color: #e3ecfb;
+        }
+        html[data-theme="dark"] .btn.secondary:hover {
+            background: #3b526f;
+        }
+        html[data-theme="dark"] .table-scroll {
+            border-color: #31445f;
+            background: #0f182b;
+        }
+        html[data-theme="dark"] th,
+        html[data-theme="dark"] td {
+            border-bottom-color: #2c3f5a;
+        }
+        html[data-theme="dark"] th {
+            background: #1a2942;
+            color: #a6bbd8;
+        }
+        html[data-theme="dark"] td {
+            color: #d9e5f7;
+        }
+        html[data-theme="dark"] .stat-item p {
+            color: #a9bdd8;
+        }
+        html[data-theme="dark"] .printer-item {
+            background: #16233a;
+            border-left-color: #49a6e8;
+        }
+        html[data-theme="dark"] .network-box {
+            background: #162742;
+            border-color: #365071;
+        }
+        html[data-theme="dark"] .status.completed { background: #1f4630; color: #9ce0bc; }
+        html[data-theme="dark"] .status.failed { background: #4b212a; color: #f4b9c0; }
+        html[data-theme="dark"] .status.processing { background: #4a3a1a; color: #f3d79d; }
+        html[data-theme="dark"] .status.queued { background: #222f58; color: #bfcaf8; }
+        @media (max-width: 900px) {
+            .container { padding: 14px; }
+            .header { padding: 16px; }
+            .header h1 { font-size: 2.1rem; }
+            .card { padding: 16px; }
+            .stats { flex-direction: column; align-items: stretch; }
+        }
     </style>
 </head>
 <body>
@@ -29,9 +149,10 @@
         <div class="header">
             <h1>EtiquetadorZPL Dashboard</h1>
             <p>Sistema de gestion de etiquetas ZPL</p>
-            <div style="margin-top: 10px;">
+            <div class="header-actions">
+                <button id="theme-toggle-btn" class="btn secondary" onclick="toggleTheme()">Tema oscuro</button>
                 <a href="config.html" class="btn">Configuracion</a>
-                <a href="cloud.html" class="btn" style="margin-left: 8px;">Cloud</a>
+                <a href="cloud.html" class="btn">Cloud</a>
             </div>
         </div>
 
@@ -62,11 +183,11 @@
 
             <div class="card">
                 <h2>Mercado Libre</h2>
-                <p style="color: #666; margin-bottom: 10px;">Estado de la integracion directa de etiquetas</p>
+                <p class="muted" style="margin-bottom: 10px;">Estado de la integracion directa de etiquetas</p>
                 <p>Configurado: <span id="meli-configured">-</span></p>
                 <p>Autenticado: <span id="meli-authenticated">-</span></p>
                 <p>Usuario: <span id="meli-user">-</span></p>
-                <div style="margin-top: 15px; display: flex; gap: 10px; flex-wrap: wrap;">
+                <div class="btn-row">
                     <a href="config.html#mercadolibre" class="btn">Configurar</a>
                     <button class="btn" onclick="loadMercadoLibreStatus()">Actualizar</button>
                 </div>
@@ -75,8 +196,8 @@
 
         <div class="card">
             <h2>Impresoras de Red</h2>
-            <p style="color: #666; margin-bottom: 10px;">Impresoras de red detectadas en el sistema</p>
-            <div id="network-printers" style="margin-bottom: 15px; padding: 10px; background: #e8f4f8; border-radius: 4px;">
+            <p class="muted" style="margin-bottom: 10px;">Impresoras de red detectadas en el sistema</p>
+            <div id="network-printers" class="network-box">
                 <strong>Impresoras de red detectadas:</strong>
                 <span id="network-printers-list">Cargando...</span>
             </div>
@@ -85,48 +206,92 @@
 
         <div class="card">
             <h2>Trabajos Recientes</h2>
-            <table id="jobs-table">
-                <thead>
-                    <tr>
-                        <th>ID</th>
-                        <th>Archivo</th>
-                        <th>Usuario</th>
-                        <th>Equipo</th>
-                        <th>Impresora</th>
-                        <th>Estado</th>
-                        <th>Creado</th>
-                    </tr>
-                </thead>
-                <tbody id="jobs-body">
-                    <tr><td colspan="7">Cargando...</td></tr>
-                </tbody>
-            </table>
-            <button class="btn" onclick="refreshJobs()">Actualizar</button>
+            <div class="table-scroll">
+                <table id="jobs-table">
+                    <thead>
+                        <tr>
+                            <th>ID</th>
+                            <th>Archivo</th>
+                            <th>Usuario</th>
+                            <th>Equipo</th>
+                            <th>Impresora</th>
+                            <th>Estado</th>
+                            <th>Creado</th>
+                        </tr>
+                    </thead>
+                    <tbody id="jobs-body">
+                        <tr><td colspan="7">Cargando...</td></tr>
+                    </tbody>
+                </table>
+            </div>
+            <div class="btn-row">
+                <button class="btn" onclick="refreshJobs()">Actualizar</button>
+            </div>
         </div>
 
         <div class="card">
             <h2>Registro de Usuarios</h2>
-            <p style="color: #666; margin-bottom: 10px;">Historial de documentos enviados por usuario y equipo</p>
-            <table id="users-table">
-                <thead>
-                    <tr>
-                        <th>Usuario</th>
-                        <th>Equipo</th>
-                        <th>Total</th>
-                        <th>Exitosos</th>
-                        <th>Fallidos</th>
-                    </tr>
-                </thead>
-                <tbody id="users-body">
-                    <tr><td colspan="5">Cargando...</td></tr>
-                </tbody>
-            </table>
-            <button class="btn" onclick="loadUserStats()">Actualizar Registro</button>
+            <p class="muted" style="margin-bottom: 10px;">Historial de documentos enviados por usuario y equipo</p>
+            <div class="table-scroll">
+                <table id="users-table">
+                    <thead>
+                        <tr>
+                            <th>Usuario</th>
+                            <th>Equipo</th>
+                            <th>Total</th>
+                            <th>Exitosos</th>
+                            <th>Fallidos</th>
+                        </tr>
+                    </thead>
+                    <tbody id="users-body">
+                        <tr><td colspan="5">Cargando...</td></tr>
+                    </tbody>
+                </table>
+            </div>
+            <div class="btn-row">
+                <button class="btn" onclick="loadUserStats()">Actualizar Registro</button>
+            </div>
         </div>
     </div>
 
     <script src="config.js"></script>
     <script>
+        const THEME_STORAGE_KEY = 'etiquetador_ui_theme';
+        let currentTheme = 'light';
+
+        function updateThemeToggleButton() {
+            const btn = document.getElementById('theme-toggle-btn');
+            if (!btn) return;
+            btn.textContent = currentTheme === 'dark' ? 'Tema claro' : 'Tema oscuro';
+            btn.setAttribute('aria-label', currentTheme === 'dark' ? 'Cambiar a tema claro' : 'Cambiar a tema oscuro');
+        }
+
+        function applyTheme(theme, persist = true) {
+            currentTheme = theme === 'dark' ? 'dark' : 'light';
+            document.documentElement.setAttribute('data-theme', currentTheme);
+            updateThemeToggleButton();
+            if (!persist) return;
+            try {
+                localStorage.setItem(THEME_STORAGE_KEY, currentTheme);
+            } catch (e) {
+                // Ignorar si localStorage no esta disponible.
+            }
+        }
+
+        function initTheme() {
+            let stored = null;
+            try {
+                stored = localStorage.getItem(THEME_STORAGE_KEY);
+            } catch (e) {
+                stored = null;
+            }
+            applyTheme(stored === 'dark' ? 'dark' : 'light', false);
+        }
+
+        function toggleTheme() {
+            applyTheme(currentTheme === 'dark' ? 'light' : 'dark', true);
+        }
+
         async function fetchAPI(endpoint) {
             try {
                 if (!API_BASE || API_BASE.includes('8003')) {
@@ -160,7 +325,7 @@
 
             if (data && data.printers) {
                 printersDiv.innerHTML = data.printers.map(printer =>
-                    `<div style="padding: 5px; border-left: 3px solid #3498db; margin: 5px 0; background: #f8f9fa;">${printer}</div>`
+                    `<div class="printer-item">${printer}</div>`
                 ).join('');
             } else {
                 printersDiv.innerHTML = '<p>No se pudieron cargar las impresoras</p>';
@@ -232,6 +397,7 @@
         function refreshPrinters() { loadPrinters(); }
         function refreshJobs() { loadJobs(); }
 
+        initTheme();
         loadStatistics();
         loadPrinters();
         loadNetworkPrinters();

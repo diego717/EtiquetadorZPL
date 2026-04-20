@@ -144,7 +144,7 @@
             
             try {
                 const port = await getApiPort();
-                const response = await fetch(`http://localhost:${port}/api/login`, {
+                const response = await fetch(`http://localhost:${port}/api/auth/login`, {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
@@ -156,13 +156,17 @@
                     const data = await response.json();
                     
                     // Guardar sesión
-                    localStorage.setItem('session_id', data.session_id);
-                    localStorage.setItem('username', username);
-                    localStorage.setItem('role', data.role);
+                    localStorage.setItem('cloud_access_token', data.access_token || '');
+                    localStorage.setItem('cloud_username', data.username || username);
+                    localStorage.setItem('cloud_role', data.role || '');
+                    localStorage.setItem('username', data.username || username);
+                    localStorage.setItem('role', data.role || '');
                     
                     // Redirigir al dashboard
-                    window.location.href = 'index.html';
+                    window.location.href = 'config.html#administrado';
                 } else {
+                    const errorData = await response.json().catch(() => ({}));
+                    errorDiv.textContent = errorData.detail || 'Usuario o contrasena incorrectos';
                     errorDiv.style.display = 'block';
                 }
             } catch (error) {
