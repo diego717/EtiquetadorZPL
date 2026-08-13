@@ -39,6 +39,40 @@ EXPORT_FORMATS = {
 }
 
 
+def compute_face_crop(
+    image_size: tuple[int, int],
+    face_box: tuple[int, int, int, int],
+    eye_line: Optional[float],
+    hair_margin: float,
+    ratio: float,
+    eye_position: float,
+) -> tuple[float, float, float, float]:
+    """Encuadre vertical con espacio configurable por encima de la cara.
+
+    Función pura para que las pruebas puedan verificar el encuadre sin abrir una ventana.
+    `eye_line` llega ya en `None` cuando la alineación de ojos está desactivada.
+    """
+    x, y, width, height = (float(value) for value in face_box)
+    image_w, image_h = image_size
+    maximum_h = min(image_h, image_w / ratio)
+    # La cara no incluye el cabello para la mayoría de detectores. Se reserva un
+    # margen superior y se aleja levemente el cuadro para incluir cabeza y hombros.
+    face_fill = max(0.34, min(0.46, 0.48 - hair_margin * 0.20))
+    crop_h = min(maximum_h, max(height / face_fill, width / (ratio * 0.68)))
+    crop_h = max(min(crop_h, maximum_h), min(maximum_h, 100.0))
+    crop_w = crop_h * ratio
+    center_x = x + width / 2
+    if eye_line is not None:
+        top = eye_line - crop_h * (eye_position / 100)
+    else:
+        margin = min(max(hair_margin, 0.08), 0.35)
+        top = y + height / 2 - crop_h * (margin + height / (2 * crop_h))
+    left = center_x - crop_w / 2
+    left = min(max(0.0, left), image_w - crop_w)
+    top = min(max(0.0, top), image_h - crop_h)
+    return (left, top, left + crop_w, top + crop_h)
+
+
 @dataclass
 class PhotoItem:
     path: Path
@@ -585,28 +619,12 @@ class FaceCropperApp:
         """Crea un encuadre vertical con espacio configurable por encima de la cara."""
         if item.face_box is None:
             return
-        face = item.face_box
-        x, y, width, height = (float(value) for value in face)
-        image_w, image_h = item.image.size
         ratio = self.get_aspect_ratio(show_error=False) or 3 / 4
-        maximum_h = min(image_h, image_w / ratio)
-        # La cara no incluye el cabello para la mayoría de detectores. Se reserva un
-        # margen superior y se aleja levemente el cuadro para incluir cabeza y hombros.
-        face_fill = max(0.34, min(0.46, 0.48 - item.hair_margin * 0.20))
-        crop_h = min(maximum_h, max(height / face_fill, width / (ratio * 0.68)))
-        crop_h = max(min(crop_h, maximum_h), min(maximum_h, 100.0))
-        crop_w = crop_h * ratio
-        center_x = x + width / 2
         eye_line = self.get_eye_line(item) if self.align_eyes_var.get() else None
-        if eye_line is not None:
-            top = eye_line - crop_h * (self.eye_position_var.get() / 100)
-        else:
-            hair_margin = min(max(item.hair_margin, 0.08), 0.35)
-            top = y + height / 2 - crop_h * (hair_margin + height / (2 * crop_h))
-        left = center_x - crop_w / 2
-        left = min(max(0.0, left), image_w - crop_w)
-        top = min(max(0.0, top), image_h - crop_h)
-        item.crop = (left, top, left + crop_w, top + crop_h)
+        item.crop = compute_face_crop(
+            item.image.size, item.face_box, eye_line, item.hair_margin, ratio,
+            self.eye_position_var.get(),
+        )
         item.face_found = True
 
     def auto_crop_current(self) -> None:
