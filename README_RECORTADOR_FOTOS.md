@@ -33,6 +33,28 @@ Las imágenes nunca salen de la computadora: la detección y la exportación se 
 
 Por defecto se mantiene el nombre original de cada foto. El sufijo es opcional y se escribe exactamente como se indique; por ejemplo, `ana.jpg` con `_credencial` pasa a ser `ana_credencial.jpg`.
 
+## Detección de rostros
+
+La detección usa **YuNet**, un modelo de red neuronal que viene con OpenCV. Comparado con el
+detector anterior tolera mejor los anteojos, las cabezas rotadas y la luz lateral, y devuelve
+directamente la posición de cada ojo, así que la alineación de ojos del lote se confirma en
+muchas más fotos.
+
+El modelo es un archivo local (`models/face_detection_yunet_2023mar.onnx`, licencia MIT de
+Shiqi Yu; ver `models/README.md`). Va incluido dentro del ejecutable y **no se descarga nada al
+usarlo**: la aplicación sigue funcionando sin conexión y las imágenes nunca salen de la
+computadora.
+
+Si el modelo faltara o la versión de OpenCV fuera anterior a la 4.5.4, el programa vuelve solo
+al detector clásico y lo avisa en la barra de estado al terminar el encuadre automático. No se
+interrumpe el trabajo.
+
+Para comparar ambos detectores sobre tus propias fotos:
+
+```powershell
+python tests\test_recortador_deteccion.py --compare C:\ruta\a\fotos
+```
+
 ## Crear un ejecutable opcional
 
 Ejecutá `build_recortador_fotos.bat`. El programa quedará en `dist\\RecortadorFotos.exe`.
