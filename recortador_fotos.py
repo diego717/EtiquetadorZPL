@@ -13,9 +13,9 @@ from typing import Optional
 import tkinter as tk
 from tkinter import filedialog, messagebox, ttk
 
-import cv2
-import numpy as np
 from PIL import Image, ImageEnhance, ImageOps, ImageStat, ImageTk, UnidentifiedImageError
+
+import face_detection
 
 
 SUPPORTED_EXTENSIONS = {".jpg", ".jpeg", ".png", ".bmp", ".webp", ".tif", ".tiff"}
@@ -142,8 +142,6 @@ class FaceCropperApp:
         self._display_origin = (0, 0)
         self._display_scale = 1.0
         self._drag_start: Optional[tuple[float, float, tuple[float, float, float, float]]] = None
-        self._face_cascade: Optional[cv2.CascadeClassifier] = None
-        self._eye_cascade: Optional[cv2.CascadeClassifier] = None
 
         self.aspect_var = tk.StringVar(value="3:4 (identificación)")
         self.custom_aspect_var = tk.StringVar(value="3:4")
@@ -534,68 +532,19 @@ class FaceCropperApp:
             return None
         return self.photos[self.current_index]
 
-    def load_face_cascade(self) -> Optional[cv2.CascadeClassifier]:
-        if self._face_cascade is None:
-            cascade_path = Path(cv2.data.haarcascades) / "haarcascade_frontalface_default.xml"
-            cascade = cv2.CascadeClassifier(str(cascade_path))
-            if cascade.empty():
-                messagebox.showerror("Detector no disponible", "No se pudo cargar el detector de rostros de OpenCV.")
-                return None
-            self._face_cascade = cascade
-        return self._face_cascade
-
-    def load_eye_cascade(self) -> Optional[cv2.CascadeClassifier]:
-        if self._eye_cascade is None:
-            cascade_path = Path(cv2.data.haarcascades) / "haarcascade_eye_tree_eyeglasses.xml"
-            cascade = cv2.CascadeClassifier(str(cascade_path))
-            if cascade.empty():
-                return None
-            self._eye_cascade = cascade
-        return self._eye_cascade
-
     def find_largest_face(self, image: Image.Image) -> Optional[tuple[int, int, int, int]]:
-        cascade = self.load_face_cascade()
-        if cascade is None:
-            return None
-        rgb = np.asarray(image.convert("RGB"))
-        gray = cv2.cvtColor(rgb, cv2.COLOR_RGB2GRAY)
-        faces = cascade.detectMultiScale(gray, scaleFactor=1.12, minNeighbors=5, minSize=(36, 36))
-        if len(faces) == 0:
-            return None
-        return max(faces, key=lambda face: face[2] * face[3])
+        result = face_detection.detect_primary_face(image)
+        return None if result is None else result.box
 
     def find_eye_line(self, image: Image.Image, face: tuple[int, int, int, int]) -> Optional[float]:
         """Devuelve la coordenada vertical promedio de ambos ojos dentro de la foto."""
-        cascade = self.load_eye_cascade()
-        if cascade is None:
+        result = face_detection.detect_primary_face(image)
+        if result is None or result.eye_line is None:
             return None
-        face_x, face_y, face_w, face_h = face
-        gray = cv2.cvtColor(np.asarray(image.convert("RGB")), cv2.COLOR_RGB2GRAY)
-        # Los ojos se encuentran en la parte alta de la cara; limitar la búsqueda
-        # reduce falsos positivos en nariz, boca o fondo.
-        roi_height = max(1, int(face_h * 0.62))
-        roi = gray[face_y:face_y + roi_height, face_x:face_x + face_w]
-        if roi.size == 0:
+        # La caja pedida puede venir de una detección anterior o de otra foto.
+        if face and not face_detection.same_face(result.box, tuple(face)):
             return None
-        candidates = cascade.detectMultiScale(
-            roi, scaleFactor=1.10, minNeighbors=5,
-            minSize=(max(12, int(face_w * 0.12)), max(12, int(face_h * 0.08))),
-        )
-        centers = [(face_x + x + w / 2, face_y + y + h / 2) for x, y, w, h in candidates]
-        best_pair: Optional[tuple[tuple[float, float], tuple[float, float]]] = None
-        best_score = float("-inf")
-        for index, first in enumerate(centers):
-            for second in centers[index + 1:]:
-                horizontal = abs(first[0] - second[0])
-                vertical = abs(first[1] - second[1])
-                if horizontal < face_w * 0.22 or vertical > face_h * 0.16:
-                    continue
-                score = horizontal - vertical * 1.8
-                if score > best_score:
-                    best_score, best_pair = score, (first, second)
-        if best_pair:
-            return (best_pair[0][1] + best_pair[1][1]) / 2
-        return None
+        return result.eye_line
 
     def get_eye_line(self, item: PhotoItem) -> Optional[float]:
         if item.eyes_checked:
@@ -606,12 +555,16 @@ class FaceCropperApp:
         return item.eye_line
 
     def auto_crop_item(self, item: PhotoItem) -> bool:
-        face = item.face_box or self.find_largest_face(item.image)
-        if face is None:
-            item.crop = self.default_crop(*item.image.size)
-            item.face_found = False
-            return False
-        item.face_box = tuple(int(value) for value in face)
+        if item.face_box is None:
+            result = face_detection.detect_primary_face(item.image)
+            if result is None:
+                item.crop = self.default_crop(*item.image.size)
+                item.face_found = False
+                return False
+            item.face_box = result.box
+            # La misma detección ya trae los ojos: evita una segunda pasada.
+            if not item.eyes_checked:
+                item.eye_line, item.eyes_checked = result.eye_line, True
         self.apply_face_crop(item)
         return True
 
@@ -745,7 +698,11 @@ class FaceCropperApp:
             self.root.config(cursor="")
         self.rebuild_list()
         self.refresh_preview()
-        self.status_var.set(f"Encuadre automático terminado: {detected} de {len(self.photos)} rostro(s) detectado(s).")
+        note = face_detection.engine_note()
+        self.status_var.set(
+            f"Encuadre automático terminado: {detected} de {len(self.photos)} rostro(s) detectado(s)."
+            + (f"  {note}" if note else "")
+        )
 
     def change_aspect(self) -> None:
         ratio = self.get_aspect_ratio()

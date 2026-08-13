@@ -58,8 +58,6 @@ class RecortadorModerno(FaceCropperApp):
         self._display_origin = (0, 0)
         self._display_scale = 1.0
         self._drag_start = None
-        self._face_cascade = None
-        self._eye_cascade = None
         self.show_original = False
         self.visible_indices: list[int] = []
         self.history: dict[str, list[dict]] = {}
