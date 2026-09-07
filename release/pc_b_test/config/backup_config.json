@@ -1,7 +1,0 @@
-{
-  "enabled": true,
-  "daily_backup": false,
-  "weekly_backup": false,
-  "keep_daily": 7,
-  "keep_weekly": 4
-}

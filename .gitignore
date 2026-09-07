@@ -15,6 +15,7 @@ htmlcov/
 
 # Virtual environments
 .venv/
+.venv-*/
 venv/
 env/
 ENV/
@@ -33,6 +34,9 @@ installer/*.zip
 BUILD_INFO.txt
 
 # PyInstaller extra artifacts
+*.spec
+!EtiquetadorZPL_Complete.spec
+!EtiquetadorZPL_ClientAssets_API.spec
 *.toc
 *.pyz
 *.pkg
@@ -58,7 +62,13 @@ backups/
 api_port.txt
 poppler_path.txt
 notification_config.json
+client_assets_config.json
 users.json
+
+# Secrets / environment overrides
+.env
+.env.*
+!.env.example
 
 # Cloudflare / tunnel local files
 .cloudflared/
