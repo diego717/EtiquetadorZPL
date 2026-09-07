@@ -17,12 +17,15 @@ from security_logger import security_logger
 from permissions import permission_manager
 
 # from gui import mostrar_vista_previa  # Eliminado - solo interfaz grÃ¡fica
-from printer import imprimir_zpl_directo, mover_a_historial
+from printer import imprimir_zpl_directo, mover_a_historial, send_raw_to_printer
 from pdf_printer import imprimir_png
 
 # Constantes
 MAX_ZIP_SIZE_MB = 100
 MAX_TXT_SIZE_KB = 500
+DEFAULT_PDF_RENDER_DPI = 300
+MIN_PDF_RENDER_DPI = 150
+MAX_PDF_RENDER_DPI = 600
 ENCODINGS = ['utf-8', 'latin-1', 'cp1252']
 LABELARY_URL = "https://api.labelary.com/v1/printers/8dpmm/labels/4x6/0/"
 LABELARY_HEADERS = {
@@ -80,6 +83,13 @@ class PDFHandler(FileSystemEventHandler):
             permission_manager.validate_printer_access(impresora)
             
         self.start_processing_thread()
+
+    def _get_pdf_render_dpi(self):
+        try:
+            dpi = int(self.config.get("pdf_render_dpi", DEFAULT_PDF_RENDER_DPI) or DEFAULT_PDF_RENDER_DPI)
+        except (TypeError, ValueError):
+            dpi = DEFAULT_PDF_RENDER_DPI
+        return max(MIN_PDF_RENDER_DPI, min(MAX_PDF_RENDER_DPI, dpi))
     
     def _get_system_info(self):
         """Obtener informaciÃ³n del sistema para identificaciÃ³n"""
@@ -543,10 +553,11 @@ class PDFHandler(FileSystemEventHandler):
                 
             # Convertir a imagen de alta resoluciÃ³n
             temp_img = pdf_path.parent / f"{pdf_path.stem}_temp.png"
+            render_dpi = self._get_pdf_render_dpi()
             
             cmd = [
                 pdftoppm_exe,
-                "-png", "-singlefile", "-r", "600",  # Doble resoluciÃ³n
+                "-png", "-singlefile", "-r", str(render_dpi),
                 "-aa", "yes",  # Anti-aliasing
                 "-aaVector", "yes",  # Anti-aliasing para vectores
                 str(pdf_path),
@@ -646,7 +657,8 @@ class PDFHandler(FileSystemEventHandler):
             # Guardar imagen recortada
             salida_dir = self.config.get("salida", self.config.get("entrada", "."))
             salida_path = Path(salida_dir) / f"{Path(ruta_pdf).stem}_recortada.png"
-            img_recortada.save(salida_path, "PNG", dpi=(300, 300))
+            render_dpi = self._get_pdf_render_dpi()
+            img_recortada.save(salida_path, "PNG", dpi=(render_dpi, render_dpi))
             
             logging.info(f"Imagen guardada: {salida_path}")
             
@@ -686,6 +698,13 @@ class PDFHandler(FileSystemEventHandler):
             # Obtener cantidad de copias
             copias = self.config.get('copias', 1)
 
+            if str(self.config.get("png_print_mode", "")).strip().lower() == "zpl":
+                if self._imprimir_png_como_zpl(png_path, impresora_a_usar, copias):
+                    return True
+                if not bool(self.config.get("zpl_fallback_to_png", True)):
+                    return False
+                logging.warning("Fallo modo ZPL liviano; usando impresion PNG tradicional")
+
             # Leer contenido del PNG como base64 para enviar a API
             try:
                 import base64
@@ -723,6 +742,63 @@ class PDFHandler(FileSystemEventHandler):
         except Exception as e:
             logging.exception(f"Error al imprimir PNG: {e}")
             return False
+
+    def _imprimir_png_como_zpl(self, png_path, impresora, copias=1):
+        """Envia una imagen como ZPL RAW para evitar rasterizacion pesada del spooler."""
+        try:
+            if not impresora or impresora == "IMPRESORA_NO_CONFIGURADA":
+                logging.error("No hay impresora configurada para modo ZPL liviano")
+                return False
+
+            zpl_bytes = self._png_to_zpl_bytes(png_path)
+            safe_copies = max(1, int(copias or 1))
+            success = True
+            for copy_idx in range(safe_copies):
+                if not send_raw_to_printer(
+                    zpl_bytes,
+                    impresora,
+                    job_name=f"Etiqueta ZPL liviana {copy_idx + 1}/{safe_copies}",
+                ):
+                    success = False
+                    break
+            return success
+        except Exception as e:
+            logging.warning(f"No se pudo imprimir PNG como ZPL RAW: {e}")
+            return False
+
+    def _png_to_zpl_bytes(self, png_path):
+        threshold = 200
+        try:
+            threshold = int(self.config.get("zpl_threshold", threshold) or threshold)
+        except (TypeError, ValueError):
+            threshold = 200
+        threshold = max(1, min(254, threshold))
+
+        with Image.open(png_path) as img:
+            gray = img.convert("L")
+            # ZPL ^GF usa bits encendidos como puntos negros.
+            dots = gray.point(lambda pixel: 255 if pixel < threshold else 0, "1")
+            width, height = dots.size
+            row_bytes = (width + 7) // 8
+            padded_width = row_bytes * 8
+            if padded_width != width:
+                padded = Image.new("1", (padded_width, height), 0)
+                padded.paste(dots, (0, 0))
+                dots = padded
+                width = padded_width
+
+            bitmap = dots.tobytes()
+            total_bytes = len(bitmap)
+            hex_data = bitmap.hex().upper()
+
+        zpl = (
+            "^XA\n"
+            f"^PW{width}\n"
+            f"^LL{height}\n"
+            f"^FO0,0^GFA,{total_bytes},{total_bytes},{row_bytes},{hex_data}\n"
+            "^XZ\n"
+        )
+        return zpl.encode("ascii")
 
     def _is_grayscale_forced(self):
         return bool(self.config.get("force_grayscale", False))
@@ -877,10 +953,11 @@ class PDFHandler(FileSystemEventHandler):
                 
                 if pdftoppm_exe:
                     temp_img = Path(ruta_pdf).parent / f"{Path(ruta_pdf).stem}_direct.png"
+                    render_dpi = self._get_pdf_render_dpi()
                     
                     cmd = [
                         pdftoppm_exe,
-                        "-png", "-singlefile", "-r", "600",  # Doble resoluciÃ³n
+                        "-png", "-singlefile", "-r", str(render_dpi),
                         "-aa", "yes",  # Anti-aliasing
                         "-aaVector", "yes",  # Anti-aliasing para vectores
                         str(ruta_pdf),

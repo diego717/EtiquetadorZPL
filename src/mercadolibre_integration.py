@@ -13,7 +13,9 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional
 from urllib.parse import urlencode
 
-import requests
+from httpx import Response
+
+from httpx_client import get_sync_http_client
 
 logger = logging.getLogger(__name__)
 
@@ -117,7 +119,7 @@ class MercadoLibreIntegration:
             "code": code,
             "redirect_uri": self.config.get("redirect_uri", ""),
         }
-        response = requests.post(self.TOKEN_URL, data=payload, timeout=30)
+        response = get_sync_http_client().post(self.TOKEN_URL, data=payload, timeout=30)
         response.raise_for_status()
         token_data = response.json()
         return self._store_token_data(token_data)
@@ -133,7 +135,7 @@ class MercadoLibreIntegration:
             "client_secret": self.config.get("client_secret", ""),
             "refresh_token": refresh_token,
         }
-        response = requests.post(self.TOKEN_URL, data=payload, timeout=30)
+        response = get_sync_http_client().post(self.TOKEN_URL, data=payload, timeout=30)
         response.raise_for_status()
         token_data = response.json()
         return self._store_token_data(token_data)
@@ -183,7 +185,7 @@ class MercadoLibreIntegration:
         headers: Optional[Dict[str, str]] = None,
         timeout: int = 30,
         retry_on_401: bool = True,
-    ) -> requests.Response:
+    ) -> Response:
         access_token = self.ensure_token()
         request_headers = {
             "Authorization": f"Bearer {access_token}",
@@ -193,7 +195,7 @@ class MercadoLibreIntegration:
             request_headers.update(headers)
 
         url = resource if resource.startswith("http") else f"{self.API_BASE_URL}{resource}"
-        response = requests.request(
+        response = get_sync_http_client().request(
             method=method,
             url=url,
             params=params,

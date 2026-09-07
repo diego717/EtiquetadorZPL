@@ -19,9 +19,12 @@ from tkinter import filedialog, messagebox
 import customtkinter as ctk
 from PIL import Image, ImageOps, ImageTk, UnidentifiedImageError
 
+import face_detection
 from recortador_fotos import (
     ASPECT_PRESETS,
     EXPORT_FORMATS,
+    IMAGE_FILE_PATTERN,
+    JPEG_QUALITY,
     SUPPORTED_EXTENSIONS,
     FaceCropperApp,
     PhotoItem,
@@ -40,8 +43,8 @@ class RecortadorModerno(FaceCropperApp):
     MUTED = ("#607587", "#aebdca")
     TEXT = ("#26364a", "#e1e8ee")
     DEFAULT_PRESETS = {
-        "Credencial estándar": {"aspect": "3:4 (identificación)", "custom_aspect": "3:4", "hair_margin": 20, "align_eyes": True, "eye_position": 40, "format": "JPG", "width": "", "height": "", "template": "{nombre}{sufijo}"},
-        "Foto documento": {"aspect": "35 × 45 mm (documento)", "custom_aspect": "35:45", "hair_margin": 24, "align_eyes": True, "eye_position": 40, "format": "JPG", "width": "", "height": "", "template": "{nombre}{sufijo}"},
+        "Credencial estándar": {"aspect": "3:4 (identificación)", "custom_aspect": "3:4", "hair_margin": 20, "align_eyes": True, "eye_position": 40, "format": "JPG", "width": "600", "height": "800", "template": "{nombre}{sufijo}"},
+        "Foto documento": {"aspect": "35 × 45 mm (documento)", "custom_aspect": "35:45", "hair_margin": 24, "align_eyes": True, "eye_position": 40, "format": "JPG", "width": "600", "height": "771", "template": "{nombre}{sufijo}"},
     }
 
     def __init__(self) -> None:
@@ -73,12 +76,13 @@ class RecortadorModerno(FaceCropperApp):
         self.hair_margin_var = tk.DoubleVar(value=20)
         self.align_eyes_var = tk.BooleanVar(value=True)
         self.eye_position_var = tk.DoubleVar(value=40)
+        self.detector_var = tk.StringVar(value=face_detection.detector_preference_label())
         self.brightness_text = tk.StringVar(value="+0")
         self.contrast_text = tk.StringVar(value="+0")
         self.hair_margin_text = tk.StringVar(value="20%")
         self.eye_position_text = tk.StringVar(value="40%")
-        self.width_var = tk.StringVar()
-        self.height_var = tk.StringVar()
+        self.width_var = tk.StringVar(value="600")
+        self.height_var = tk.StringVar(value="800")
         self.status_var = tk.StringVar(value="Agregá fotos para comenzar.")
         self.preset_var = tk.StringVar(value="Credencial estándar")
         self.preset_name_var = tk.StringVar()
@@ -220,6 +224,14 @@ class RecortadorModerno(FaceCropperApp):
         self._slider(frame, "Ojos desde arriba", self.eye_position_var, self.eye_position_text, 32, 48, self.change_eye_position, "#16856f", 11)
         ctk.CTkButton(frame, text="Deshacer última acción", command=self.undo_current, fg_color=self.SECONDARY, text_color=self.SECONDARY_TEXT, hover_color=self.SECONDARY_HOVER).grid(row=13, column=0, sticky="ew", padx=(0, 4), pady=(10, 0))
         ctk.CTkButton(frame, text="Copiar ajustes al lote", command=self.copy_adjustments_to_all, fg_color=self.SECONDARY, text_color=self.SECONDARY_TEXT, hover_color=self.SECONDARY_HOVER).grid(row=13, column=1, sticky="ew", padx=(4, 0), pady=(10, 0))
+        ctk.CTkLabel(frame, text="Detector", fg_color="transparent", text_color=self.TEXT).grid(row=14, column=0, columnspan=2, sticky="w", pady=(12, 2))
+        self.detector_menu = ctk.CTkOptionMenu(
+            frame,
+            values=list(face_detection.DETECTOR_LABELS),
+            variable=self.detector_var,
+            command=lambda _value: self.change_detector(),
+        )
+        self.detector_menu.grid(row=15, column=0, columnspan=2, sticky="ew")
 
     def _slider(self, parent, label, variable, value_text, minimum, maximum, command, color, row) -> None:
         ctk.CTkLabel(parent, text=label, fg_color="transparent", text_color=self.TEXT).grid(row=row, column=0, sticky="w")
@@ -267,7 +279,7 @@ class RecortadorModerno(FaceCropperApp):
         ctk.CTkEntry(tab, textvariable=self.suffix_var, placeholder_text="Sufijo opcional, ej. _credencial").grid(row=18, column=0, sticky="ew", padx=8, pady=(5, 0))
         dimensions = ctk.CTkFrame(tab, fg_color="transparent")
         dimensions.grid(row=19, column=0, sticky="w", padx=8, pady=(7, 4))
-        ctk.CTkLabel(dimensions, text="Tamaño final:", fg_color="transparent", text_color=self.TEXT).pack(side="left", padx=(0, 5))
+        ctk.CTkLabel(dimensions, text="Tamaño final (automático):", fg_color="transparent", text_color=self.TEXT).pack(side="left", padx=(0, 5))
         ctk.CTkEntry(dimensions, textvariable=self.width_var, width=65, placeholder_text="Ancho").pack(side="left")
         ctk.CTkLabel(dimensions, text=" × ").pack(side="left")
         ctk.CTkEntry(dimensions, textvariable=self.height_var, width=65, placeholder_text="Alto").pack(side="left")
@@ -281,12 +293,31 @@ class RecortadorModerno(FaceCropperApp):
         self.theme_button.configure(text="Modo oscuro" if dark else "Modo claro")
 
     def _bind_shortcuts(self) -> None:
-        self.root.bind("<Left>", lambda _event: self.move_photo(-1))
-        self.root.bind("<Right>", lambda _event: self.move_photo(1))
+        self.root.bind_all("<Left>", lambda event: self._handle_arrow_shortcut(event, -1))
+        self.root.bind_all("<Right>", lambda event: self._handle_arrow_shortcut(event, 1))
         self.root.bind("<plus>", lambda _event: self.zoom_current(0.89))
         self.root.bind("<minus>", lambda _event: self.zoom_current(1.12))
         self.root.bind("<r>", lambda _event: self.reset_adjustments())
         self.root.bind("<R>", lambda _event: self.reset_adjustments())
+
+    @staticmethod
+    def _event_from_text_input(event) -> bool:
+        widget = getattr(event, "widget", None)
+        while widget is not None:
+            try:
+                widget_class = widget.winfo_class()
+            except tk.TclError:
+                return False
+            if widget_class in {"Entry", "TEntry", "Text", "Spinbox", "TSpinbox"}:
+                return True
+            widget = getattr(widget, "master", None)
+        return False
+
+    def _handle_arrow_shortcut(self, event, step: int):
+        if self._event_from_text_input(event):
+            return None
+        self.move_photo(step)
+        return "break"
 
     def move_photo(self, step: int) -> None:
         if self.photos:
@@ -301,7 +332,7 @@ class RecortadorModerno(FaceCropperApp):
     def add_photos(self) -> None:
         paths = filedialog.askopenfilenames(
             title="Seleccionar fotos", initialdir=self.last_input_dir or None,
-            filetypes=[("Imágenes", "*.jpg *.jpeg *.png *.bmp *.webp *.tif *.tiff"), ("Todos", "*.*")],
+            filetypes=[("Imágenes", IMAGE_FILE_PATTERN), ("Todos", "*.*")],
         )
         if paths:
             self.last_input_dir = str(Path(paths[0]).parent)
@@ -492,7 +523,7 @@ class RecortadorModerno(FaceCropperApp):
         if current:
             current.hair_margin = self.hair_margin_var.get() / 100
         self.sync_adjustment_controls()
-        self.change_aspect()
+        self.change_aspect(auto_size=False)
         self.status_var.set(f"Preset aplicado: {self.preset_var.get()}.")
 
     def apply_preset_to_all(self) -> None:
@@ -613,7 +644,7 @@ class RecortadorModerno(FaceCropperApp):
                         background = Image.new("RGB", image.size, "white")
                         background.paste(image, mask=image.getchannel("A"))
                         image = background
-                    image.convert("RGB").save(destination, pil_format, quality=95, optimize=True)
+                    image.convert("RGB").save(destination, pil_format, quality=JPEG_QUALITY, optimize=True)
                 elif pil_format == "WEBP":
                     image.save(destination, pil_format, quality=95, method=6)
                 elif pil_format == "PNG":

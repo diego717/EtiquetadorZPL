@@ -4,6 +4,7 @@ Integracion con Administrado para descargar etiquetas PDF.
 
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
 import re
@@ -19,6 +20,7 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
 import requests
+from requests.adapters import HTTPAdapter
 import win32crypt
 import win32con
 import win32file
@@ -41,6 +43,9 @@ class AdministradoIntegration:
             "context": None,
             "storage_mtime": None,
         }
+        self._http_session_lock = threading.Lock()
+        self._http_session: Optional[requests.Session] = None
+        self._http_session_cookie_header = ""
 
     def _resolve_config_path(self) -> Path:
         try:
@@ -64,6 +69,8 @@ class AdministradoIntegration:
             "default_printer": "",
             "default_copies": 1,
             "auto_crop_pdf": True,
+            "pdf_render_dpi": 300,
+            "use_raw_zpl_for_labels": True,
             "use_playwright": True,
             "spooler_confirmation_timeout_seconds": 2.0,
             "spooler_poll_interval_seconds": 0.4,
@@ -80,9 +87,12 @@ class AdministradoIntegration:
         return config
 
     def save_config(self, updates: Dict[str, Any]) -> Dict[str, Any]:
+        previous_cookie = str(self.config.get("cookie_header", "")).strip()
         self.config.update(updates)
         self.config_path.parent.mkdir(parents=True, exist_ok=True)
         self.config_path.write_text(json.dumps(self.config, indent=2, ensure_ascii=True), encoding="utf-8")
+        if "cookie_header" in updates and str(self.config.get("cookie_header", "")).strip() != previous_cookie:
+            self.close_http_session()
         return self.get_public_config()
 
     def get_public_config(self) -> Dict[str, Any]:
@@ -104,9 +114,59 @@ class AdministradoIntegration:
             "User-Agent": "EtiquetadorZPL/1.0",
         }
 
+    def _close_http_session_locked(self) -> None:
+        session = self._http_session
+        if session is not None:
+            try:
+                session.close()
+            except Exception:
+                pass
+        self._http_session = None
+        self._http_session_cookie_header = ""
+
+    def close_http_session(self) -> None:
+        with self._http_session_lock:
+            self._close_http_session_locked()
+
+    def _get_http_session(self) -> requests.Session:
+        cookie_header = self.get_cookie_header()
+        if not cookie_header:
+            raise ValueError("Falta la cookie de sesion de Administrado")
+
+        with self._http_session_lock:
+            if (
+                self._http_session is not None
+                and self._http_session_cookie_header == cookie_header
+            ):
+                return self._http_session
+
+            self._close_http_session_locked()
+            session = requests.Session()
+            adapter = HTTPAdapter(
+                pool_connections=4,
+                pool_maxsize=8,
+                max_retries=0,
+                pool_block=False,
+            )
+            session.mount("http://", adapter)
+            session.mount("https://", adapter)
+            session.headers.update(
+                {
+                    "Cookie": cookie_header,
+                    "User-Agent": "EtiquetadorZPL/1.0",
+                }
+            )
+            self._http_session = session
+            self._http_session_cookie_header = cookie_header
+            return session
+
     def request(self, path_or_url: str, *, timeout: int = 30) -> requests.Response:
         url = path_or_url if path_or_url.startswith("http") else f"{self.config.get('base_url', self.BASE_URL)}{path_or_url}"
-        response = requests.get(url, headers=self._headers(), timeout=timeout, allow_redirects=True)
+        session = self._get_http_session()
+        response = session.get(url, timeout=timeout, allow_redirects=True)
+        if response.status_code in {401, 403}:
+            # Forzar refresco de conexion/cookies en siguiente request.
+            self.close_http_session()
         return response
 
     def get_cookie_header(self) -> str:
@@ -137,6 +197,7 @@ class AdministradoIntegration:
             "cookie_header": cookie_header,
             "last_error": "",
         })
+        self.close_http_session()
         return {
             "browser": browser_name,
             "profile": selected_profile,
@@ -145,41 +206,44 @@ class AdministradoIntegration:
         }
 
     def capture_playwright_session(self, timeout_seconds: int = 600) -> Dict[str, Any]:
-        sync_playwright = self._get_playwright()
+        return asyncio.run(self.capture_playwright_session_async(timeout_seconds))
+
+    async def capture_playwright_session_async(self, timeout_seconds: int = 600) -> Dict[str, Any]:
+        async_playwright = self._get_async_playwright()
         login_url = self.config.get("sales_url", f"{self.BASE_URL}/seller/ventas3")
 
-        with sync_playwright() as playwright:
-            browser = playwright.chromium.launch(headless=False)
-            context = browser.new_context(accept_downloads=True)
-            page = context.new_page()
-            page.goto(login_url, wait_until="domcontentloaded")
+        async with async_playwright() as playwright:
+            browser = await playwright.chromium.launch(headless=False)
+            context = await browser.new_context(accept_downloads=True)
+            page = await context.new_page()
+            await page.goto(login_url, wait_until="domcontentloaded")
 
             deadline = time.time() + timeout_seconds
             stable_hits = 0
             while time.time() < deadline:
                 current_url = page.url
-                cookies = context.cookies()
+                challenge_text = await self._read_playwright_challenge_text(page)
+                cookies = await context.cookies()
                 admin_cookies = [item for item in cookies if "administrado.net" in item.get("domain", "")]
                 has_session_cookie = any(
                     item.get("name", "").lower() in {"laravel_session", "remember_web", "xsrf-token"}
                     for item in admin_cookies
                 )
-                if (
-                    "administrado.net" in current_url.lower()
-                    and "login" not in current_url.lower()
-                    and ("/seller/" in current_url.lower() or "/home" in current_url.lower())
-                ):
+                waiting_for_challenge = self._looks_like_playwright_auth_challenge(
+                    current_url,
+                    challenge_text,
+                )
+
+                if self._is_authenticated_playwright_url(current_url) and not waiting_for_challenge:
                     stable_hits += 1
                 else:
                     stable_hits = 0
 
-                if stable_hits >= 3:
-                    return self._persist_playwright_session(context, browser, current_url)
-                if has_session_cookie and "login" not in current_url.lower():
-                    return self._persist_playwright_session(context, browser, current_url)
-                time.sleep(1)
+                if stable_hits >= 3 and has_session_cookie:
+                    return await self._persist_playwright_session_async(context, browser, current_url)
+                await asyncio.sleep(1)
 
-            browser.close()
+            await browser.close()
         raise TimeoutError("No se pudo capturar la sesion dentro del tiempo esperado. Inicia sesion completa y espera a entrar al panel interno de Administrado.")
 
     def list_label_links_playwright(self, limit: int = 20) -> List[Dict[str, Any]]:
@@ -195,7 +259,7 @@ class AdministradoIntegration:
                 try:
                     context = self._ensure_playwright_context_locked()
                     page = context.new_page()
-                    page.goto(sales_url, wait_until="networkidle", timeout=120000)
+                    page.goto(sales_url, wait_until="domcontentloaded", timeout=120000)
                     items = page.evaluate(
                         """
                         () => {
@@ -228,31 +292,48 @@ class AdministradoIntegration:
 
         return self._extract_label_links_from_items(items, limit=limit)
 
-    def test_session(self) -> Dict[str, Any]:
-        if self.config.get("use_playwright", True) and self.storage_state_path.exists():
-            try:
-                return self._test_session_playwright()
-            except Exception as exc:
-                logger.warning("Fallo test de sesion con Playwright, usando requests: %s", exc)
-        response = self.request(self.config.get("sales_url", f"{self.BASE_URL}/seller/ventas3"))
-        ok = response.status_code == 200 and "login" not in response.url.lower()
-        return {
-            "ok": ok,
-            "status_code": response.status_code,
-            "final_url": response.url,
-        }
+    def _list_label_links_via_requests(self, limit: int = 20) -> Tuple[List[Dict[str, Any]], bool]:
+        response = self.request(self.config.get("sales_url", f"{self.BASE_URL}/seller/ventas3"), timeout=60)
+        response.raise_for_status()
+        html = response.text
+        sales = self._extract_label_links_from_html(html, limit=limit)
+        html_lower = html.lower()
+        has_sales_markers = any(
+            marker in html_lower
+            for marker in ("data_ventas", "/seller/envios/", "imprimir_etiqueta", "reimprimir_etiqueta")
+        )
+        return sales, has_sales_markers
 
     def list_label_links(self, limit: int = 20) -> List[Dict[str, Any]]:
+        request_error: Optional[Exception] = None
+
+        if self.get_cookie_header():
+            try:
+                sales, has_sales_markers = self._list_label_links_via_requests(limit=limit)
+                if sales or has_sales_markers or not (
+                    self.config.get("use_playwright", True) and self.storage_state_path.exists()
+                ):
+                    return sales
+            except Exception as exc:
+                request_error = exc
+                logger.warning("Fallo sincronizacion con requests en Administrado: %s", exc)
+
         if self.config.get("use_playwright", True) and self.storage_state_path.exists():
             try:
                 return self.list_label_links_playwright(limit=limit)
             except Exception as exc:
-                logger.warning("Fallo sincronizacion con Playwright, usando requests: %s", exc)
+                logger.warning("Fallo sincronizacion con Playwright, intentando refrescar sesion: %s", exc)
+                try:
+                    self.refresh_playwright_session()
+                    return self.list_label_links_playwright(limit=limit)
+                except Exception as exc2:
+                    logger.warning("Fallo refrescando sesion de Playwright: %s", exc2)
 
-        response = self.request(self.config.get("sales_url", f"{self.BASE_URL}/seller/ventas3"), timeout=60)
-        response.raise_for_status()
-        html = response.text
-        return self._extract_label_links_from_html(html, limit=limit)
+        if request_error is not None:
+            raise request_error
+
+        sales, _ = self._list_label_links_via_requests(limit=limit)
+        return sales
 
     def _extract_label_links_from_html(self, html: str, limit: int = 20) -> List[Dict[str, Any]]:
         sales_from_payload = self._extract_sales_from_data_ventas(html, limit=limit)
@@ -491,8 +572,24 @@ class AdministradoIntegration:
         if not selected_printer:
             raise ValueError("No hay impresora configurada para Administrado")
 
-        jobs_before = get_print_jobs_from_spooler(selected_printer, max_jobs=10)
-        before_ids = {str(job.get("job_id")) for job in jobs_before if job.get("job_id") is not None}
+        confirmation_timeout = self._as_float(
+            self.config.get("spooler_confirmation_timeout_seconds", 2.0),
+            default=2.0,
+            min_value=0.0,
+            max_value=10.0,
+        )
+        poll_interval = self._as_float(
+            self.config.get("spooler_poll_interval_seconds", 0.4),
+            default=0.4,
+            min_value=0.1,
+            max_value=2.0,
+        )
+        spooler_enabled = confirmation_timeout > 0.0
+        jobs_before: List[Dict[str, Any]] = []
+        before_ids: set[str] = set()
+        if spooler_enabled:
+            jobs_before = get_print_jobs_from_spooler(selected_printer, max_jobs=10)
+            before_ids = {str(job.get("job_id")) for job in jobs_before if job.get("job_id") is not None}
 
         with tempfile.TemporaryDirectory(prefix="administrado_pdf_") as temp_dir:
             temp_path = Path(temp_dir)
@@ -508,6 +605,9 @@ class AdministradoIntegration:
                     "impresora": selected_printer,
                     "recortar_pdf": bool(self.config.get("auto_crop_pdf", True)),
                     "copias": int(self.config.get("default_copies", 1) or 1),
+                    "pdf_render_dpi": int(self.config.get("pdf_render_dpi", 300) or 300),
+                    "png_print_mode": "zpl" if bool(self.config.get("use_raw_zpl_for_labels", True)) else "png",
+                    "zpl_fallback_to_png": True,
                     "poppler": "",
                 },
                 observer=None,
@@ -518,33 +618,24 @@ class AdministradoIntegration:
             finally:
                 handler.shutdown()
 
-        confirmation_timeout = self._as_float(
-            self.config.get("spooler_confirmation_timeout_seconds", 2.0),
-            default=2.0,
-            min_value=0.0,
-            max_value=10.0,
-        )
-        poll_interval = self._as_float(
-            self.config.get("spooler_poll_interval_seconds", 0.4),
-            default=0.4,
-            min_value=0.1,
-            max_value=2.0,
-        )
-        jobs_after, new_job_ids, waited_seconds, polls = self._wait_for_spooler_diff(
-            printer_name=selected_printer,
-            before_ids=before_ids,
-            timeout_seconds=confirmation_timeout,
-            poll_interval_seconds=poll_interval,
-            max_jobs=10,
-            get_jobs_fn=get_print_jobs_from_spooler,
-        )
+        if spooler_enabled:
+            jobs_after, new_job_ids, waited_seconds, polls = self._wait_for_spooler_diff(
+                printer_name=selected_printer,
+                before_ids=before_ids,
+                timeout_seconds=confirmation_timeout,
+                poll_interval_seconds=poll_interval,
+                max_jobs=10,
+                get_jobs_fn=get_print_jobs_from_spooler,
+            )
+        else:
+            jobs_after, new_job_ids, waited_seconds, polls = [], [], 0.0, 0
 
         return {
             "envio_id": envio_id,
             "printer": selected_printer,
             "success": bool(success),
             "verification": {
-                "spooler_checked": True,
+                "spooler_checked": spooler_enabled,
                 "jobs_before": len(jobs_before),
                 "jobs_after": len(jobs_after),
                 "new_job_detected": bool(new_job_ids),
@@ -588,10 +679,70 @@ class AdministradoIntegration:
             ) from exc
         return sync_playwright
 
+    def _get_async_playwright(self):
+        try:
+            from playwright.async_api import async_playwright
+        except ImportError as exc:
+            raise ValueError(
+                "Playwright no esta instalado. Ejecuta: pip install playwright && python -m playwright install chromium"
+            ) from exc
+        return async_playwright
+
+    def _is_authenticated_playwright_url(self, current_url: str) -> bool:
+        current_url = str(current_url or "").lower()
+        return (
+            "administrado.net" in current_url
+            and "login" not in current_url
+            and ("/seller/" in current_url or "/home" in current_url)
+        )
+
+    def _looks_like_playwright_auth_challenge(self, current_url: str, page_text: str) -> bool:
+        url_text = str(current_url or "").lower()
+        normalized_text = str(page_text or "").lower()
+        challenge_markers = (
+            "whatsapp",
+            "codigo",
+            "código",
+            "verificacion",
+            "verificación",
+            "autenticacion",
+            "autenticación",
+            "dos pasos",
+            "2 pasos",
+            "two factor",
+            "otp",
+            "token",
+        )
+
+        if any(marker in url_text for marker in ("verify", "verification", "otp", "2fa", "two-factor")):
+            return True
+
+        return any(marker in normalized_text for marker in challenge_markers)
+
+    async def _read_playwright_challenge_text(self, page) -> str:
+        try:
+            text = await page.locator("body").inner_text(timeout=1000)
+        except Exception:
+            return ""
+        return text[:4000]
+
     def _persist_playwright_session(self, context, browser, current_url: str) -> Dict[str, Any]:
         context.storage_state(path=str(self.storage_state_path))
         browser.close()
         self.close_playwright_runtime()
+        self.close_http_session()
+        self.save_config({"last_error": "", "cookie_header": ""})
+        return {
+            "success": True,
+            "url": current_url,
+            "storage_state_path": str(self.storage_state_path),
+        }
+
+    async def _persist_playwright_session_async(self, context, browser, current_url: str) -> Dict[str, Any]:
+        await context.storage_state(path=str(self.storage_state_path))
+        await browser.close()
+        self.close_playwright_runtime()
+        self.close_http_session()
         self.save_config({"last_error": "", "cookie_header": ""})
         return {
             "success": True,
@@ -615,6 +766,90 @@ class AdministradoIntegration:
             "ok": "login" not in current_url.lower() and "administrado.net" in current_url.lower(),
             "status_code": 200,
             "final_url": current_url,
+        }
+
+    async def _test_session_playwright_async(self) -> Dict[str, Any]:
+        if not self.storage_state_path.exists():
+            raise ValueError("No hay sesion guardada de Playwright")
+
+        sales_url = self.config.get("sales_url", f"{self.BASE_URL}/seller/ventas3")
+        async_playwright = self._get_async_playwright()
+
+        async with async_playwright() as playwright:
+            browser = await playwright.chromium.launch(headless=True)
+            context = await browser.new_context(storage_state=str(self.storage_state_path))
+            page = await context.new_page()
+            try:
+                await page.goto(sales_url, wait_until="domcontentloaded", timeout=120000)
+                await asyncio.sleep(2)
+                current_url = page.url
+            finally:
+                await page.close()
+                await browser.close()
+
+        return {
+            "ok": self._is_authenticated_playwright_url(current_url),
+            "status_code": 200,
+            "final_url": current_url,
+        }
+
+    def refresh_playwright_session(self, timeout_seconds: int = 60) -> Dict[str, Any]:
+        return asyncio.run(self.refresh_playwright_session_async(timeout_seconds))
+
+    async def refresh_playwright_session_async(self, timeout_seconds: int = 60) -> Dict[str, Any]:
+        del timeout_seconds
+        if not self.storage_state_path.exists():
+            raise ValueError("No hay sesion guardada de Playwright")
+
+        sales_url = self.config.get("sales_url", f"{self.BASE_URL}/seller/ventas3")
+        async_playwright = self._get_async_playwright()
+
+        async with async_playwright() as playwright:
+            browser = await playwright.chromium.launch(headless=True)
+            context = await browser.new_context(storage_state=str(self.storage_state_path))
+            page = await context.new_page()
+            try:
+                await page.goto(sales_url, wait_until="networkidle", timeout=120000)
+                await asyncio.sleep(2)
+                current_url = page.url
+                if not self._is_authenticated_playwright_url(current_url):
+                    raise ValueError(f"La sesion de Playwright no es valida. URL final: {current_url}")
+                await context.storage_state(path=str(self.storage_state_path))
+            finally:
+                await page.close()
+                await browser.close()
+
+        self.close_playwright_runtime()
+        self.close_http_session()
+        self.save_config({"last_error": ""})
+        return {
+            "success": True,
+            "refreshed": True,
+            "final_url": current_url,
+        }
+
+    def test_session(self) -> Dict[str, Any]:
+        return asyncio.run(self.test_session_async())
+
+    async def test_session_async(self) -> Dict[str, Any]:
+        if self.config.get("use_playwright", True) and self.storage_state_path.exists():
+            try:
+                result = await self._test_session_playwright_async()
+                if result.get("ok"):
+                    return result
+                await self.refresh_playwright_session_async()
+                return await self._test_session_playwright_async()
+            except Exception as exc:
+                logger.warning("Fallo test de sesion con Playwright, usando requests: %s", exc)
+        response = await asyncio.to_thread(
+            self.request,
+            self.config.get("sales_url", f"{self.BASE_URL}/seller/ventas3"),
+        )
+        ok = response.status_code == 200 and "login" not in response.url.lower()
+        return {
+            "ok": ok,
+            "status_code": response.status_code,
+            "final_url": response.url,
         }
 
     @staticmethod

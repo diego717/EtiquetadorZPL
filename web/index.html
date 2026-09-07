@@ -98,12 +98,27 @@
         html[data-theme="dark"] .card h2 {
             color: #eef4ff;
         }
+        html[data-theme="dark"] .btn {
+            background: linear-gradient(135deg, #2d83d6, #1f6ab8);
+            color: #f7fbff;
+            border: 1px solid #4e93d6;
+            box-shadow: 0 6px 14px rgba(12, 36, 66, 0.42);
+        }
+        html[data-theme="dark"] .btn:hover {
+            background: linear-gradient(135deg, #3a93eb, #2b78c8);
+            border-color: #79afe3;
+        }
+        html[data-theme="dark"] .btn:focus-visible {
+            box-shadow: 0 0 0 3px rgba(103, 175, 240, 0.28), 0 6px 14px rgba(12, 36, 66, 0.42);
+        }
         html[data-theme="dark"] .btn.secondary {
-            background: #2f415b;
-            color: #e3ecfb;
+            background: #202f46;
+            color: #e4edfa;
+            border-color: #526784;
         }
         html[data-theme="dark"] .btn.secondary:hover {
-            background: #3b526f;
+            background: #2a3c57;
+            border-color: #6a83a7;
         }
         html[data-theme="dark"] .table-scroll {
             border-color: #31445f;
@@ -152,6 +167,7 @@
             <div class="header-actions">
                 <button id="theme-toggle-btn" class="btn secondary" onclick="toggleTheme()">Tema oscuro</button>
                 <a href="config.html" class="btn">Configuracion</a>
+                <a href="config.html?view=pos#pos-reconciliation-section" class="btn">Conciliacion POS</a>
                 <a href="cloud.html" class="btn">Cloud</a>
             </div>
         </div>
@@ -202,6 +218,25 @@
                 <span id="network-printers-list">Cargando...</span>
             </div>
             <button class="btn" onclick="loadNetworkPrinters()">Actualizar Impresoras de Red</button>
+        </div>
+
+        <div class="card">
+            <h2>Exportar facturas Odoo</h2>
+            <p class="muted" style="margin-bottom: 10px;">Selecciona un rango de fechas y descarga un listado de ventas facturadas desde Odoo.</p>
+            <div class="grid" style="grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 14px; align-items: end;">
+                <label style="display:block;">
+                    Desde
+                    <input id="invoice-from" type="date" style="width:100%; margin-top:6px; padding:8px; border-radius:6px; border:1px solid #d1d5db;" />
+                </label>
+                <label style="display:block;">
+                    Hasta
+                    <input id="invoice-to" type="date" style="width:100%; margin-top:6px; padding:8px; border-radius:6px; border:1px solid #d1d5db;" />
+                </label>
+                <div>
+                    <button class="btn" onclick="exportInvoicedSales()">Descargar Excel</button>
+                </div>
+            </div>
+            <p class="muted" id="invoice-export-status" style="margin-top: 12px;">Selecciona fechas y presiona Descargar Excel.</p>
         </div>
 
         <div class="card">
@@ -392,6 +427,49 @@
             document.getElementById('meli-configured').textContent = data?.configured ? 'Si' : 'No';
             document.getElementById('meli-authenticated').textContent = data?.authenticated ? 'Si' : 'No';
             document.getElementById('meli-user').textContent = data?.nickname || data?.user_id || '-';
+        }
+
+        async function exportInvoicedSales() {
+            const statusElement = document.getElementById('invoice-export-status');
+            const dateFrom = document.getElementById('invoice-from').value;
+            const dateTo = document.getElementById('invoice-to').value;
+            const payload = {
+                date_from: dateFrom,
+                date_to: dateTo,
+            };
+
+            statusElement.textContent = 'Generando archivo...';
+
+            try {
+                await ensureApiPort();
+                const response = await fetch(`${API_BASE}/api/odoo/invoices/export`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload),
+                });
+
+                if (!response.ok) {
+                    const errorText = await response.text();
+                    throw new Error(errorText || `HTTP ${response.status}`);
+                }
+
+                const blob = await response.blob();
+                const disposition = response.headers.get('content-disposition') || '';
+                const filenameMatch = disposition.match(/filename=(.+)/);
+                const filename = filenameMatch ? filenameMatch[1].replace(/"/g, '') : `facturas_${dateFrom || 'desde'}_${dateTo || 'hasta'}.csv`;
+                const downloadUrl = URL.createObjectURL(blob);
+                const link = document.createElement('a');
+                link.href = downloadUrl;
+                link.download = filename;
+                document.body.appendChild(link);
+                link.click();
+                link.remove();
+                URL.revokeObjectURL(downloadUrl);
+                statusElement.textContent = `Archivo generado: ${filename}`;
+            } catch (error) {
+                statusElement.textContent = `Error: ${error.message}`;
+                console.error(error);
+            }
         }
 
         function refreshPrinters() { loadPrinters(); }

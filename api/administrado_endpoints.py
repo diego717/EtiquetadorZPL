@@ -13,22 +13,26 @@ from pathlib import Path
 import threading
 from typing import Any, Dict, Optional
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
 
 from administrado_integration import administrado_integration
-from auth_dependencies import get_optional_current_user
 from odoo_integration import odoo_integration
 from print_fallbacks import download_and_print_label_with_fallback, download_and_print_order_with_fallback
-from print_dispatch_queue import print_dispatch_queue
 
 router = APIRouter(prefix="/api/administrado", tags=["administrado"])
 logger = logging.getLogger(__name__)
 PRINT_STATE_LOCK = threading.Lock()
 MAX_PRINT_HISTORY_ITEMS = 500
+PRINT_STATE_CACHE: Optional[Dict[str, Any]] = None
+PRINT_STATE_CACHE_MTIME: Optional[float] = None
+PRINT_STATE_CACHE_PATH: Optional[Path] = None
 PRINT_INFLIGHT_LOCK = threading.Lock()
 PRINT_INFLIGHT: Dict[str, Dict[str, Any]] = {}
-DISPATCH_MAX_ATTEMPTS = 3
+ODOO_CANCEL_CACHE_LOCK = threading.Lock()
+ODOO_CANCEL_CACHE: Dict[str, tuple[bool, float]] = {}
+ODOO_CANCEL_CACHE_TTL_SECONDS = 45.0
+ODOO_CANCEL_CACHE_MAX_ITEMS = 2000
 
 
 def _friendly_error(error: Any) -> str:
@@ -45,6 +49,8 @@ class AdministradoConfigRequest(BaseModel):
     default_printer: str = ""
     default_copies: int = Field(default=1, ge=1, le=10)
     auto_crop_pdf: bool = True
+    pdf_render_dpi: int = Field(default=300, ge=150, le=600)
+    use_raw_zpl_for_labels: bool = True
 
 
 class AdministradoPrintRequest(BaseModel):
@@ -94,24 +100,65 @@ def _default_print_state() -> Dict[str, Any]:
     return {"shipments": {}, "history": []}
 
 
+def _clone_print_state(state: Dict[str, Any]) -> Dict[str, Any]:
+    shipments = state.get("shipments")
+    history = state.get("history")
+    return {
+        "shipments": dict(shipments) if isinstance(shipments, dict) else {},
+        "history": list(history) if isinstance(history, list) else [],
+    }
+
+
+def _get_print_state_mtime(path: Path) -> Optional[float]:
+    try:
+        return path.stat().st_mtime
+    except OSError:
+        return None
+
+
+def _set_print_state_cache(path: Path, state: Dict[str, Any], mtime: Optional[float]) -> None:
+    global PRINT_STATE_CACHE, PRINT_STATE_CACHE_MTIME, PRINT_STATE_CACHE_PATH
+    PRINT_STATE_CACHE = _clone_print_state(state)
+    PRINT_STATE_CACHE_MTIME = mtime
+    PRINT_STATE_CACHE_PATH = path
+
+
 def _load_print_state() -> Dict[str, Any]:
+    global PRINT_STATE_CACHE, PRINT_STATE_CACHE_MTIME, PRINT_STATE_CACHE_PATH
     path = _resolve_print_state_path()
+    mtime = _get_print_state_mtime(path)
+    if (
+        PRINT_STATE_CACHE is not None
+        and PRINT_STATE_CACHE_PATH == path
+        and PRINT_STATE_CACHE_MTIME == mtime
+    ):
+        return _clone_print_state(PRINT_STATE_CACHE)
+
     if not path.exists():
-        return _default_print_state()
+        state = _default_print_state()
+        _set_print_state_cache(path, state, mtime)
+        return _clone_print_state(state)
+
     try:
         with open(path, "r", encoding="utf-8") as handle:
             data = json.load(handle)
         if not isinstance(data, dict):
-            return _default_print_state()
+            state = _default_print_state()
+            _set_print_state_cache(path, state, mtime)
+            return _clone_print_state(state)
         shipments = data.get("shipments")
         history = data.get("history")
         if not isinstance(shipments, dict):
             shipments = {}
         if not isinstance(history, list):
             history = []
-        return {"shipments": shipments, "history": history}
+        state = {"shipments": shipments, "history": history}
+        _set_print_state_cache(path, state, mtime)
+        return _clone_print_state(state)
     except Exception:
-        return _default_print_state()
+        state = _default_print_state()
+        _set_print_state_cache(path, state, mtime)
+        return _clone_print_state(state)
 
 
 def _save_print_state(state: Dict[str, Any]) -> None:
@@ -119,6 +166,7 @@ def _save_print_state(state: Dict[str, Any]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     with open(path, "w", encoding="utf-8") as handle:
         json.dump(state, handle, indent=2, ensure_ascii=True)
+    _set_print_state_cache(path, state, _get_print_state_mtime(path))
 
 
 def _record_print_event(
@@ -252,15 +300,74 @@ def _looks_cancelled_in_administrado(sale: Dict[str, Any]) -> bool:
     return any(token in haystack for token in cancelled_tokens)
 
 
+def _prune_odoo_cancel_cache_locked(now: float) -> None:
+    expired_keys = [envio_id for envio_id, (_, expires_at) in ODOO_CANCEL_CACHE.items() if expires_at <= now]
+    for envio_id in expired_keys:
+        ODOO_CANCEL_CACHE.pop(envio_id, None)
+
+    if len(ODOO_CANCEL_CACHE) <= ODOO_CANCEL_CACHE_MAX_ITEMS:
+        return
+
+    ordered_items = sorted(ODOO_CANCEL_CACHE.items(), key=lambda item: item[1][1])
+    overflow = len(ODOO_CANCEL_CACHE) - ODOO_CANCEL_CACHE_MAX_ITEMS
+    for envio_id, _ in ordered_items[:overflow]:
+        ODOO_CANCEL_CACHE.pop(envio_id, None)
+
+
+def _get_cancelled_envio_ids_in_odoo(envio_ids: list[str]) -> set[str]:
+    normalized: list[str] = []
+    seen = set()
+    for raw_envio in envio_ids or []:
+        envio = str(raw_envio or "").strip()
+        if not envio or envio in seen:
+            continue
+        normalized.append(envio)
+        seen.add(envio)
+
+    if not normalized:
+        return set()
+
+    cached_cancelled: set[str] = set()
+    pending: list[str] = []
+    now = time.monotonic()
+
+    with ODOO_CANCEL_CACHE_LOCK:
+        _prune_odoo_cancel_cache_locked(now)
+        for envio in normalized:
+            cached = ODOO_CANCEL_CACHE.get(envio)
+            if cached is None:
+                pending.append(envio)
+                continue
+            is_cancelled, expires_at = cached
+            if expires_at <= now:
+                ODOO_CANCEL_CACHE.pop(envio, None)
+                pending.append(envio)
+                continue
+            if is_cancelled:
+                cached_cancelled.add(envio)
+
+    remote_cancelled: set[str] = set()
+    if pending:
+        remote_cancelled = odoo_integration.get_cancelled_envio_ids(pending)
+        expires_at = time.monotonic() + ODOO_CANCEL_CACHE_TTL_SECONDS
+        with ODOO_CANCEL_CACHE_LOCK:
+            for envio in pending:
+                ODOO_CANCEL_CACHE[envio] = (envio in remote_cancelled, expires_at)
+            _prune_odoo_cancel_cache_locked(time.monotonic())
+
+    return cached_cancelled.union(remote_cancelled)
+
+
 def _is_cancelled_in_odoo(envio_id: str) -> bool:
     try:
-        order = odoo_integration.find_sale_order_by_envio(envio_id, include_all_states=True)
+        normalized_envio = str(envio_id or "").strip()
+        if not normalized_envio:
+            return False
+        cancelled_ids = _get_cancelled_envio_ids_in_odoo([normalized_envio])
     except Exception as exc:
         logger.warning("No se pudo validar estado Odoo para envio %s: %s", envio_id, exc)
         return False
-    if not order:
-        return False
-    return str(order.get("state") or "").strip().lower() == "cancel"
+    return normalized_envio in cancelled_ids
 
 
 def _filter_non_printable_sales(sales: list[Dict[str, Any]]) -> list[Dict[str, Any]]:
@@ -268,6 +375,20 @@ def _filter_non_printable_sales(sales: list[Dict[str, Any]]) -> list[Dict[str, A
         return []
 
     check_odoo_cancel = bool(odoo_integration.config.get("enabled")) and odoo_integration.is_configured()
+    cancelled_in_odoo: set[str] = set()
+    if check_odoo_cancel:
+        envio_ids = [
+            str(sale.get("envio_id") or "").strip()
+            for sale in sales
+            if isinstance(sale, dict) and str(sale.get("envio_id") or "").strip()
+        ]
+        if envio_ids:
+            try:
+                cancelled_in_odoo = _get_cancelled_envio_ids_in_odoo(envio_ids)
+            except Exception as exc:
+                logger.warning("No se pudo consultar cancelaciones Odoo en bloque: %s", exc)
+                cancelled_in_odoo = set()
+
     filtered: list[Dict[str, Any]] = []
 
     for sale in sales:
@@ -278,7 +399,7 @@ def _filter_non_printable_sales(sales: list[Dict[str, Any]]) -> list[Dict[str, A
             continue
 
         envio_id = str(sale.get("envio_id") or "").strip()
-        if check_odoo_cancel and envio_id and _is_cancelled_in_odoo(envio_id):
+        if check_odoo_cancel and envio_id and envio_id in cancelled_in_odoo:
             continue
 
         filtered.append(sale)
@@ -338,7 +459,20 @@ async def get_status() -> Dict[str, Any]:
 @router.post("/session/test")
 async def test_session() -> Dict[str, Any]:
     try:
-        return await asyncio.to_thread(administrado_integration.test_session)
+        return await administrado_integration.test_session_async()
+    except Exception as exc:
+        message = _friendly_error(exc)
+        administrado_integration.save_config({"last_error": message})
+        raise HTTPException(status_code=400, detail=message)
+
+
+@router.post("/session/refresh")
+async def refresh_playwright_session(timeout_seconds: int = 60) -> Dict[str, Any]:
+    try:
+        result = await administrado_integration.refresh_playwright_session_async(
+            timeout_seconds,
+        )
+        return result
     except Exception as exc:
         message = _friendly_error(exc)
         administrado_integration.save_config({"last_error": message})
@@ -361,8 +495,7 @@ async def import_cookies(request: AdministradoCookieImportRequest) -> Dict[str, 
 @router.post("/playwright/capture-session")
 async def capture_playwright_session(request: AdministradoPlaywrightCaptureRequest) -> Dict[str, Any]:
     try:
-        return await asyncio.to_thread(
-            administrado_integration.capture_playwright_session,
+        return await administrado_integration.capture_playwright_session_async(
             request.timeout_seconds,
         )
     except Exception as exc:
@@ -449,22 +582,6 @@ def _normalize_shipment_print_mode(mode_raw: Any) -> str:
     return mode
 
 
-def _build_dispatch_task_view(task: Optional[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
-    if not isinstance(task, dict):
-        return None
-    return {
-        "id": task.get("id"),
-        "status": task.get("status"),
-        "attempt_count": task.get("attempt_count"),
-        "max_attempts": task.get("max_attempts"),
-        "last_error": task.get("last_error"),
-        "updated_at": task.get("updated_at"),
-        "completed_at": task.get("completed_at"),
-        "next_retry_at": task.get("next_retry_at"),
-        "idempotency_key": task.get("idempotency_key"),
-    }
-
-
 def _print_order_with_fallback(
     envio_id: str,
     order_id: int,
@@ -491,7 +608,6 @@ def _print_label_with_fallback(envio_id: str, preferred_printer: str = "") -> Di
 @router.post("/shipments/print")
 async def print_shipment(
     request: AdministradoShipmentPrintRequest,
-    user: Optional[Dict[str, Any]] = Depends(get_optional_current_user),
 ) -> Dict[str, Any]:
     try:
         envio_id = str(request.envio_id or "").strip()
@@ -499,44 +615,12 @@ async def print_shipment(
             raise ValueError("envio_id vacio")
 
         mode = _normalize_shipment_print_mode(request.mode)
-        token_username = str((user or {}).get("username") or "").strip()
-        body_username = str(request.app_username or "").strip()
-        app_username = token_username or body_username
-        auth_source = "token" if token_username else ("body" if body_username else "none")
-        app_username_key = str(app_username).strip().lower() or "anon"
-        idempotency_key = f"administrado:{envio_id}:{mode}:{app_username_key}"
-        dispatch_payload = {
-            "envio_id": envio_id,
-            "mode": mode,
-            "order_printer": str(request.order_printer or "").strip(),
-            "label_printer": str(request.label_printer or "").strip(),
-            "app_username": app_username,
-            "auth_source": auth_source,
-        }
+        app_username = str(request.app_username or "").strip()
 
         def _executor() -> Dict[str, Any]:
             _register_print_inflight(envio_id, mode, app_username)
             try:
                 auth_override = odoo_integration.resolve_operator_auth(app_username)
-                confirm_on_print_enabled = bool(odoo_integration.config.get("confirm_order_on_print"))
-                requires_order_flow = mode in {"both", "order_only"}
-
-                if confirm_on_print_enabled and requires_order_flow:
-                    if not app_username:
-                        raise ValueError(
-                            "Falta usuario operador. Inicia sesion para confirmar en Odoo."
-                        )
-                    if auth_source != "token":
-                        raise ValueError(
-                            "La confirmacion Odoo requiere sesion autenticada. "
-                            "Inicia sesion del operador (token/cookie) y reintenta."
-                        )
-                    if not auth_override:
-                        raise ValueError(
-                            "No hay usuario Odoo configurado para el operador "
-                            f"'{app_username}'. Cargalo en Odoo > Usuarios Odoo por operador."
-                        )
-
                 active_odoo_user = (
                     str(auth_override.get("username", "")).strip()
                     if auth_override
@@ -552,7 +636,7 @@ async def print_shipment(
                             f"No se encontro orden Odoo para envio {envio_id}. Revisa campo shipment/report_name."
                         )
 
-                    if confirm_on_print_enabled:
+                    if bool(odoo_integration.config.get("confirm_order_on_print")):
                         confirm_result = odoo_integration.confirm_sale_order(int(order["id"]), auth_override)
 
                     order_result = _print_order_with_fallback(
@@ -602,7 +686,6 @@ async def print_shipment(
                     "envio_id": envio_id,
                     "mode": mode,
                     "app_username": app_username or None,
-                    "auth_source": auth_source,
                     "odoo_actor": active_odoo_user or None,
                     "confirm_result": confirm_result,
                     "order_result": order_result,
@@ -611,54 +694,13 @@ async def print_shipment(
             finally:
                 _release_print_inflight(envio_id)
 
-        outcome = await asyncio.to_thread(
-            print_dispatch_queue.execute_with_idempotency,
-            source="administrado",
-            entity_id=envio_id,
-            action=mode,
-            idempotency_key=idempotency_key,
-            request_payload=dispatch_payload,
-            executor=_executor,
-            max_attempts=DISPATCH_MAX_ATTEMPTS,
-        )
-
-        if outcome.get("status") == "processing":
-            task_view = _build_dispatch_task_view(outcome.get("task"))
-            raise HTTPException(
-                status_code=409,
-                detail=f"El envio {envio_id} ya se esta procesando. task={task_view.get('id') if task_view else '-'}",
-            )
-
-        if outcome.get("status") == "completed":
-            result = outcome.get("result") or {}
-            if not isinstance(result, dict):
-                result = {
-                    "success": True,
-                    "envio_id": envio_id,
-                    "mode": mode,
-                    "result": result,
-                }
-            result["dispatch_task"] = _build_dispatch_task_view(outcome.get("task"))
-            result["idempotent_reused"] = bool(outcome.get("reused"))
-            return result
-
-        message = _friendly_error(outcome.get("error") or "No se pudo completar el despacho de impresion.")
-        if not outcome.get("reused"):
-            _record_print_event(
-                envio_id=envio_id,
-                mode=mode,
-                success=False,
-                app_username=app_username,
-                error=message,
-            )
-        administrado_integration.save_config({"last_error": message})
-        raise HTTPException(status_code=400, detail=message)
+        return await asyncio.to_thread(_executor)
     except HTTPException:
         raise
     except Exception as exc:
         message = _friendly_error(exc)
         mode_for_event = str(request.mode or "both")
-        effective_app_username = str(locals().get("app_username") or request.app_username or "")
+        app_username_for_event = str(locals().get("app_username") or request.app_username or "")
         try:
             mode_for_event = _normalize_shipment_print_mode(mode_for_event)
         except Exception:
@@ -667,7 +709,7 @@ async def print_shipment(
             envio_id=str(request.envio_id or ""),
             mode=mode_for_event,
             success=False,
-            app_username=effective_app_username,
+            app_username=app_username_for_event,
             error=message,
         )
         administrado_integration.save_config({"last_error": message})

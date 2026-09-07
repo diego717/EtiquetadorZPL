@@ -22,7 +22,7 @@ from openpyxl import load_workbook
 from openpyxl.utils import get_column_letter
 from PIL import Image, ImageDraw, ImageFilter, ImageFont, ImageTk
 
-from recortador_fotos import EXPORT_FORMATS, PhotoItem, SUPPORTED_EXTENSIONS
+from recortador_fotos import EXPORT_FORMATS, IMAGE_FILE_PATTERN, JPEG_QUALITY, PhotoItem, SUPPORTED_EXTENSIONS
 from recortador_fotos_moderno import RecortadorModerno
 
 
@@ -179,7 +179,7 @@ class RecortadorAvanzado(RecortadorModerno):
     def add_photos(self) -> None:
         paths = filedialog.askopenfilenames(
             title="Seleccionar fotos o PDF", initialdir=self.last_input_dir or None,
-            filetypes=[("Fotos y PDF", "*.jpg *.jpeg *.png *.bmp *.webp *.tif *.tiff *.pdf"), ("Todos", "*.*")],
+            filetypes=[("Fotos y PDF", f"{IMAGE_FILE_PATTERN} *.pdf"), ("Todos", "*.*")],
         )
         if not paths:
             return
@@ -863,7 +863,7 @@ class RecortadorAvanzado(RecortadorModerno):
             for item, card in cards:
                 destination = self.available_path(output_dir / f"{Path(item.path).stem}{extension}")
                 if pil_format == "JPEG":
-                    card.convert("RGB").save(destination, pil_format, quality=95, optimize=True)
+                    card.convert("RGB").save(destination, pil_format, quality=JPEG_QUALITY, optimize=True)
                 elif pil_format == "WEBP":
                     card.save(destination, pil_format, quality=95, method=6)
                 else:
@@ -1035,7 +1035,7 @@ class RecortadorAvanzado(RecortadorModerno):
         export_folder = tk.StringVar(value=self.output_dir_var.get())
 
         def choose_background() -> None:
-            path = filedialog.askopenfilename(title="Elegir imagen de fondo", filetypes=[("Imágenes", "*.png *.jpg *.jpeg *.webp *.bmp"), ("Todos", "*.*")])
+            path = filedialog.askopenfilename(title="Elegir imagen de fondo", filetypes=[("Imágenes", IMAGE_FILE_PATTERN), ("Todos", "*.*")])
             if path:
                 variables["background_image"].set(path)
                 background_info.configure(text=f"Fondo: {Path(path).name}")
@@ -1047,7 +1047,7 @@ class RecortadorAvanzado(RecortadorModerno):
             refresh()
 
         def choose_designer_logo() -> None:
-            path = filedialog.askopenfilename(title="Importar logo", filetypes=[("Imágenes", "*.png *.jpg *.jpeg *.webp *.bmp"), ("Todos", "*.*")])
+            path = filedialog.askopenfilename(title="Importar logo", filetypes=[("Imágenes", IMAGE_FILE_PATTERN), ("Todos", "*.*")])
             if path:
                 variables["logo_path"].set(path)
                 selected.set("Logo")
@@ -1580,7 +1580,7 @@ class RecortadorAvanzado(RecortadorModerno):
         window.after(120, refresh)
 
     def choose_brand_logo(self) -> None:
-        path = filedialog.askopenfilename(title="Elegir logo para la tarjeta", filetypes=[("Imágenes", "*.png *.jpg *.jpeg *.webp"), ("Todos", "*.*")])
+        path = filedialog.askopenfilename(title="Elegir logo para la tarjeta", filetypes=[("Imágenes", IMAGE_FILE_PATTERN), ("Todos", "*.*")])
         if not path:
             return
         self.brand_logo_path = Path(path)
@@ -1763,7 +1763,7 @@ class RecortadorAvanzado(RecortadorModerno):
             destination = self.available_path(output_dir / f"{name}{extension}")
             try:
                 if pil_format == "JPEG":
-                    image.convert("RGB").save(destination, "JPEG", quality=95, optimize=True)
+                    image.convert("RGB").save(destination, "JPEG", quality=JPEG_QUALITY, optimize=True)
                 elif pil_format == "PNG":
                     image.save(destination, "PNG", optimize=True)
                 else:

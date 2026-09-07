@@ -1,4 +1,4 @@
-[Setup]
+﻿[Setup]
 AppName=EtiquetadorZPL
 AppVersion=1.0
 AppPublisher=Tu Empresa
@@ -21,7 +21,7 @@ Name: "autostart"; Description: "Iniciar automaticamente con Windows"; GroupDesc
 
 [Files]
 ; Ejecutable principal
-Source: "dist\EtiquetadorZPL.exe"; DestDir: "{app}"; Flags: ignoreversion
+Source: "dist\\EtqRuntime.exe"; DestDir: "{app}"; Flags: ignoreversion
 
 ; Archivos web
 Source: "web\*"; DestDir: "{app}\web"; Flags: ignoreversion recursesubdirs createallsubdirs
@@ -30,8 +30,8 @@ Source: "web\*"; DestDir: "{app}\web"; Flags: ignoreversion recursesubdirs creat
 Source: "poppler\poppler-23.08.0\Library\bin\*"; DestDir: "{app}\poppler\poppler-23.08.0\Library\bin"; Flags: ignoreversion
 Source: "poppler\poppler-23.08.0\share\*"; DestDir: "{app}\poppler\poppler-23.08.0\share"; Flags: ignoreversion recursesubdirs createallsubdirs
 
-; Configuración
-; Archivos de configuración (solo si no existen)
+; ConfiguraciÃ³n
+; Archivos de configuraciÃ³n (solo si no existen)
 Source: "config\*"; DestDir: "{app}\config"; Flags: ignoreversion onlyifdoesntexist
 
 ; Archivos adicionales necesarios
@@ -43,13 +43,13 @@ Source: "get_writable_path.py"; DestDir: "{app}"; Flags: ignoreversion
 Source: "MANUAL_USUARIO.md"; DestDir: "{app}"; Flags: ignoreversion
 
 [Icons]
-Name: "{group}\EtiquetadorZPL"; Filename: "{app}\EtiquetadorZPL.exe"
+Name: "{group}\EtiquetadorZPL"; Filename: "{app}\\EtqRuntime.exe"
 Name: "{group}\Dashboard Web"; Filename: "http://localhost:8002/web/"
 Name: "{group}\{cm:UninstallProgram,EtiquetadorZPL}"; Filename: "{uninstallexe}"
-Name: "{autodesktop}\EtiquetadorZPL"; Filename: "{app}\EtiquetadorZPL.exe"; Tasks: desktopicon
+Name: "{autodesktop}\EtiquetadorZPL"; Filename: "{app}\\EtqRuntime.exe"; Tasks: desktopicon
 
 [Run]
-Filename: "{app}\EtiquetadorZPL.exe"; Description: "Ejecutar EtiquetadorZPL"; Flags: nowait postinstall skipifsilent
+Filename: "{app}\\EtqRuntime.exe"; Description: "Ejecutar EtiquetadorZPL"; Flags: nowait postinstall skipifsilent
 
 [Registry]
 ; Agregar poppler al PATH del sistema
@@ -81,7 +81,7 @@ begin
     ForceDirectories('C:\EtiquetasFlex\Entrada1');
     ForceDirectories('C:\EtiquetasFlex\Historial1');
     
-    // Crear carpetas de logs y temp en la aplicación
+    // Crear carpetas de logs y temp en la aplicaciÃ³n
     ForceDirectories(ExpandConstant('{app}\logs'));
     ForceDirectories(ExpandConstant('{app}\temp'));
     
@@ -91,13 +91,16 @@ begin
       CreateShellLink(
         ExpandConstant('{userstartup}\EtiquetadorZPL.lnk'),
         'Iniciar EtiquetadorZPL automaticamente',
-        ExpandConstant('{app}\EtiquetadorZPL.exe'),
+        ExpandConstant('{app}\\EtqRuntime.exe'),
         '',
         ExpandConstant('{app}'),
-        ExpandConstant('{app}\EtiquetadorZPL.exe'),
+        ExpandConstant('{app}\\EtqRuntime.exe'),
         0,
         SW_SHOWNORMAL
       );
     end;
   end;
 end;
+
+
+

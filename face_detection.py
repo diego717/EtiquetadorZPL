@@ -11,6 +11,7 @@ la aplicación sigue trabajando completamente offline.
 from __future__ import annotations
 
 import math
+import os
 import sys
 from dataclasses import dataclass
 from pathlib import Path
@@ -22,6 +23,26 @@ from PIL import Image
 
 
 MODEL_FILENAME = "face_detection_yunet_2023mar.onnx"
+MEDIAPIPE_MODEL_FILENAMES = ("blaze_face_short_range.tflite",)
+
+DETECTOR_LABELS = ("YuNet + MediaPipe", "MediaPipe", "YuNet", "Clasico Haar")
+_DETECTOR_ALIASES = {
+    "auto": "auto",
+    "yunet + mediapipe": "auto",
+    "yunet+mediapipe": "auto",
+    "mediapipe": "mediapipe",
+    "mp": "mediapipe",
+    "yunet": "yunet",
+    "haar": "haar",
+    "clasico haar": "haar",
+    "clásico haar": "haar",
+}
+_DETECTOR_LABEL_BY_KEY = {
+    "auto": "YuNet + MediaPipe",
+    "mediapipe": "MediaPipe",
+    "yunet": "YuNet",
+    "haar": "Clasico Haar",
+}
 
 # Lado mayor al que se reduce la foto antes de detectar. Un rostro en el umbral de
 # "rostro pequeño" del control de calidad (12% del alto) queda en ~115 px acá, y uno
@@ -48,6 +69,13 @@ BOX_SCALE_W = 1.0
 BOX_SCALE_H = 1.0
 BOX_SHIFT_Y = 0.0
 
+# MediaPipe/BlazeFace devuelve una caja muy ajustada al rostro. El recortador
+# necesita una caja comparable a YuNet/Haar para calcular un encuadre de
+# credencial con cuello y hombros.
+MEDIAPIPE_BOX_SCALE_W = 1.45
+MEDIAPIPE_BOX_SCALE_H = 1.60
+MEDIAPIPE_BOX_SHIFT_Y = 0.08
+
 # Tras esta cantidad de fallos seguidos de detect() se abandona YuNet por la sesión.
 MAX_CONSECUTIVE_FAILURES = 3
 
@@ -64,7 +92,20 @@ class FaceResult:
     engine: str
 
 
-_state: dict = {"engine": None, "detector": None, "reason": "", "failures": 0}
+def _normalize_detector(value: object) -> str:
+    text = str(value or "auto").strip().lower()
+    return _DETECTOR_ALIASES.get(text, "auto")
+
+
+_state: dict = {
+    "engine": None,
+    "detector": None,
+    "reason": "",
+    "failures": 0,
+    "preference": _normalize_detector(os.environ.get("RECORTADOR_FACE_DETECTOR", "auto")),
+}
+_mediapipe_detector = None
+_mediapipe_reason = ""
 
 # Memo de un solo lugar: `find_largest_face` y `find_eye_line` se llaman en secuencia
 # sobre la misma foto y no tiene sentido correr la red dos veces. Se guarda una
@@ -87,6 +128,20 @@ def model_path() -> Optional[Path]:
     for candidate in candidates:
         if candidate.is_file():
             return candidate
+    return None
+
+
+def mediapipe_model_path() -> Optional[Path]:
+    base_dirs = (
+        _resource_dir() / "models",
+        Path(__file__).resolve().parent / "models",
+        Path.cwd() / "models",
+    )
+    for filename in MEDIAPIPE_MODEL_FILENAMES:
+        for base_dir in base_dirs:
+            candidate = base_dir / filename
+            if candidate.is_file():
+                return candidate
     return None
 
 
@@ -123,19 +178,57 @@ def _load_haar():
     return cascade, ""
 
 
+def _load_mediapipe():
+    global _mediapipe_detector, _mediapipe_reason
+    if _mediapipe_detector is not None:
+        return _mediapipe_detector, ""
+    if _mediapipe_reason:
+        return None, _mediapipe_reason
+    path = mediapipe_model_path()
+    if path is None:
+        _mediapipe_reason = "no se encontro un modelo de MediaPipe"
+        return None, _mediapipe_reason
+    try:
+        import mediapipe as mp
+
+        base_options = mp.tasks.BaseOptions(model_asset_path=str(path))
+        options = mp.tasks.vision.FaceDetectorOptions(
+            base_options=base_options,
+            running_mode=mp.tasks.vision.RunningMode.IMAGE,
+            min_detection_confidence=0.50,
+            min_suppression_threshold=0.30,
+        )
+        _mediapipe_detector = mp.tasks.vision.FaceDetector.create_from_options(options)
+        return _mediapipe_detector, ""
+    except Exception as error:
+        _mediapipe_reason = f"MediaPipe no disponible: {error}"
+        return None, _mediapipe_reason
+
+
 def _ensure_engine() -> None:
     """Resuelve el motor una sola vez por sesión."""
     if _state["engine"] is not None:
         return
-    detector, reason = _load_yunet()
-    if detector is not None:
-        _state.update(engine="yunet", detector=detector, reason="")
-        return
+    preference = _state.get("preference", "auto")
+    reasons: list[str] = []
+    if preference in ("auto", "yunet"):
+        detector, reason = _load_yunet()
+        if detector is not None:
+            _state.update(engine="yunet", detector=detector, reason="")
+            return
+        reasons.append(reason)
+    if preference in ("auto", "mediapipe"):
+        detector, reason = _load_mediapipe()
+        if detector is not None:
+            _state.update(engine="mediapipe", detector=detector, reason="")
+            return
+        reasons.append(reason)
     cascade, haar_reason = _load_haar()
     if cascade is not None:
-        _state.update(engine="haar", detector=cascade, reason=reason)
+        _state.update(engine="haar", detector=cascade, reason="; ".join(reason for reason in reasons if reason))
         return
-    _state.update(engine="none", detector=None, reason=f"{reason}; {haar_reason}")
+    reasons.append(haar_reason)
+    _state.update(engine="none", detector=None, reason="; ".join(reason for reason in reasons if reason))
 
 
 def _fall_back_to_haar(reason: str) -> None:
@@ -146,8 +239,25 @@ def _fall_back_to_haar(reason: str) -> None:
         _state.update(engine="none", detector=None, reason=f"{reason}; {haar_reason}")
 
 
+def detector_preference() -> str:
+    return _state.get("preference", "auto")
+
+
+def detector_preference_label() -> str:
+    return _DETECTOR_LABEL_BY_KEY.get(detector_preference(), "YuNet + MediaPipe")
+
+
+def set_detector_preference(value: object) -> None:
+    global _cache
+    preference = _normalize_detector(value)
+    if preference == _state.get("preference") and _state["engine"] is not None:
+        return
+    _state.update(engine=None, detector=None, reason="", failures=0, preference=preference)
+    _cache = None
+
+
 def engine() -> str:
-    """`"yunet"`, `"haar"` o `"none"`."""
+    """`"yunet"`, `"mediapipe"`, `"haar"` o `"none"`."""
     _ensure_engine()
     return _state["engine"]
 
@@ -156,6 +266,8 @@ def engine_note() -> str:
     """Mensaje breve para la barra de estado, vacío cuando el detector avanzado está activo."""
     if engine() == "yunet":
         return ""
+    if engine() == "mediapipe":
+        return "Detector MediaPipe activo."
     if engine() == "haar":
         return "Detector avanzado no disponible; se usó el detector clásico."
     return "No hay detector de rostros disponible."
@@ -206,6 +318,17 @@ def _scale_box(x: float, y: float, w: float, h: float, scale_x: float, scale_y: 
     return int(round(x)), int(round(y)), int(round(new_w)), int(round(new_h))
 
 
+def _scale_mediapipe_box(x: float, y: float, w: float, h: float, scale_x: float, scale_y: float) -> tuple[int, int, int, int]:
+    x, w = x * scale_x, w * scale_x
+    y, h = y * scale_y, h * scale_y
+    new_w = w * MEDIAPIPE_BOX_SCALE_W
+    new_h = h * MEDIAPIPE_BOX_SCALE_H
+    x -= (new_w - w) / 2
+    y -= (new_h - h) / 2
+    y += new_h * MEDIAPIPE_BOX_SHIFT_Y
+    return int(round(x)), int(round(y)), int(round(new_w)), int(round(new_h))
+
+
 def _eye_line_from(
     eyes: tuple[tuple[float, float], tuple[float, float]]
 ) -> tuple[float, float]:
@@ -238,6 +361,60 @@ def _detect_yunet(bgr: np.ndarray, scale_x: float, scale_y: float) -> Optional[F
     return FaceResult(box, eye_line, eyes, roll, float(row[14]), "yunet")
 
 
+def _detect_mediapipe(
+    bgr: np.ndarray,
+    scale_x: float,
+    scale_y: float,
+    detector=None,
+) -> Optional[FaceResult]:
+    import mediapipe as mp
+
+    detector = detector or _state["detector"]
+    rgb = cv2.cvtColor(bgr, cv2.COLOR_BGR2RGB)
+    rgb.flags.writeable = False
+    image = mp.Image(image_format=mp.ImageFormat.SRGB, data=rgb)
+    result = detector.detect(image)
+    detections = getattr(result, "detections", None)
+    if not detections:
+        return None
+    height, width = rgb.shape[:2]
+    detection = max(
+        detections,
+        key=lambda item: item.bounding_box.width * item.bounding_box.height,
+    )
+    box_data = detection.bounding_box
+    box = _scale_mediapipe_box(
+        box_data.origin_x,
+        box_data.origin_y,
+        box_data.width,
+        box_data.height,
+        scale_x,
+        scale_y,
+    )
+    keypoints = list(detection.keypoints or [])
+    eyes = None
+    eye_line = None
+    roll = 0.0
+    if len(keypoints) >= 2:
+        eyes = (
+            (keypoints[0].x * width * scale_x, keypoints[0].y * height * scale_y),
+            (keypoints[1].x * width * scale_x, keypoints[1].y * height * scale_y),
+        )
+        eye_line, roll = _eye_line_from(eyes)
+    score = float(detection.categories[0].score) if detection.categories else 0.0
+    return FaceResult(box, eye_line, eyes, roll, score, "mediapipe")
+
+
+def _detect_mediapipe_fallback(bgr: np.ndarray, scale_x: float, scale_y: float) -> Optional[FaceResult]:
+    detector, _reason = _load_mediapipe()
+    if detector is None:
+        return None
+    try:
+        return _detect_mediapipe(bgr, scale_x, scale_y, detector)
+    except Exception:
+        return None
+
+
 def _detect_haar(bgr: np.ndarray, scale_x: float, scale_y: float) -> Optional[FaceResult]:
     gray = cv2.cvtColor(bgr, cv2.COLOR_BGR2GRAY)
     faces = _state["detector"].detectMultiScale(
@@ -265,14 +442,23 @@ def _detect_uncached(image: Image.Image) -> Optional[FaceResult]:
             return _detect_haar(bgr, scale_x, scale_y)
         except cv2.error:
             return None
+    if _state["engine"] == "mediapipe":
+        try:
+            return _detect_mediapipe(bgr, scale_x, scale_y)
+        except Exception:
+            return None
     try:
         result = _detect_yunet(bgr, scale_x, scale_y)
     except cv2.error as error:
         _state["failures"] += 1
         if _state["failures"] >= MAX_CONSECUTIVE_FAILURES:
             _fall_back_to_haar(f"detect() falló {_state['failures']} veces: {error}")
+        if _state.get("preference") == "auto":
+            return _detect_mediapipe_fallback(bgr, scale_x, scale_y)
         return None
     _state["failures"] = 0
+    if result is None and _state.get("preference") == "auto":
+        return _detect_mediapipe_fallback(bgr, scale_x, scale_y)
     return result
 
 

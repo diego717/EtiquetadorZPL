@@ -1,0 +1,383 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <base target="_top">
+    <style>
+      :root {
+        color-scheme: light;
+        --bg: #fff8ef;
+        --panel: #ffffff;
+        --ink: #402313;
+        --muted: #8a5f49;
+        --accent: #e5811f;
+        --line: #f0ceb0;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        padding: 14px;
+        background: linear-gradient(180deg, #fff3e4 0%, #fffaf5 100%);
+        color: var(--ink);
+        font: 13px/1.45 "Segoe UI", Arial, sans-serif;
+      }
+
+      .card {
+        background: var(--panel);
+        border: 1px solid var(--line);
+        border-radius: 14px;
+        box-shadow: 0 10px 24px rgba(136, 86, 37, 0.08);
+        overflow: hidden;
+      }
+
+      .header {
+        padding: 14px 16px 10px;
+        background:
+          radial-gradient(circle at top right, rgba(229, 129, 31, 0.18), transparent 34%),
+          linear-gradient(135deg, #fff3e4 0%, #ffffff 100%);
+        border-bottom: 1px solid var(--line);
+      }
+
+      .eyebrow {
+        margin: 0 0 4px;
+        font-size: 11px;
+        font-weight: 700;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        color: var(--accent);
+      }
+
+      h1 {
+        margin: 0;
+        font-size: 18px;
+        line-height: 1.15;
+      }
+
+      .sub {
+        margin-top: 6px;
+        color: var(--muted);
+      }
+
+      .meta {
+        display: grid;
+        gap: 10px;
+        padding: 14px 16px;
+        border-bottom: 1px solid var(--line);
+      }
+
+      .meta-row {
+        display: grid;
+        gap: 4px;
+      }
+
+      .label {
+        font-size: 11px;
+        font-weight: 700;
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
+        color: var(--muted);
+      }
+
+      .value {
+        font-size: 14px;
+        word-break: break-word;
+      }
+
+      .preview-wrap {
+        padding: 16px;
+      }
+
+      .preview-box {
+        min-height: 260px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        border: 1px dashed #dfb289;
+        border-radius: 14px;
+        background:
+          linear-gradient(135deg, rgba(229, 129, 31, 0.08), transparent 45%),
+          #fffdfa;
+        overflow: hidden;
+      }
+
+      .preview-box img {
+        display: block;
+        max-width: 100%;
+        max-height: 360px;
+        object-fit: contain;
+        background: white;
+      }
+
+      .empty {
+        padding: 22px;
+        text-align: center;
+        color: var(--muted);
+      }
+
+      .status {
+        padding: 0 16px 16px;
+        color: var(--muted);
+      }
+
+      .footer {
+        padding: 12px 16px 16px;
+        border-top: 1px solid var(--line);
+        color: var(--muted);
+        font-size: 12px;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="card">
+      <div class="header">
+        <p class="eyebrow">Impresion</p>
+        <h1 id="title">Preview de variante</h1>
+        <div class="sub" id="subtitle">
+          Selecciona una fila de la hoja IMPRESION.
+        </div>
+      </div>
+
+      <div class="meta">
+        <div class="meta-row">
+          <div class="label">Cliente</div>
+          <div class="value" id="clientValue">-</div>
+        </div>
+        <div class="meta-row">
+          <div class="label">Pedido</div>
+          <div class="value" id="orderValue">-</div>
+        </div>
+        <div class="meta-row">
+          <div class="label">Variante</div>
+          <div class="value" id="variantValue">-</div>
+        </div>
+      </div>
+
+      <div class="preview-wrap">
+        <div class="preview-box" id="previewBox">
+          <div class="empty">Esperando una fila valida...</div>
+        </div>
+      </div>
+
+      <div class="status" id="statusText"></div>
+      <div class="footer">
+        El panel sigue la fila activa y muestra la imagen de la variante en Odoo.
+      </div>
+    </div>
+
+    <script>
+      const pollIntervalMs = Number(<?= pollIntervalMs ?>) || 500;
+      let lastSummarySignature = "";
+      let lastPreviewKey = "";
+      let pollHandle = null;
+      let summaryRequestInFlight = false;
+      let imageRequestInFlight = false;
+
+      function escapeHtml(value) {
+        return String(value || "")
+          .replace(/&/g, "&amp;")
+          .replace(/</g, "&lt;")
+          .replace(/>/g, "&gt;")
+          .replace(/"/g, "&quot;")
+          .replace(/'/g, "&#39;");
+      }
+
+      function setText(id, value) {
+        document.getElementById(id).textContent = value || "-";
+      }
+
+      function renderEmpty(data) {
+        document.getElementById("title").textContent = "Preview de variante";
+        document.getElementById("subtitle").textContent =
+          data && data.message ? data.message : "Selecciona una fila valida.";
+        setText("clientValue", "");
+        setText("orderValue", "");
+        setText("variantValue", "");
+        document.getElementById("previewBox").innerHTML =
+          '<div class="empty">' +
+          escapeHtml((data && data.message) || "Sin preview disponible.") +
+          "</div>";
+        document.getElementById("statusText").textContent = "";
+      }
+
+      function renderData(data) {
+        document.getElementById("title").textContent =
+          data.clientName || "Preview de variante";
+        document.getElementById("subtitle").textContent =
+          "Fila " + data.row + " de IMPRESION";
+        setText("clientValue", data.clientName);
+        setText("orderValue", data.orderValue);
+        setText(
+          "variantValue",
+          data.variantDisplayName || data.variantDefaultCode || data.variantLookupValue
+        );
+
+        if (data.imageSrc) {
+          document.getElementById("previewBox").innerHTML =
+            '<img src="' + data.imageSrc + '" alt="' +
+            escapeHtml(data.variantDisplayName || data.clientName || "Preview") +
+            '">';
+        } else {
+          document.getElementById("previewBox").innerHTML =
+            '<div class="empty">' +
+            escapeHtml(data.message || "No hay imagen para esta variante.") +
+            "</div>";
+        }
+
+        document.getElementById("statusText").textContent =
+          data.imageSource === "odoo_variant"
+            ? "Imagen cargada desde Odoo."
+            : (data.message || "");
+      }
+
+      function renderSummary(data) {
+        document.getElementById("title").textContent =
+          data.clientName || "Preview de variante";
+        document.getElementById("subtitle").textContent =
+          "Fila " + data.row + " de IMPRESION";
+        setText("clientValue", data.clientName);
+        setText("orderValue", data.orderValue);
+        setText(
+          "variantValue",
+          data.variantDisplayName || data.variantDefaultCode || data.variantLookupValue
+        );
+        document.getElementById("statusText").textContent = data.message || "";
+      }
+
+      function renderLoadingPreview(message) {
+        document.getElementById("previewBox").innerHTML =
+          '<div class="empty">' +
+          escapeHtml(message || "Cargando preview...") +
+          "</div>";
+      }
+
+      function loadPreviewAsset(summary) {
+        if (imageRequestInFlight) {
+          return;
+        }
+
+        imageRequestInFlight = true;
+        google.script.run
+          .withSuccessHandler(function(asset) {
+            imageRequestInFlight = false;
+
+            if (!asset || !asset.ok) {
+              renderData({
+                clientName: summary.clientName,
+                row: summary.row,
+                orderValue: summary.orderValue,
+                variantDisplayName:
+                  (asset && asset.variantDisplayName) ||
+                  summary.variantDisplayName,
+                variantDefaultCode:
+                  (asset && asset.variantDefaultCode) ||
+                  summary.variantDefaultCode,
+                imageSrc: "",
+                imageSource: "",
+                message: asset && asset.message
+                  ? asset.message
+                  : "No hay imagen para esta variante."
+              });
+              return;
+            }
+
+            renderData({
+              clientName: summary.clientName,
+              row: summary.row,
+              orderValue: summary.orderValue,
+              variantDisplayName:
+                asset.variantDisplayName || summary.variantDisplayName,
+              variantDefaultCode:
+                asset.variantDefaultCode || summary.variantDefaultCode,
+              imageSrc: asset.imageSrc,
+              imageSource: asset.imageSource,
+              message: ""
+            });
+          })
+          .withFailureHandler(function(error) {
+            imageRequestInFlight = false;
+            renderData({
+              clientName: summary.clientName,
+              row: summary.row,
+              orderValue: summary.orderValue,
+              variantDisplayName: summary.variantDisplayName,
+              variantDefaultCode: summary.variantDefaultCode,
+              imageSrc: "",
+              imageSource: "",
+              message: error && error.message
+                ? error.message
+                : "No se pudo cargar la preview."
+            });
+          })
+          .getImpresionVariantPreviewAsset(
+            summary.recordUrl,
+            summary.variantLookupValue
+          );
+      }
+
+      function refreshPreview() {
+        if (summaryRequestInFlight) {
+          return;
+        }
+
+        summaryRequestInFlight = true;
+        google.script.run
+          .withSuccessHandler(function(summary) {
+            summaryRequestInFlight = false;
+
+            const signature = JSON.stringify({
+              ok: !!(summary && summary.ok),
+              row: summary && summary.row,
+              clientName: summary && summary.clientName,
+              orderValue: summary && summary.orderValue,
+              recordUrl: summary && summary.recordUrl,
+              variantLookupValue: summary && summary.variantLookupValue,
+              previewKey: summary && summary.previewKey,
+              message: summary && summary.message
+            });
+
+            if (signature === lastSummarySignature) {
+              return;
+            }
+
+            lastSummarySignature = signature;
+
+            if (!summary || !summary.ok) {
+              lastPreviewKey = "";
+              renderEmpty(summary);
+              return;
+            }
+
+            renderSummary(summary);
+
+            if (summary.previewKey !== lastPreviewKey) {
+              lastPreviewKey = summary.previewKey;
+              renderLoadingPreview(summary.message);
+              loadPreviewAsset(summary);
+            }
+          })
+          .withFailureHandler(function(error) {
+            summaryRequestInFlight = false;
+            lastPreviewKey = "";
+            renderEmpty({
+              message: error && error.message
+                ? error.message
+                : "No se pudo actualizar la preview."
+            });
+          })
+          .getImpresionVariantPreviewSelectionSummary();
+      }
+
+      refreshPreview();
+      pollHandle = setInterval(refreshPreview, pollIntervalMs);
+
+      window.addEventListener("beforeunload", function() {
+        if (pollHandle) {
+          clearInterval(pollHandle);
+        }
+      });
+    </script>
+  </body>
+</html>

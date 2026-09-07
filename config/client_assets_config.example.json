@@ -1,0 +1,56 @@
+{
+  "enabled": true,
+  "root_folder": "C:/Trabajos",
+  "use_alphabetical_buckets": true,
+  "search_strategy": "recursive_filename",
+  "preview_cache_dir": "",
+  "credito_keyword": "",
+  "corel_enabled": true,
+  "corel_visible": false,
+  "corel_open_visible": true,
+  "corel_bring_to_front": true,
+  "embedded_thumbnail_fallback": true,
+  "preview_width": 1200,
+  "preview_height": 0,
+  "preview_dpi": 120,
+  "max_files_per_client": 100,
+  "corel_macro": {
+    "enabled": false,
+    "project_name": "GlobalMacros.gms",
+    "module_name": "ClientAssetsPrepare",
+    "entrypoint": "PrepareClientAsset",
+    "profile_entrypoints": {
+      "tarjetas_plasticas": "PrepareTarjetasPlasticas",
+      "tarjetas_laminar_tinta_a": "PrepareTarjetasLaminarTintaA",
+      "tarjetas_laminar_tinta_b": "PrepareTarjetasLaminarTintaB"
+    },
+    "fallback_to_python_prepare": true,
+    "debug_enabled": true
+  },
+  "corel_prepare_profiles": {
+    "tarjetas_plasticas": {
+      "label": "Tarjetas plasticas",
+      "printer_name": "",
+      "paper_name": "",
+      "orientation": "",
+      "print_profile_name": "",
+      "notes": ""
+    },
+    "tarjetas_laminar_tinta_a": {
+      "label": "Tarjetas para laminar / tinta - Impresora A",
+      "printer_name": "",
+      "paper_name": "A4",
+      "orientation": "portrait",
+      "print_profile_name": "",
+      "notes": "Misma preparacion de laminadas; cambia solo la impresora."
+    },
+    "tarjetas_laminar_tinta_b": {
+      "label": "Tarjetas para laminar / tinta - Impresora B",
+      "printer_name": "",
+      "paper_name": "A4",
+      "orientation": "portrait",
+      "print_profile_name": "",
+      "notes": "Completar con el nombre real de la impresora B."
+    }
+  }
+}

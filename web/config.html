@@ -234,43 +234,55 @@
             justify-content: center;
             min-height: 36px;
             line-height: 1.15;
-            color: #041018;
-            background: linear-gradient(135deg, var(--accent), #5af0d2);
-            box-shadow: 0 10px 20px rgba(28, 177, 184, 0.2);
+            color: #f4faff;
+            background: linear-gradient(135deg, #2f87d9, #1f6fbf);
+            border-color: rgba(112, 171, 231, 0.62);
+            box-shadow: 0 10px 22px rgba(10, 40, 74, 0.34);
             transition: transform 0.18s ease, box-shadow 0.18s ease, filter 0.18s ease;
         }
 
         .btn:hover {
             transform: translateY(-1px);
-            box-shadow: 0 12px 24px rgba(28, 177, 184, 0.3);
-            filter: brightness(1.04);
+            box-shadow: 0 12px 24px rgba(10, 40, 74, 0.44);
+            filter: brightness(1.07);
         }
 
         .btn:focus-visible {
             outline: none;
-            box-shadow: 0 0 0 3px rgba(66, 208, 199, 0.3), 0 12px 24px rgba(28, 177, 184, 0.28);
+            box-shadow: 0 0 0 3px rgba(112, 171, 231, 0.34), 0 12px 24px rgba(10, 40, 74, 0.44);
         }
 
         .btn.secondary {
             color: #dce8f9;
-            background: rgba(16, 33, 56, 0.84);
-            border-color: var(--line-strong);
+            background: rgba(10, 23, 41, 0.92);
+            border-color: rgba(126, 151, 186, 0.62);
             box-shadow: none;
         }
 
         .btn.secondary:hover {
-            background: rgba(20, 41, 70, 0.92);
+            background: rgba(17, 34, 58, 0.95);
+            border-color: rgba(146, 174, 214, 0.72);
             box-shadow: none;
         }
 
         .btn.danger {
             color: #ffe9e9;
-            background: linear-gradient(140deg, #bc394a, #e05967);
+            background: linear-gradient(140deg, #bb3d4d, #da5a68);
+            border-color: rgba(238, 155, 166, 0.62);
         }
 
         .btn.success {
-            color: #05160c;
-            background: linear-gradient(140deg, #2cb97e, #6cf6c0);
+            color: #f3fff8;
+            background: linear-gradient(140deg, #2c9965, #38bd7f);
+            border-color: rgba(140, 222, 181, 0.62);
+        }
+
+        .btn.success:hover {
+            background: linear-gradient(140deg, #33aa72, #46ca8b);
+        }
+
+        .btn.danger:hover {
+            background: linear-gradient(140deg, #cd4b5b, #e06c78);
         }
 
         .btn.sm {
@@ -313,6 +325,47 @@
         body.admin-only .admin-hide { display: none !important; }
         body.admin-only .container { max-width: 960px; }
         body.admin-only #administrado-section { margin-top: 0; }
+
+        body:not(.pos-only-view) #pos-reconciliation-section { display: none !important; }
+        body.pos-only-view .container { max-width: 1480px; }
+        body.pos-only-view .container > .grid,
+        body.pos-only-view .container > .card:not(#pos-reconciliation-section) { display: none !important; }
+        body.pos-only-view #toggle-admin-view-btn,
+        body.pos-only-view .header-actions a[href="cloud.html"] { display: none !important; }
+        body.pos-only-view #pos-reconciliation-section { display: block !important; }
+
+        .pos-settings,
+        .pos-manual-panel {
+            border: 1px solid var(--line);
+            border-radius: var(--radius-md);
+            background: rgba(7, 17, 31, 0.54);
+            padding: 12px 14px;
+            margin-bottom: 18px;
+        }
+
+        .pos-settings > summary,
+        .pos-manual-panel > summary {
+            cursor: pointer;
+            color: #dce8f9;
+            font-weight: 700;
+            line-height: 1.4;
+        }
+
+        .pos-settings[open] > summary,
+        .pos-manual-panel[open] > summary { margin-bottom: 14px; }
+
+        .pos-manual-grid {
+            display: grid;
+            grid-template-columns: repeat(4, minmax(150px, 1fr));
+            gap: 12px;
+        }
+
+        .pos-manual-grid .form-group { margin-bottom: 0; }
+        .pos-manual-actions { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-top: 14px; }
+        .pos-inline-message { min-height: 20px; color: #9cb2d1; }
+        .pos-inline-message.error { color: #ffb8b8; }
+        .pos-inline-message.success { color: #7af0c2; }
+        .pos-money { font-variant-numeric: tabular-nums; }
 
         .inline-toolbar { display: flex; gap: 10px; align-items: end; flex-wrap: wrap; margin: 18px 0 14px; }
 
@@ -900,6 +953,7 @@
 
         @media (max-width: 980px) {
             .grid { grid-template-columns: 1fr; }
+            .pos-manual-grid { grid-template-columns: repeat(2, minmax(150px, 1fr)); }
             .container { padding: 14px 12px 30px; }
             .header { padding: 18px; }
             .card { padding: 16px; }
@@ -907,6 +961,10 @@
 
         @media (max-width: 900px) {
             .odoo-grid { grid-template-columns: 1fr; }
+        }
+
+        @media (max-width: 620px) {
+            .pos-manual-grid { grid-template-columns: 1fr; }
         }
 
         @media (prefers-reduced-motion: reduce) {
@@ -918,8 +976,8 @@
 <body>
     <div class="container">
         <div class="header">
-            <h1>Configuracion EtiquetadorZPL</h1>
-            <p>Panel de administracion del sistema</p>
+            <h1 id="page-title">Configuracion EtiquetadorZPL</h1>
+            <p id="page-subtitle">Panel de administracion del sistema</p>
             <div class="header-actions">
                 <button id="toggle-admin-view-btn" class="btn" onclick="toggleAdminOnlyMode()">Mostrar panel completo</button>
                 <button id="theme-toggle-btn" class="btn secondary" onclick="toggleTheme()">Tema claro</button>
@@ -929,7 +987,8 @@
 
         <div class="nav admin-hide">
             <a href="index.html">Dashboard</a>
-            <a href="config.html" class="active">Configuracion</a>
+            <a href="config.html" id="nav-config-link" class="active">Configuracion</a>
+            <a href="config.html?view=pos#pos-reconciliation-section" id="nav-pos-link">Conciliacion POS</a>
         </div>
 
         <div class="grid admin-hide">
@@ -1138,8 +1197,17 @@
                             <input type="number" id="adm-default-copies" min="1" max="10" value="1">
                         </div>
                         <div class="form-group">
+                            <label>DPI PDF:</label>
+                            <input type="number" id="adm-pdf-render-dpi" min="150" max="600" step="50" value="300">
+                        </div>
+                        <div class="form-group">
                             <label>
                                 <input type="checkbox" id="adm-auto-crop-pdf" checked> Recortar PDF antes de imprimir
+                            </label>
+                        </div>
+                        <div class="form-group">
+                            <label>
+                                <input type="checkbox" id="adm-raw-zpl-labels" checked> Modo liviano ZPL para etiquetas
                             </label>
                         </div>
                         <div class="form-group">
@@ -1173,6 +1241,10 @@
                     <label>Traer ultimos envios con etiqueta:</label>
                     <input type="number" id="adm-sync-limit" min="1" max="50" value="20">
                 </div>
+                <div class="form-group" style="margin-bottom: 0; min-width: 220px;">
+                    <label for="adm-auto-refresh-toggle">Auto-actualizar Administrado</label>
+                    <input type="checkbox" id="adm-auto-refresh-toggle" onchange="toggleAdministradoAutoRefreshSetting()">
+                </div>
                 <button id="adm-sync-btn" class="btn" onclick="syncAdministradoSales()">Sincronizar desde Administrado</button>
                 <span id="adm-sync-summary" class="summary-pill is-empty">Sin datos</span>
             </div>
@@ -1192,73 +1264,6 @@
                 </table>
             </div>
 
-            <div class="dispatch-panel">
-                <h3>Cola de despacho de impresion</h3>
-                <p class="muted" style="margin-bottom: 10px;">
-                    Historial de tareas de impresion con estado, reintentos y acceso rapido a reencolar fallidas.
-                </p>
-                <div class="dispatch-toolbar">
-                    <div class="dispatch-filter-group">
-                        <div class="form-group">
-                            <label>Origen:</label>
-                            <select id="dispatch-source-filter" onchange="refreshDispatchPanel({ silent: true })">
-                                <option value="">Todos</option>
-                                <option value="administrado">Administrado</option>
-                                <option value="mercadolibre">Mercado Libre</option>
-                            </select>
-                        </div>
-                        <div class="form-group">
-                            <label>Estado:</label>
-                            <select id="dispatch-status-filter" onchange="refreshDispatchPanel({ silent: true })">
-                                <option value="">Todos</option>
-                                <option value="pending">Pendiente</option>
-                                <option value="processing">En proceso</option>
-                                <option value="completed">Completada</option>
-                                <option value="failed">Fallida</option>
-                            </select>
-                        </div>
-                        <div class="form-group">
-                            <label>Limite:</label>
-                            <input type="number" id="dispatch-limit" min="5" max="200" value="30" onchange="refreshDispatchPanel({ silent: true })">
-                        </div>
-                        <div class="form-group" style="min-width: 220px;">
-                            <label>Buscar:</label>
-                            <input type="text" id="dispatch-query" placeholder="Envio, task ID o accion" oninput="renderDispatchTasks()">
-                        </div>
-                    </div>
-                    <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
-                        <button id="dispatch-refresh-btn" class="btn" onclick="refreshDispatchPanel()">Actualizar cola</button>
-                        <button id="dispatch-retry-failed-btn" class="btn secondary" onclick="retryFailedVisibleDispatchTasks()">Reintentar fallidas visibles</button>
-                        <label class="dispatch-toggle">
-                            <input type="checkbox" id="dispatch-auto-refresh" checked>
-                            Auto-actualizar
-                        </label>
-                        <span id="dispatch-summary" class="summary-pill is-empty">Sin datos</span>
-                    </div>
-                </div>
-                <div id="dispatch-stats" class="dispatch-stats">
-                    <span class="status">Sin datos</span>
-                </div>
-                <div class="table-scroll">
-                    <table class="table-clean dispatch-table">
-                        <thead>
-                        <tr>
-                            <th>Fecha</th>
-                            <th>Origen</th>
-                            <th>Entidad</th>
-                            <th>Accion</th>
-                            <th>Estado</th>
-                            <th>Intentos</th>
-                            <th>Detalle</th>
-                            <th>Accion</th>
-                        </tr>
-                        </thead>
-                        <tbody id="dispatch-tasks-body">
-                            <tr><td colspan="8" class="empty-cell">Actualiza para ver tareas de despacho</td></tr>
-                        </tbody>
-                    </table>
-                </div>
-            </div>
         </div>
 
         <div class="card" id="odoo-automation-section">
@@ -1343,7 +1348,7 @@
                         Si esta activada la confirmacion al imprimir, cada operador debe iniciar sesion y tener usuario Odoo mapeado.
                     </p>
                     <div class="form-group">
-                        <label>Usuario en Administrado:</label>
+                        <label>Identificador del operador (Administrado/App):</label>
                         <input type="text" id="odoo-operator-app-username" placeholder="ej: admin">
                     </div>
                     <div class="form-group">
@@ -1428,6 +1433,248 @@
             </div>
         </div>
 
+        <div class="card admin-hide" id="pos-reconciliation-section">
+            <h2>Conciliacion de pagos POS (TotalNet)</h2>
+            <p class="muted" style="margin-bottom: 12px;">
+                Trae los cupones de TotalNet, los cruza contra facturas a contado en Odoo y registra el pago recien al confirmar.
+            </p>
+
+            <details class="pos-settings">
+                <summary>Configuracion de TotalNet y diarios contables</summary>
+            <div class="odoo-grid">
+                <div class="odoo-panel">
+                    <h3>Credenciales TotalNet</h3>
+                    <div class="odoo-toggles">
+                        <label class="odoo-toggle">
+                            <input type="checkbox" id="totalnet-enabled">
+                            <span>Habilitar integracion TotalNet</span>
+                        </label>
+                    </div>
+                    <div class="form-group">
+                        <label>Client ID:</label>
+                        <input type="text" id="totalnet-client-id" placeholder="client_id">
+                    </div>
+                    <div class="form-group">
+                        <label>Client Secret:</label>
+                        <input type="password" id="totalnet-client-secret" placeholder="client_secret">
+                    </div>
+                    <div class="form-group">
+                        <label>URL de token OAuth2:</label>
+                        <input type="text" id="totalnet-token-url" placeholder="https://login.microsoftonline.com/.../oauth2/v2.0/token">
+                    </div>
+                    <div class="form-group">
+                        <label>URL base API:</label>
+                        <input type="text" id="totalnet-api-base-url" placeholder="https://apis.vnet.uy/adx-conecta">
+                    </div>
+                    <div class="form-group">
+                        <label>Comercio:</label>
+                        <input type="text" id="totalnet-comercio" placeholder="2042823">
+                    </div>
+                    <div class="form-group">
+                        <label>Sucursal:</label>
+                        <input type="text" id="totalnet-sucursal" placeholder="1">
+                    </div>
+                    <div class="odoo-actions">
+                        <button class="btn" onclick="saveTotalNetConfig()">Guardar TotalNet</button>
+                        <button class="btn success" onclick="testTotalNetConnection()">Probar conexion</button>
+                        <button class="btn" onclick="checkTotalNetSettlementInfo()">Ver liquidaciones disponibles</button>
+                    </div>
+                    <p class="odoo-muted">Estado: <span id="totalnet-status">-</span></p>
+                </div>
+
+                <div class="odoo-panel">
+                    <h3>Mapeo diario contable por sello</h3>
+                    <p class="odoo-muted">Que diario de Odoo usar segun la marca de tarjeta (ej. MasterCard, Visa).</p>
+                    <div style="display:flex; gap:10px; align-items:end; flex-wrap:wrap; margin-bottom:10px;">
+                        <div class="form-group" style="margin-bottom:0;">
+                            <label>Sello:</label>
+                            <input type="text" id="pos-journal-map-sello" placeholder="MasterCard">
+                        </div>
+                        <div class="form-group" style="margin-bottom:0; min-width:220px;">
+                            <label>Diario:</label>
+                            <select id="pos-journal-map-journal">
+                                <option value="">Cargando diarios...</option>
+                            </select>
+                        </div>
+                        <button class="btn" onclick="addJournalMapping()">Agregar</button>
+                    </div>
+                    <table class="table-clean">
+                        <thead><tr><th>Sello</th><th>Diario</th><th>Accion</th></tr></thead>
+                        <tbody id="pos-journal-map-body">
+                            <tr><td colspan="3" class="empty-cell">Sin mapeos</td></tr>
+                        </tbody>
+                    </table>
+                    <div class="form-group" style="margin-top:10px;">
+                        <label>Tolerancia de importe:</label>
+                        <input type="number" id="pos-amount-tolerance" step="0.01" min="0" value="0.01">
+                    </div>
+                    <div class="form-group">
+                        <label>Ventana de fechas (dias):</label>
+                        <input type="number" id="pos-date-window" min="0" max="15" value="2">
+                    </div>
+                    <button class="btn" onclick="savePosReconciliationConfig()">Guardar configuracion</button>
+                </div>
+            </div>
+            </details>
+
+            <h3 style="margin-top:18px;">Sincronizar y conciliar</h3>
+            <div class="inline-toolbar">
+                <div class="form-group" style="margin-bottom:0;">
+                    <label>Fecha desde:</label>
+                    <input type="date" id="pos-sync-date-from">
+                </div>
+                <div class="form-group" style="margin-bottom:0;">
+                    <label>Fecha hasta:</label>
+                    <input type="date" id="pos-sync-date-to">
+                </div>
+                <button class="btn" onclick="syncPosReconciliation()">Sincronizar</button>
+                <button class="btn secondary" onclick="loadPosPendingInvoicesFromRange()">Actualizar solo Odoo</button>
+                <span id="pos-sync-summary" class="summary-pill is-empty">Sin datos</span>
+            </div>
+
+            <h4>Facturas de Odoo pendientes de pago</h4>
+            <p class="odoo-muted">Esta lista viene directamente de Odoo y sigue disponible aunque TotalNet no responda.</p>
+            <div class="table-scroll">
+                <table class="table-clean">
+                    <thead>
+                        <tr><th>Fecha</th><th>Factura</th><th>Cliente</th><th>Total pendiente</th><th>Moneda</th><th>Origen</th><th>Accion</th></tr>
+                    </thead>
+                    <tbody id="pos-pending-invoices-body">
+                        <tr><td colspan="7" class="empty-cell">Selecciona un rango y actualiza Odoo</td></tr>
+                    </tbody>
+                </table>
+            </div>
+            <p id="pos-pending-invoices-status" class="pos-inline-message" role="status"></p>
+
+            <details class="pos-manual-panel" id="pos-manual-panel">
+                <summary>Ingresar ticket TotalNet manualmente</summary>
+                <p class="odoo-muted">Usa este formulario cuando tengas el comprobante fisico pero TotalNet no lo devuelva por API. Buscar no registra ningun pago.</p>
+                <div class="pos-manual-grid">
+                    <div class="form-group">
+                        <label for="pos-manual-date">Fecha del ticket:</label>
+                        <input type="date" id="pos-manual-date" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="pos-manual-invoice">Nro. de factura:</label>
+                        <input type="text" id="pos-manual-invoice" inputmode="numeric" placeholder="49947" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="pos-manual-amount">Importe cobrado:</label>
+                        <input type="number" id="pos-manual-amount" min="0.01" step="0.01" placeholder="1035,00" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="pos-manual-currency">Moneda:</label>
+                        <select id="pos-manual-currency"><option value="UYU">UYU</option><option value="USD">USD</option></select>
+                    </div>
+                    <div class="form-group">
+                        <label for="pos-manual-ticket">Ticket:</label>
+                        <input type="text" id="pos-manual-ticket" inputmode="numeric" placeholder="0926" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="pos-manual-authorization">Autorizacion:</label>
+                        <input type="text" id="pos-manual-authorization" inputmode="numeric" placeholder="074234" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="pos-manual-brand">Sello:</label>
+                        <select id="pos-manual-brand"><option value="VISA">VISA</option><option value="MASTERCARD">MASTERCARD</option><option value="CABAL">CABAL</option></select>
+                    </div>
+                    <div class="form-group">
+                        <label for="pos-manual-product">Producto:</label>
+                        <select id="pos-manual-product"><option value="DEBITO">Debito</option><option value="CREDITO">Credito</option></select>
+                    </div>
+                    <div class="form-group">
+                        <label for="pos-manual-batch">Lote (opcional):</label>
+                        <input type="text" id="pos-manual-batch" inputmode="numeric" placeholder="393">
+                    </div>
+                    <div class="form-group">
+                        <label for="pos-manual-terminal">Terminal (opcional):</label>
+                        <input type="text" id="pos-manual-terminal" inputmode="numeric" placeholder="30983093">
+                    </div>
+                    <div class="form-group">
+                        <label for="pos-manual-last-four">Ultimos 4 digitos (opcional):</label>
+                        <input type="text" id="pos-manual-last-four" inputmode="numeric" maxlength="4" placeholder="6294">
+                    </div>
+                </div>
+                <div class="pos-manual-actions">
+                    <button class="btn" onclick="matchManualPosTicket()">Buscar factura en Odoo</button>
+                    <span id="pos-manual-status" class="pos-inline-message" role="status" aria-live="polite"></span>
+                </div>
+            </details>
+
+            <h4>Coincidencias</h4>
+            <div class="table-scroll">
+                <table class="table-clean">
+                    <thead>
+                        <tr>
+                            <th></th><th>Fecha</th><th>Importe</th><th>Moneda</th><th>Ticket / Autorizacion</th>
+                            <th>Sello</th><th>Factura</th><th>Criterio / diferencia</th>
+                        </tr>
+                    </thead>
+                    <tbody id="pos-matches-body">
+                        <tr><td colspan="8" class="empty-cell">Sincroniza para ver resultados</td></tr>
+                    </tbody>
+                </table>
+            </div>
+
+            <h4>Ambiguos (elegir factura)</h4>
+            <div class="table-scroll">
+                <table class="table-clean">
+                    <thead>
+                        <tr>
+                            <th></th><th>Fecha</th><th>Importe</th><th>Moneda</th><th>Ticket / Autorizacion</th>
+                            <th>Sello</th><th>Factura candidata</th>
+                        </tr>
+                    </thead>
+                    <tbody id="pos-ambiguous-body">
+                        <tr><td colspan="7" class="empty-cell">Sin ambiguos</td></tr>
+                    </tbody>
+                </table>
+            </div>
+
+            <h4>Sin match</h4>
+            <div class="table-scroll">
+                <table class="table-clean">
+                    <thead><tr><th></th><th>Fecha</th><th>Importe</th><th>Moneda</th><th>Ticket / Autorizacion</th><th>Sello</th><th>Factura por importe</th></tr></thead>
+                    <tbody id="pos-nomatch-body">
+                        <tr><td colspan="7" class="empty-cell">Sin filas</td></tr>
+                    </tbody>
+                </table>
+            </div>
+
+            <div class="inline-toolbar" style="margin-top:12px;">
+                <div class="form-group" style="margin-bottom:0; min-width:320px;">
+                    <label for="pos-payment-operator">Registrar pagos en Odoo como:</label>
+                    <select id="pos-payment-operator" disabled>
+                        <option value="">Cargando usuarios...</option>
+                    </select>
+                </div>
+                <div class="form-group" style="margin-bottom:0; min-width:320px;">
+                    <label for="pos-payment-journal">Diario para los pagos seleccionados:</label>
+                    <select id="pos-payment-journal" disabled>
+                        <option value="">Cargando diarios...</option>
+                    </select>
+                    <span id="pos-payment-journal-status" class="odoo-muted"></span>
+                </div>
+                <div class="form-group" style="margin-bottom:0; min-width:320px;">
+                    <label style="display:flex; gap:8px; align-items:center;">
+                        <input type="checkbox" id="pos-round-payment" checked>
+                        Redondear el pago al peso
+                    </label>
+                    <select id="pos-rounding-account" disabled>
+                        <option value="">Cargando cuentas de redondeo...</option>
+                    </select>
+                    <span class="odoo-muted">0,00–0,49 baja; 0,50–0,99 sube. La diferencia se contabiliza en esta cuenta.</span>
+                    <label style="display:flex; gap:8px; align-items:center; margin-top:8px;">
+                        <input type="checkbox" id="pos-attach-receipt-pdf" checked>
+                        Adjuntar detalle TotalNet en PDF a la factura
+                    </label>
+                </div>
+                <button class="btn success" onclick="confirmPosReconciliation()">Confirmar seleccionados</button>
+                <span id="pos-payment-operator-status" class="odoo-muted"></span>
+            </div>
+            <div id="pos-confirm-summary" class="odoo-muted" style="margin-top:8px;"></div>
+        </div>
+
         <!-- Lista de Backups -->
         <div class="card admin-hide">
             <h2>Backups Disponibles</h2>
@@ -1466,7 +1713,10 @@
         let administradoSales = [];
         let administradoSyncInProgress = false;
         let administradoAutoSyncDone = false;
+        let administradoAutoRefreshTimer = null;
+        let administradoAutoRefreshEnabled = true;
         const administradoPrintInFlight = new Set();
+        const ADMINISTRADO_AUTO_REFRESH_MS = 15000;
         let dispatchTasks = [];
         let dispatchTasksRaw = [];
         let dispatchStats = null;
@@ -1478,9 +1728,9 @@
         let odooAutomationStatus = {};
         let odooStatusTimer = null;
         const ADMIN_ONLY_STORAGE_KEY = 'etiquetador_admin_only_mode';
+        const ADMINISTRADO_AUTO_REFRESH_STORAGE_KEY = 'etiquetador_administrado_auto_refresh';
         const THEME_STORAGE_KEY = 'etiquetador_ui_theme';
-        const CLOUD_TOKEN_STORAGE_KEY = 'cloud_access_token';
-        const CLOUD_USERNAME_STORAGE_KEY = 'cloud_username';
+        const POS_ONLY_VIEW = new URLSearchParams(window.location.search).get('view') === 'pos';
         let adminOnlyMode = true;
         let currentTheme = 'dark';
 
@@ -1529,6 +1779,16 @@
         }
 
         function initViewMode() {
+            if (POS_ONLY_VIEW) {
+                adminOnlyMode = false;
+                document.body.classList.add('pos-only-view');
+                applyAdminOnlyMode();
+                document.getElementById('page-title').textContent = 'Conciliacion de pagos POS';
+                document.getElementById('page-subtitle').textContent = 'TotalNet y facturas pendientes de Odoo en una vista operativa independiente';
+                document.getElementById('nav-config-link')?.classList.remove('active');
+                document.getElementById('nav-pos-link')?.classList.add('active');
+                return;
+            }
             let stored = null;
             try {
                 stored = localStorage.getItem(ADMIN_ONLY_STORAGE_KEY);
@@ -1543,6 +1803,7 @@
         }
 
         function toggleAdminOnlyMode() {
+            if (POS_ONLY_VIEW) return;
             adminOnlyMode = !adminOnlyMode;
             try {
                 localStorage.setItem(ADMIN_ONLY_STORAGE_KEY, adminOnlyMode ? '1' : '0');
@@ -1582,6 +1843,60 @@
             return window.location.hash === '#administrado';
         }
 
+        function updateAdministradoAutoRefreshToggle() {
+            const checkbox = document.getElementById('adm-auto-refresh-toggle');
+            if (!checkbox) {
+                return;
+            }
+            checkbox.checked = administradoAutoRefreshEnabled === true;
+        }
+
+        function applyAdministradoAutoRefreshEnabled(enabled, persist = true) {
+            administradoAutoRefreshEnabled = enabled !== false;
+            updateAdministradoAutoRefreshToggle();
+            if (administradoAutoRefreshEnabled) {
+                startAdministradoAutoRefresh();
+            } else {
+                stopAdministradoAutoRefresh();
+            }
+            if (!persist) {
+                return;
+            }
+            try {
+                localStorage.setItem(
+                    ADMINISTRADO_AUTO_REFRESH_STORAGE_KEY,
+                    administradoAutoRefreshEnabled ? '1' : '0'
+                );
+            } catch (e) {
+                // Ignorar si localStorage no esta disponible.
+            }
+        }
+
+        function initAdministradoAutoRefreshSetting() {
+            let stored = null;
+            try {
+                stored = localStorage.getItem(ADMINISTRADO_AUTO_REFRESH_STORAGE_KEY);
+            } catch (e) {
+                stored = null;
+            }
+            applyAdministradoAutoRefreshEnabled(stored === '0' ? false : true, false);
+        }
+
+        function toggleAdministradoAutoRefreshSetting() {
+            const checkbox = document.getElementById('adm-auto-refresh-toggle');
+            applyAdministradoAutoRefreshEnabled(checkbox ? checkbox.checked : true, true);
+        }
+
+        function canAutoRefreshAdministrado() {
+            return (
+                administradoAutoRefreshEnabled === true
+                && isAdministradoHashActive()
+                && document.hidden !== true
+                && administradoSyncInProgress !== true
+                && administradoPrintInFlight.size === 0
+            );
+        }
+
         function compactErrorText(value, maxLen = 220) {
             const text = String(value || '').replace(/\s+/g, ' ').trim();
             if (!text) {
@@ -1602,6 +1917,30 @@
             }
             await syncAdministradoSales({ silent: true });
             administradoAutoSyncDone = true;
+        }
+
+        async function autoRefreshAdministradoSales() {
+            if (!canAutoRefreshAdministrado()) {
+                return;
+            }
+            await syncAdministradoSales({ silent: true });
+        }
+
+        function startAdministradoAutoRefresh() {
+            if (administradoAutoRefreshTimer) {
+                return;
+            }
+            administradoAutoRefreshTimer = setInterval(() => {
+                autoRefreshAdministradoSales();
+            }, ADMINISTRADO_AUTO_REFRESH_MS);
+        }
+
+        function stopAdministradoAutoRefresh() {
+            if (!administradoAutoRefreshTimer) {
+                return;
+            }
+            clearInterval(administradoAutoRefreshTimer);
+            administradoAutoRefreshTimer = null;
         }
         
         // Funcion fetchAPI local
@@ -1673,7 +2012,6 @@
                 await autoSyncAdministradoIfNeeded();
                 await loadOdooConfig();
                 await loadOdooAutomationStatus();
-                await refreshDispatchPanel({ silent: true });
                 loadBackups();
             } catch (error) {
                 console.error('Error cargando configuraciones:', error);
@@ -1684,96 +2022,6 @@
                 updateAdministradoForm();
                 updateOdooForm();
             }
-        }
-
-        function getCloudAccessToken() {
-            try {
-                return String(localStorage.getItem(CLOUD_TOKEN_STORAGE_KEY) || '').trim();
-            } catch (e) {
-                return '';
-            }
-        }
-
-        function decodeTokenPayload(token) {
-            const raw = String(token || '').trim();
-            if (!raw || !raw.includes('.')) {
-                return null;
-            }
-            try {
-                const payloadB64 = raw.split('.', 1)[0];
-                const normalized = payloadB64.replace(/-/g, '+').replace(/_/g, '/');
-                const padded = normalized + '='.repeat((4 - (normalized.length % 4)) % 4);
-                const jsonText = atob(padded);
-                return JSON.parse(jsonText);
-            } catch (error) {
-                return null;
-            }
-        }
-
-        function getSessionAppUsername() {
-            const token = getCloudAccessToken();
-            const tokenPayload = decodeTokenPayload(token);
-            const fromToken = String(tokenPayload?.sub || '').trim();
-            if (fromToken) {
-                return fromToken;
-            }
-            try {
-                return (
-                    String(localStorage.getItem(CLOUD_USERNAME_STORAGE_KEY) || '').trim() ||
-                    String(localStorage.getItem('username') || '').trim()
-                );
-            } catch (e) {
-                return '';
-            }
-        }
-
-        async function resolveOperatorCloudSession(apiBase) {
-            const localToken = getCloudAccessToken();
-            const localUsername = getSessionAppUsername();
-            if (localToken) {
-                return {
-                    authenticated: true,
-                    token: localToken,
-                    username: localUsername,
-                    source: 'token'
-                };
-            }
-
-            try {
-                const response = await fetch(`${apiBase}/api/auth/me`, {
-                    method: 'GET',
-                    credentials: 'include'
-                });
-                if (response.ok) {
-                    const me = await response.json();
-                    const cookieUsername = String(me?.username || '').trim();
-                    if (cookieUsername) {
-                        try {
-                            localStorage.setItem(CLOUD_USERNAME_STORAGE_KEY, cookieUsername);
-                            if (!String(localStorage.getItem('username') || '').trim()) {
-                                localStorage.setItem('username', cookieUsername);
-                            }
-                        } catch (e) {
-                            // Ignorar si localStorage no esta disponible.
-                        }
-                        return {
-                            authenticated: true,
-                            token: '',
-                            username: cookieUsername,
-                            source: 'cookie'
-                        };
-                    }
-                }
-            } catch (error) {
-                // Ignorar y usar fallback local.
-            }
-
-            return {
-                authenticated: false,
-                token: '',
-                username: localUsername,
-                source: 'none'
-            };
         }
 
         function updateNotificationForm() {
@@ -1864,7 +2112,9 @@
             document.getElementById('adm-enabled').checked = config.enabled === true;
             document.getElementById('adm-sales-url').value = config.sales_url || 'https://www.administrado.net/seller/ventas3';
             document.getElementById('adm-default-copies').value = config.default_copies || 1;
+            document.getElementById('adm-pdf-render-dpi').value = config.pdf_render_dpi || 300;
             document.getElementById('adm-auto-crop-pdf').checked = config.auto_crop_pdf !== false;
+            document.getElementById('adm-raw-zpl-labels').checked = config.use_raw_zpl_for_labels !== false;
             document.getElementById('adm-cookie-header').value = '';
 
             const configured = config.configured === true;
@@ -2175,6 +2425,7 @@
                 }
                 odooOperatorUsers = Array.isArray(result.items) ? result.items : [];
                 renderOdooOperatorUsers();
+                await loadPosPaymentOperators();
                 document.getElementById('odoo-operator-odoo-password').value = '';
                 alert('OK: Usuario Odoo por operador guardado');
             } catch (error) {
@@ -2197,6 +2448,7 @@
                 }
                 odooOperatorUsers = Array.isArray(result.items) ? result.items : [];
                 renderOdooOperatorUsers();
+                await loadPosPaymentOperators();
             } catch (error) {
                 alert(`Error de conexion: ${error.message}`);
             }
@@ -2469,7 +2721,9 @@
                 cookie_header: document.getElementById('adm-cookie-header').value.trim(),
                 default_printer: (odooLabelPrimary || odooLabelFallback || (administradoConfig.default_printer || '')).trim(),
                 default_copies: parseInt(document.getElementById('adm-default-copies').value, 10) || 1,
-                auto_crop_pdf: document.getElementById('adm-auto-crop-pdf').checked
+                pdf_render_dpi: parseInt(document.getElementById('adm-pdf-render-dpi').value, 10) || 300,
+                auto_crop_pdf: document.getElementById('adm-auto-crop-pdf').checked,
+                use_raw_zpl_for_labels: document.getElementById('adm-raw-zpl-labels').checked
             };
 
             try {
@@ -3097,7 +3351,6 @@
 
             try {
                 const apiBase = await ensureApiPort();
-                const operatorSession = await resolveOperatorCloudSession(apiBase);
                 const selectedOrderPrinter = (
                     (document.getElementById('odoo-order-printer-primary')?.value || '').trim()
                 );
@@ -3106,34 +3359,8 @@
                     (document.getElementById('odoo-label-printer-fallback')?.value || '').trim() ||
                     (administradoConfig.default_printer || '').trim()
                 );
-                const appUsername = String(operatorSession.username || '').trim();
-                const cloudToken = String(operatorSession.token || '').trim();
-                const hasSecureSession = operatorSession.authenticated === true;
+                const appUsername = (localStorage.getItem('username') || '').trim();
                 const modeText = modeTextMap[mode] || mode;
-                const confirmOnPrintEnabled = Boolean(odooConfig && odooConfig.confirm_order_on_print === true);
-                const requiresOrderFlow = mode === 'both' || mode === 'order_only';
-                const mappedOdooActor = resolveMappedOdooUser(appUsername);
-
-                if (confirmOnPrintEnabled && requiresOrderFlow) {
-                    if (!hasSecureSession) {
-                        alert(
-                            'La confirmacion Odoo ahora requiere sesion autenticada. ' +
-                            'Inicia sesion del operador (modo cloud) y vuelve a intentar.'
-                        );
-                        return;
-                    }
-                    if (!appUsername) {
-                        alert('No se pudo identificar al operador autenticado. Vuelve a iniciar sesion.');
-                        return;
-                    }
-                    if (!mappedOdooActor) {
-                        alert(
-                            `No hay usuario Odoo mapeado para '${appUsername}'. ` +
-                            'Configuralo en Odoo > Usuarios Odoo por operador.'
-                        );
-                        return;
-                    }
-                }
 
                 const confirmText = [
                     `Vas a enviar a imprimir:`,
@@ -3142,8 +3369,6 @@
                     `- Impresora orden: ${selectedOrderPrinter || '(default configurada)'}`,
                     `- Impresora etiqueta: ${selectedLabelPrinter || '(default configurada)'}`,
                     `- Usuario app: ${appUsername || '-'}`,
-                    `- Usuario Odoo mapeado: ${mappedOdooActor || '-'}`,
-                    `- Sesion segura: ${hasSecureSession ? 'Si' : 'No'}${operatorSession.source !== 'none' ? ` (${operatorSession.source})` : ''}`,
                     '',
                     'Confirmar impresion?'
                 ].join('\n');
@@ -3155,17 +3380,22 @@
                 const targetSale = administradoSales.find((sale) => String(sale.envio_id) === safeEnvioId);
                 if (targetSale) {
                     targetSale._printing = true;
-                    targetSale._printing_label = modeText;
+                    targetSale._printing_label = `Procesando solicitud… (puede tardar) • ${modeText}`;
                     renderAdministradoSales();
                 }
 
+                // Mensaje extra si el backend tarda (evita sensación de “se colgó”)
+                setTimeout(() => {
+                    if (!administradoPrintInFlight.has(safeEnvioId)) return;
+                    if (targetSale) {
+                        targetSale._printing_label = `Enviando a impresoras y/o esperando Odoo… (no está colgado) • ${modeText}`;
+                        renderAdministradoSales();
+                    }
+                }, 4500);
+
                 const response = await fetch(`${apiBase}/api/administrado/shipments/print`, {
                     method: 'POST',
-                    credentials: 'include',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        ...(cloudToken ? { Authorization: `Bearer ${cloudToken}` } : {})
-                    },
+                    headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
                         envio_id: safeEnvioId,
                         mode,
@@ -3235,7 +3465,6 @@
                 alert(`Error de conexion: ${error.message}`);
             } finally {
                 administradoPrintInFlight.delete(safeEnvioId);
-                refreshDispatchPanel({ silent: true });
             }
         }
 
@@ -3330,26 +3559,967 @@
             }
         }
 
+        // ---- Conciliacion de pagos POS (TotalNet) ----
+        let posJournals = [];
+        let posJournalMap = {};
+        let posRoundingAccounts = [];
+        let posSyncResult = null;
+        let posPaymentOperators = [];
+        let posPaymentOperatorFeatureReady = false;
+        let posPendingInvoices = [];
+
+        async function loadTotalNetConfig() {
+            const config = await fetchAPI('/api/totalnet/config');
+            if (!config) return;
+            document.getElementById('totalnet-enabled').checked = !!config.enabled;
+            document.getElementById('totalnet-client-id').value = config.client_id || '';
+            document.getElementById('totalnet-token-url').value = config.token_url || '';
+            document.getElementById('totalnet-api-base-url').value = config.api_base_url || 'https://apis.vnet.uy/adx-conecta';
+            document.getElementById('totalnet-comercio').value = config.comercio || '';
+            document.getElementById('totalnet-sucursal').value = config.sucursal || '';
+            document.getElementById('totalnet-status').textContent = config.configured ? 'Configurado' : 'Falta configurar';
+        }
+
+        async function saveTotalNetConfig() {
+            const config = {
+                enabled: document.getElementById('totalnet-enabled').checked,
+                client_id: document.getElementById('totalnet-client-id').value.trim(),
+                client_secret: document.getElementById('totalnet-client-secret').value.trim(),
+                token_url: document.getElementById('totalnet-token-url').value.trim(),
+                api_base_url: document.getElementById('totalnet-api-base-url').value.trim(),
+                comercio: document.getElementById('totalnet-comercio').value.trim(),
+                sucursal: document.getElementById('totalnet-sucursal').value.trim()
+            };
+            try {
+                const apiBase = await ensureApiPort();
+                const response = await fetch(`${apiBase}/api/totalnet/config`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(config)
+                });
+                if (response.ok) {
+                    document.getElementById('totalnet-client-secret').value = '';
+                    await loadTotalNetConfig();
+                    alert('OK: Configuracion TotalNet guardada');
+                } else {
+                    const result = await response.json().catch(() => ({}));
+                    alert(`Error guardando TotalNet: ${result.detail || response.status}`);
+                }
+            } catch (error) {
+                alert(`Error de conexion: ${error.message}`);
+            }
+        }
+
+        async function testTotalNetConnection() {
+            try {
+                const apiBase = await ensureApiPort();
+                const response = await fetch(`${apiBase}/api/totalnet/session/test`, { method: 'POST' });
+                const result = await response.json();
+                if (response.ok) {
+                    alert(result.message || (
+                        result.api_no_results
+                            ? 'OK: OAuth2 y API TotalNet respondieron. No hubo cupones para la fecha de prueba.'
+                            : 'OK: Conexion a TotalNet exitosa'
+                    ));
+                } else {
+                    alert(`Error de conexion TotalNet: ${result.detail || response.status}`);
+                }
+            } catch (error) {
+                alert(`Error de conexion: ${error.message}`);
+            }
+        }
+
+        async function checkTotalNetSettlementInfo() {
+            try {
+                const apiBase = await ensureApiPort();
+                const response = await fetch(`${apiBase}/api/totalnet/info`, { method: 'POST' });
+                const result = await response.json();
+                if (response.ok) {
+                    alert(`Respuesta de TotalNet /info (fechas con liquidacion disponible):\n\n${JSON.stringify(result, null, 2)}`);
+                } else {
+                    alert(`Error consultando /info de TotalNet: ${result.detail || response.status}`);
+                }
+            } catch (error) {
+                alert(`Error de conexion: ${error.message}`);
+            }
+        }
+
+        function renderJournalMapTable() {
+            const body = document.getElementById('pos-journal-map-body');
+            const entries = Object.entries(posJournalMap);
+            if (entries.length === 0) {
+                body.innerHTML = '<tr><td colspan="3" class="empty-cell">Sin mapeos</td></tr>';
+                return;
+            }
+            body.innerHTML = entries.map(([sello, journalId]) => {
+                const journal = posJournals.find(j => String(j.id) === String(journalId));
+                const journalName = journal ? journal.name : `#${journalId}`;
+                return `<tr><td>${sello}</td><td>${journalName}</td>` +
+                    `<td><button class="btn danger" onclick="removeJournalMapping('${sello}')">Quitar</button></td></tr>`;
+            }).join('');
+        }
+
+        async function loadPosJournals() {
+            const response = await fetchAPI('/api/pos-reconciliation/journals');
+            posJournals = (response && response.items) || [];
+            const mappingSelect = document.getElementById('pos-journal-map-journal');
+            mappingSelect.innerHTML = posJournals.length
+                ? posJournals.map(j => `<option value="${j.id}">${j.name}</option>`).join('')
+                : '<option value="">Sin diarios (revisa la config de Odoo)</option>';
+            const paymentSelect = document.getElementById('pos-payment-journal');
+            if (paymentSelect) {
+                const previousValue = paymentSelect.value;
+                paymentSelect.replaceChildren();
+                paymentSelect.add(new Option('Usar mapeo configurado por sello', ''));
+                posJournals.forEach(journal => {
+                    paymentSelect.add(new Option(journal.name, String(journal.id)));
+                });
+                if (posJournals.some(journal => String(journal.id) === previousValue)) {
+                    paymentSelect.value = previousValue;
+                }
+                paymentSelect.disabled = posJournals.length === 0;
+                paymentSelect.onchange = () => {
+                    const status = document.getElementById('pos-payment-journal-status');
+                    if (!status) return;
+                    const selected = posJournals.find(journal => String(journal.id) === paymentSelect.value);
+                    status.textContent = selected
+                        ? `Diario elegido: ${selected.name}.`
+                        : 'Se usará el mapeo configurado por sello.';
+                };
+            }
+        }
+
+        async function loadPosRoundingAccounts() {
+            const response = await fetchAPI('/api/pos-reconciliation/rounding-accounts');
+            posRoundingAccounts = (response && response.items) || [];
+            const select = document.getElementById('pos-rounding-account');
+            if (!select) return;
+            select.replaceChildren();
+            select.add(new Option('Selecciona la cuenta de redondeo', ''));
+            posRoundingAccounts.forEach(account => {
+                select.add(new Option(`${account.code || ''} - ${account.name}`.replace(/^ - /, ''), String(account.id)));
+            });
+            const suggested = posRoundingAccounts.find(
+                account => normalizePosJournalText(account.name) === 'redondeos'
+            );
+            if (suggested) select.value = String(suggested.id);
+            select.disabled = posRoundingAccounts.length === 0;
+        }
+
+        function mappedPosJournalId(sello) {
+            const normalizedSello = String(sello || '').trim().toLowerCase();
+            const entry = Object.entries(posJournalMap).find(
+                ([key]) => String(key || '').trim().toLowerCase() === normalizedSello
+            );
+            const value = entry ? parseInt(entry[1], 10) : 0;
+            return Number.isInteger(value) && value > 0 ? value : null;
+        }
+
+        function normalizePosJournalText(value) {
+            return String(value || '')
+                .normalize('NFD')
+                .replace(/[\u0300-\u036f]/g, '')
+                .toLowerCase();
+        }
+
+        function suggestPosJournalId(cupon) {
+            const mappedId = mappedPosJournalId(cupon?.sello);
+            if (mappedId) return mappedId;
+
+            let brand = normalizePosJournalText(cupon?.sello);
+            if (brand === 'mastercard') brand = 'master';
+            const product = normalizePosJournalText(cupon?.producto);
+            const currency = posCurrencyCode(cupon?.moneda);
+            if (!brand || !product) return null;
+
+            const currencyMarker = currency === 'UYU' ? 'm/n' : (currency === 'USD' ? 'm/e' : '');
+            const candidates = posJournals.filter(journal => {
+                const name = normalizePosJournalText(journal.name);
+                return name.includes(brand) && name.includes(product) &&
+                    (!currencyMarker || name.includes(currencyMarker));
+            });
+            return candidates.length === 1 ? Number(candidates[0].id) : null;
+        }
+
+        function suggestPaymentJournalForResult(result) {
+            const select = document.getElementById('pos-payment-journal');
+            const status = document.getElementById('pos-payment-journal-status');
+            if (!select || !status || select.value) return;
+
+            const journalIds = [...new Set((result.matches_unicos || [])
+                .filter(match => match.can_confirm === true)
+                .map(match => Number(match.suggested_journal_id || suggestPosJournalId(match.cupon)))
+                .filter(id => Number.isInteger(id) && id > 0))];
+            if (journalIds.length !== 1) {
+                status.textContent = 'Elige el diario antes de confirmar.';
+                return;
+            }
+            const journal = posJournals.find(item => Number(item.id) === journalIds[0]);
+            if (!journal) return;
+            select.value = String(journal.id);
+            status.textContent = `Sugerido por sello, producto y moneda: ${journal.name}.`;
+        }
+
+        function renderPosPaymentOperators() {
+            const select = document.getElementById('pos-payment-operator');
+            const status = document.getElementById('pos-payment-operator-status');
+            if (!select || !status) return;
+
+            const previousValue = select.value;
+            select.replaceChildren();
+            if (!posPaymentOperatorFeatureReady) {
+                select.add(new Option('Reinicia la API para habilitar la seleccion', ''));
+                select.disabled = true;
+                status.textContent = 'La API activa todavia no permite elegir usuario.';
+                return;
+            }
+
+            const validOperators = posPaymentOperators.filter(
+                item => item && item.app_username && item.odoo_username && item.has_password === true
+            );
+            select.add(new Option('Selecciona quien registra el pago', ''));
+            validOperators.forEach(item => {
+                select.add(new Option(
+                    `${item.app_username} - ${item.odoo_username}`,
+                    item.app_username
+                ));
+            });
+            if (validOperators.some(item => String(item.app_username) === previousValue)) {
+                select.value = previousValue;
+            }
+            select.disabled = validOperators.length === 0;
+            status.textContent = validOperators.length
+                ? 'La seleccion se usara para autenticar y auditar el pago.'
+                : 'Carga al menos un usuario Odoo por operador.';
+        }
+
+        async function loadPosPaymentOperators() {
+            posPaymentOperatorFeatureReady = false;
+            posPaymentOperators = [];
+            try {
+                const apiBase = await ensureApiPort();
+                const response = await fetch(`${apiBase}/api/pos-reconciliation/operators`);
+                const result = await response.json().catch(() => ({}));
+                if (response.ok && result.selection_required === true) {
+                    posPaymentOperatorFeatureReady = true;
+                    posPaymentOperators = Array.isArray(result.items) ? result.items : [];
+                }
+            } catch (error) {
+                posPaymentOperatorFeatureReady = false;
+            }
+            renderPosPaymentOperators();
+        }
+
+        function addJournalMapping() {
+            const sello = document.getElementById('pos-journal-map-sello').value.trim();
+            const journalId = document.getElementById('pos-journal-map-journal').value;
+            if (!sello || !journalId) {
+                alert('Completa sello y diario');
+                return;
+            }
+            posJournalMap[sello] = journalId;
+            document.getElementById('pos-journal-map-sello').value = '';
+            renderJournalMapTable();
+        }
+
+        function removeJournalMapping(sello) {
+            delete posJournalMap[sello];
+            renderJournalMapTable();
+        }
+
+        async function loadPosReconciliationConfig() {
+            const config = await fetchAPI('/api/pos-reconciliation/config');
+            if (!config) return;
+            posJournalMap = config.journal_map || {};
+            document.getElementById('pos-amount-tolerance').value = config.amount_tolerance ?? 0.01;
+            document.getElementById('pos-date-window').value = config.date_window_days ?? 2;
+            renderJournalMapTable();
+        }
+
+        async function savePosReconciliationConfig() {
+            const config = {
+                amount_tolerance: parseFloat(document.getElementById('pos-amount-tolerance').value) || 0,
+                date_window_days: parseInt(document.getElementById('pos-date-window').value, 10) || 0,
+                journal_map: posJournalMap
+            };
+            try {
+                const apiBase = await ensureApiPort();
+                const response = await fetch(`${apiBase}/api/pos-reconciliation/config`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(config)
+                });
+                if (response.ok) {
+                    alert('OK: Configuracion de conciliacion guardada');
+                } else {
+                    alert(`Error guardando configuracion: ${response.status}`);
+                }
+            } catch (error) {
+                alert(`Error de conexion: ${error.message}`);
+            }
+        }
+
+        function posCuponLabel(cupon) {
+            const ticket = cupon.ticket ?? '-';
+            const auth = cupon.autorizacion ?? '-';
+            return `${escapePosHtml(ticket)} / ${escapePosHtml(auth)}`;
+        }
+
+        function escapePosHtml(value) {
+            return String(value ?? '')
+                .replaceAll('&', '&amp;')
+                .replaceAll('<', '&lt;')
+                .replaceAll('>', '&gt;')
+                .replaceAll('"', '&quot;')
+                .replaceAll("'", '&#039;');
+        }
+
+        function posPaymentDateIso(value) {
+            const text = String(value || '').trim();
+            const localMatch = text.match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
+            if (localMatch) {
+                return `${localMatch[3]}-${localMatch[2]}-${localMatch[1]}`;
+            }
+            const isoMatch = text.match(/^(\d{4}-\d{2}-\d{2})/);
+            return isoMatch ? isoMatch[1] : text;
+        }
+
+        function posPaymentCoupon(cupon) {
+            return {
+                ...cupon,
+                fecha: posPaymentDateIso(cupon?.fecha)
+            };
+        }
+
+        function posCurrencyCode(value) {
+            const text = String(value || '').trim().toUpperCase();
+            if (!text) return '';
+            if (text === '858') return 'UYU';
+            if (text === '840') return 'USD';
+            if (text === '978') return 'EUR';
+            if (text.includes('USD') || text.includes('DOLAR')) return 'USD';
+            if (text.includes('UYU') || text.includes('PESO') || text.includes('URUGUAY')) return 'UYU';
+            if (text.includes('EUR') || text.includes('EURO')) return 'EUR';
+            return /^[A-Z]{3}$/.test(text) ? text : '';
+        }
+
+        function formatPosAmount(value) {
+            const number = Number(value);
+            if (!Number.isFinite(number)) return value ?? '-';
+            return new Intl.NumberFormat('es-UY', {
+                minimumFractionDigits: 2,
+                maximumFractionDigits: 2
+            }).format(number);
+        }
+
+        function formatPosCurrency(value) {
+            return posCurrencyCode(value) || String(value || '-');
+        }
+
+        function formatPosAmountWithCurrency(value, currency) {
+            return `${formatPosAmount(value)} ${formatPosCurrency(currency)}`;
+        }
+
+        function renderPosPendingInvoices() {
+            const body = document.getElementById('pos-pending-invoices-body');
+            if (!body) return;
+            body.innerHTML = posPendingInvoices.length ? posPendingInvoices.map((invoice, idx) => `
+                <tr>
+                    <td>${escapePosHtml(invoice.invoice_date || '-')}</td>
+                    <td>${escapePosHtml(invoice.name || invoice.invoice_id || '-')}</td>
+                    <td>${escapePosHtml(invoice.partner || '-')}</td>
+                    <td class="pos-money">${formatPosAmount(invoice.amount_residual ?? invoice.amount_total)}</td>
+                    <td>${escapePosHtml(formatPosCurrency(invoice.currency))}</td>
+                    <td>${escapePosHtml(invoice.invoice_origin || '-')}</td>
+                    <td><button class="btn secondary" onclick="prefillManualPosTicket(${idx})">Cargar ticket</button></td>
+                </tr>`).join('') :
+                '<tr><td colspan="7" class="empty-cell">No hay facturas a contado pendientes en el rango</td></tr>';
+        }
+
+        async function loadPosPendingInvoices(dateFrom, dateTo) {
+            const status = document.getElementById('pos-pending-invoices-status');
+            if (!dateFrom || !dateTo) {
+                if (status) {
+                    status.className = 'pos-inline-message error';
+                    status.textContent = 'Completa fecha desde y fecha hasta.';
+                }
+                return false;
+            }
+            if (status) {
+                status.className = 'pos-inline-message';
+                status.textContent = 'Consultando facturas pendientes en Odoo...';
+            }
+            try {
+                const apiBase = await ensureApiPort();
+                const response = await fetch(`${apiBase}/api/pos-reconciliation/pending-invoices`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ date_from: dateFrom, date_to: dateTo })
+                });
+                const result = await response.json().catch(() => ({}));
+                if (!response.ok) {
+                    throw new Error(result.detail || `HTTP ${response.status}`);
+                }
+                posPendingInvoices = Array.isArray(result.items) ? result.items : [];
+                renderPosPendingInvoices();
+                if (status) {
+                    status.className = 'pos-inline-message success';
+                    status.textContent = `${posPendingInvoices.length} factura(s) pendiente(s) obtenida(s) directamente desde Odoo.`;
+                }
+                return true;
+            } catch (error) {
+                posPendingInvoices = [];
+                renderPosPendingInvoices();
+                if (status) {
+                    status.className = 'pos-inline-message error';
+                    status.textContent = `No se pudo consultar Odoo: ${error.message}`;
+                }
+                return false;
+            }
+        }
+
+        function loadPosPendingInvoicesFromRange() {
+            return loadPosPendingInvoices(
+                document.getElementById('pos-sync-date-from').value,
+                document.getElementById('pos-sync-date-to').value
+            );
+        }
+
+        function prefillManualPosTicket(index) {
+            const invoice = posPendingInvoices[index];
+            if (!invoice) return;
+            const numberMatches = String(invoice.name || '').match(/\d+/g);
+            document.getElementById('pos-manual-date').value = invoice.invoice_date || '';
+            document.getElementById('pos-manual-invoice').value = numberMatches?.at(-1) || '';
+            document.getElementById('pos-manual-amount').value = Number(invoice.rounded_amount ?? invoice.amount_total).toFixed(2);
+            document.getElementById('pos-manual-currency').value = posCurrencyCode(invoice.currency) || 'UYU';
+            const panel = document.getElementById('pos-manual-panel');
+            panel.open = true;
+            panel.scrollIntoView({ block: 'start' });
+            document.getElementById('pos-manual-ticket').focus();
+            const status = document.getElementById('pos-manual-status');
+            status.className = 'pos-inline-message';
+            status.textContent = `Factura ${invoice.name || invoice.invoice_id} preparada. Completa los datos impresos en el ticket.`;
+        }
+
+        async function matchManualPosTicket() {
+            const status = document.getElementById('pos-manual-status');
+            const payload = {
+                transaction_date: document.getElementById('pos-manual-date').value,
+                invoice_number: document.getElementById('pos-manual-invoice').value.trim(),
+                amount: Number(document.getElementById('pos-manual-amount').value),
+                currency: document.getElementById('pos-manual-currency').value,
+                ticket: document.getElementById('pos-manual-ticket').value.trim(),
+                authorization: document.getElementById('pos-manual-authorization').value.trim(),
+                brand: document.getElementById('pos-manual-brand').value,
+                product: document.getElementById('pos-manual-product').value,
+                batch: document.getElementById('pos-manual-batch').value.trim(),
+                terminal: document.getElementById('pos-manual-terminal').value.trim(),
+                last_four: document.getElementById('pos-manual-last-four').value.trim()
+            };
+            if (!payload.transaction_date || !payload.invoice_number || !Number.isFinite(payload.amount) || payload.amount <= 0 || !payload.ticket || !payload.authorization) {
+                status.className = 'pos-inline-message error';
+                status.textContent = 'Completa fecha, factura, importe, ticket y autorizacion.';
+                return;
+            }
+            status.className = 'pos-inline-message';
+            status.textContent = 'Buscando la factura a contado en Odoo...';
+            try {
+                const apiBase = await ensureApiPort();
+                const response = await fetch(`${apiBase}/api/pos-reconciliation/manual-match`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+                const result = await response.json().catch(() => ({}));
+                if (!response.ok) throw new Error(result.detail || `HTTP ${response.status}`);
+                posSyncResult = result;
+                suggestPaymentJournalForResult(result);
+                renderPosResults();
+                const match = (result.matches_unicos || [])[0];
+                status.className = match ? 'pos-inline-message success' : 'pos-inline-message error';
+                status.textContent = match
+                    ? `Se encontro ${match.invoice.name}. Revisa la coincidencia y confirma abajo cuando estes seguro.`
+                    : `No se encontro en Odoo una factura a contado N.º ${payload.invoice_number} dentro de la ventana configurada.`;
+                document.getElementById('pos-sync-summary').textContent = match
+                    ? 'Ticket manual preparado para revision'
+                    : 'Ticket manual sin coincidencia';
+            } catch (error) {
+                status.className = 'pos-inline-message error';
+                status.textContent = `No se pudo buscar el ticket manual: ${error.message}`;
+            }
+        }
+
+        function posPaymentStateLabel(value) {
+            const labels = {
+                not_paid: 'Pendiente',
+                partial: 'Pago parcial',
+                in_payment: 'En proceso de pago',
+                paid: 'Pagada',
+                reversed: 'Revertida'
+            };
+            return labels[String(value || '')] || String(value || 'Estado desconocido');
+        }
+
+        function posAmountsEqual(left, right) {
+            const leftNumber = Number(left);
+            const rightNumber = Number(right);
+            return Number.isFinite(leftNumber) && Number.isFinite(rightNumber) &&
+                Math.round((leftNumber - rightNumber) * 100) === 0;
+        }
+
+        function posMatchDetail(match) {
+            const coupon = match.cupon || {};
+            const invoice = match.invoice || {};
+            const criterion = match.matched_by === 'numero_factura_totalnet'
+                ? `N.º factura TotalNet ${coupon.numero_factura || '-'}`
+                : 'Importe, moneda y fecha';
+            if (match.amount_matches === false) {
+                const difference = Number(match.amount_difference);
+                const differenceText = Number.isFinite(difference)
+                    ? `${difference >= 0 ? '+' : ''}${formatPosAmount(difference)}`
+                    : '-';
+                const roundingLabel = match.rounding_matches === true
+                    ? 'Confirmable usando la cuenta de redondeo'
+                    : 'No confirmable';
+                return `<span style="color:#ffb454; font-weight:600;">${criterion}<br>` +
+                    `${roundingLabel}: Odoo ${formatPosAmountWithCurrency(invoice.amount_total, invoice.currency)}, ` +
+                    `TotalNet ${formatPosAmountWithCurrency(coupon.importe, coupon.moneda)}, ` +
+                    `diferencia ${differenceText} ${formatPosCurrency(coupon.moneda)}</span>`;
+            }
+            if (match.currency_matches === false) {
+                return `<span style="color:#ffb454; font-weight:600;">${criterion}<br>No confirmable: las monedas no coinciden</span>`;
+            }
+            return criterion;
+        }
+
+        function renderPosResults() {
+            const matchesBody = document.getElementById('pos-matches-body');
+            const ambiguousBody = document.getElementById('pos-ambiguous-body');
+            const nomatchBody = document.getElementById('pos-nomatch-body');
+
+            if (!posSyncResult) return;
+
+            const matches = posSyncResult.matches_unicos || [];
+            matchesBody.innerHTML = matches.length ? matches.map((m, idx) => {
+                const canRegister = m.can_confirm === true;
+                const blockedReason = m.amount_matches === false
+                    ? 'El importe de TotalNet no coincide con el total de Odoo'
+                    : 'La factura no admite registrar este pago';
+                return `
+                <tr>
+                    <td>${canRegister ? `<input type="checkbox" class="pos-match-checkbox" data-idx="${idx}" checked>` : `<span title="${blockedReason}">-</span>`}</td>
+                    <td>${m.cupon.fecha || '-'}</td>
+                    <td>${formatPosAmount(m.cupon.importe)}</td>
+                    <td>${formatPosCurrency(m.cupon.moneda)}</td>
+                    <td>${posCuponLabel(m.cupon)}</td>
+                    <td>${m.cupon.sello || '-'}</td>
+                    <td>${m.invoice.name || m.invoice.invoice_id} (${m.invoice.partner || ''}) - ${posPaymentStateLabel(m.invoice.payment_state)}</td>
+                    <td>${posMatchDetail(m)}</td>
+                </tr>`;
+            }).join('') : '<tr><td colspan="8" class="empty-cell">Sin coincidencias</td></tr>';
+
+            const ambiguous = posSyncResult.ambiguos || [];
+            ambiguousBody.innerHTML = ambiguous.length ? ambiguous.map((a, idx) => {
+                if (!a.cupon) {
+                    const cuponesTxt = (a.cupones_grupo || []).map(c => posCuponLabel(c)).join(', ');
+                    return `<tr>
+                        <td></td><td colspan="5">Agrupación recibida de una API anterior (${cuponesTxt}). Está deshabilitada y no se puede confirmar.</td>
+                        <td>${(a.candidates[0] || {}).name || ''}</td>
+                    </tr>`;
+                }
+                const candidateCanRegister = c => c.can_register_payment === true && posAmountsEqual(c.amount_total, a.cupon.importe);
+                const canRegister = a.can_confirm !== false && a.candidates.some(candidateCanRegister);
+                const options = a.candidates.map(c => `<option value="${c.invoice_id}" data-name="${c.name || ''}" ${candidateCanRegister(c) ? '' : 'disabled'}>${c.name || c.invoice_id} (${c.partner || ''}) - ${formatPosAmountWithCurrency(c.amount_total, c.currency)} - ${c.invoice_date || '-'} - ${posPaymentStateLabel(c.payment_state)}${posAmountsEqual(c.amount_total, a.cupon.importe) ? '' : ' - IMPORTE DISTINTO'}</option>`).join('');
+                return `<tr>
+                    <td>${canRegister ? `<input type="checkbox" class="pos-ambiguous-checkbox" data-idx="${idx}">` : '<span title="Las facturas candidatas ya tienen pago registrado">-</span>'}</td>
+                    <td>${a.cupon.fecha || '-'}</td>
+                    <td>${formatPosAmount(a.cupon.importe)}</td>
+                    <td>${formatPosCurrency(a.cupon.moneda)}</td>
+                    <td>${posCuponLabel(a.cupon)}</td>
+                    <td>${a.cupon.sello || '-'}</td>
+                    <td><select class="pos-ambiguous-select" data-idx="${idx}">${options}</select></td>
+                </tr>`;
+            }).join('') : '<tr><td colspan="7" class="empty-cell">Sin ambiguos</td></tr>';
+
+            const sinMatch = posSyncResult.sin_match || [];
+            nomatchBody.innerHTML = sinMatch.length ? sinMatch.map((s, idx) => {
+                const candidates = s.amount_candidates || [];
+                const candidateCanRegister = c => c.can_register_payment === true && posAmountsEqual(c.amount_total, s.cupon.importe);
+                const options = candidates.map(c =>
+                    `<option value="${c.invoice_id}" data-name="${c.name || ''}" ${candidateCanRegister(c) ? '' : 'disabled'}>` +
+                    `${c.name || c.invoice_id} (${c.partner || ''}) - ${formatPosAmountWithCurrency(c.amount_total, c.currency)} - ${c.invoice_date || '-'} - ${posPaymentStateLabel(c.payment_state)}${posAmountsEqual(c.amount_total, s.cupon.importe) ? '' : ' - IMPORTE DISTINTO'}</option>`
+                ).join('');
+                const canRegister = candidates.some(candidateCanRegister);
+                return `<tr>
+                    <td>${canRegister ? `<input type="checkbox" class="pos-manual-checkbox" data-idx="${idx}">` : ''}</td>
+                    <td>${s.cupon.fecha || '-'}</td>
+                    <td>${formatPosAmount(s.cupon.importe)}</td>
+                    <td>${formatPosCurrency(s.cupon.moneda)}</td>
+                    <td>${posCuponLabel(s.cupon)}</td>
+                    <td>${s.cupon.sello || '-'}</td>
+                    <td>${candidates.length ? `<select class="pos-manual-select" data-idx="${idx}">${options}</select>` : `<span>${s.invoice_number_searched ? `No se encontró en Odoo la factura N.º ${s.invoice_number_searched}` : 'Sin factura con ese importe'}</span>`}</td>
+                </tr>`;
+            }).join('') : '<tr><td colspan="7" class="empty-cell">Sin filas</td></tr>';
+        }
+
+        function isTotalNetNoResultsError(detail) {
+            const text = String(detail || '').toLowerCase();
+            return text.includes('totalnet devolvio 404') && text.includes('no se encontraron resultados');
+        }
+
+        function emptyPosSyncResult(dateFrom, dateTo) {
+            return {
+                matching_version: null,
+                date_from: dateFrom,
+                date_to: dateTo,
+                settlement_date_from: null,
+                settlement_date_to: null,
+                total_cupones: 0,
+                total_facturas_contado: 0,
+                total_facturas_pendientes_contado: 0,
+                matches_unicos: [],
+                ambiguos: [],
+                sin_match: []
+            };
+        }
+
+        function mergePosSyncResult(target, source) {
+            const sourceVersion = Number(source.matching_version || 0);
+            target.matching_version = target.matching_version === null
+                ? sourceVersion
+                : Math.min(target.matching_version, sourceVersion);
+            if (source.settlement_date_from && (!target.settlement_date_from || source.settlement_date_from < target.settlement_date_from)) {
+                target.settlement_date_from = source.settlement_date_from;
+            }
+            if (source.settlement_date_to && (!target.settlement_date_to || source.settlement_date_to > target.settlement_date_to)) {
+                target.settlement_date_to = source.settlement_date_to;
+            }
+            target.total_cupones += Number(source.total_cupones || 0);
+            target.total_facturas_contado += Number(
+                source.total_facturas_contado ?? source.total_facturas_pendientes ?? 0
+            );
+            target.total_facturas_pendientes_contado += Number(
+                source.total_facturas_pendientes_contado ?? source.total_facturas_pendientes ?? 0
+            );
+            target.matches_unicos.push(...(source.matches_unicos || []));
+            target.ambiguos.push(...(source.ambiguos || []));
+            target.sin_match.push(...(source.sin_match || []));
+        }
+
+        async function requestPosSync(apiBase, dateFrom, dateTo) {
+            const response = await fetch(`${apiBase}/api/pos-reconciliation/sync`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ date_from: dateFrom, date_to: dateTo })
+            });
+            const result = await response.json();
+            return { response, result };
+        }
+
+        async function retryPosSyncDayByDay(apiBase, dateFrom, dateTo, summary) {
+            const merged = emptyPosSyncResult(dateFrom, dateTo);
+            const current = new Date(`${dateFrom}T00:00:00Z`);
+            const last = new Date(`${dateTo}T00:00:00Z`);
+            let processedDays = 0;
+
+            while (current <= last) {
+                const day = current.toISOString().slice(0, 10);
+                processedDays += 1;
+                summary.textContent = `Sincronizando dia ${processedDays}: ${day}...`;
+                const { response, result } = await requestPosSync(apiBase, day, day);
+                if (response.ok) {
+                    mergePosSyncResult(merged, result);
+                } else if (!isTotalNetNoResultsError(result.detail)) {
+                    throw new Error(result.detail || `HTTP ${response.status}`);
+                }
+                current.setUTCDate(current.getUTCDate() + 1);
+            }
+            return merged;
+        }
+
+        async function syncPosReconciliation(options = {}) {
+            const preservePaymentContext = options.preservePaymentContext === true;
+            const preserveConfirmSummary = options.preserveConfirmSummary === true;
+            const dateFrom = document.getElementById('pos-sync-date-from').value;
+            const dateTo = document.getElementById('pos-sync-date-to').value;
+            if (!dateFrom || !dateTo) {
+                alert('Completa fecha desde y hasta');
+                return;
+            }
+            const today = new Date();
+            const todayLocal = [
+                today.getFullYear(),
+                String(today.getMonth() + 1).padStart(2, '0'),
+                String(today.getDate()).padStart(2, '0')
+            ].join('-');
+            if (dateFrom > dateTo) {
+                alert('La fecha desde no puede ser posterior a la fecha hasta');
+                return;
+            }
+            if (dateTo >= todayLocal) {
+                alert('TotalNet permite consultar solamente hasta el día de ayer');
+                return;
+            }
+            const summary = document.getElementById('pos-sync-summary');
+            if (!preserveConfirmSummary) {
+                document.getElementById('pos-confirm-summary').textContent = '';
+            }
+            const paymentJournalSelect = document.getElementById('pos-payment-journal');
+            const paymentJournalStatus = document.getElementById('pos-payment-journal-status');
+            if (!preservePaymentContext) {
+                if (paymentJournalSelect) paymentJournalSelect.value = '';
+                if (paymentJournalStatus) paymentJournalStatus.textContent = '';
+            }
+            summary.textContent = 'Sincronizando...';
+            try {
+                await loadPosPendingInvoices(dateFrom, dateTo);
+                summary.textContent = 'Odoo actualizado. Consultando TotalNet...';
+                const apiBase = await ensureApiPort();
+                let { response, result } = await requestPosSync(apiBase, dateFrom, dateTo);
+                if (!response.ok) {
+                    if (isTotalNetNoResultsError(result.detail)) {
+                        result = await retryPosSyncDayByDay(apiBase, dateFrom, dateTo, summary);
+                    } else {
+                        summary.textContent = `Odoo visible. TotalNet no respondio: ${result.detail || response.status}`;
+                        alert(`Error sincronizando: ${result.detail || response.status}`);
+                        return;
+                    }
+                }
+                if (Number(result.matching_version || 0) < 4) {
+                    posSyncResult = null;
+                    summary.textContent = 'API desactualizada: reiniciar';
+                    alert('La API abierta todavía usa la conciliación anterior. Cierra la ventana de la API, vuelve a iniciarla y luego presiona Sincronizar.');
+                    return;
+                }
+                posSyncResult = result;
+                suggestPaymentJournalForResult(result);
+                const resultMatches = result.matches_unicos || [];
+                const confirmableCount = resultMatches.filter(match => match.can_confirm === true).length;
+                const differenceCount = resultMatches.filter(match => match.amount_matches === false).length;
+                const settlementNote = result.settlement_date_to
+                    ? ` · TotalNet liquidacion consultada hasta ${result.settlement_date_to} (ventas sin liquidar todavia no apareceran hasta volver a sincronizar mas adelante)`
+                    : '';
+                summary.textContent = `${result.total_cupones} cupones, ${result.total_facturas_contado ?? 0} facturas a contado ` +
+                    `(${result.total_facturas_pendientes_contado ?? 0} pendientes), ${resultMatches.length} coincidencias ` +
+                    `(${confirmableCount} confirmables, ${differenceCount} con diferencia), ${(result.ambiguos || []).length} ambiguos` +
+                    settlementNote;
+                summary.classList.remove('is-empty');
+                renderPosResults();
+            } catch (error) {
+                summary.textContent = `Odoo visible si respondio. Error TotalNet: ${error.message}`;
+                alert(`Error de conexion: ${error.message}`);
+            }
+        }
+
+        function clearPosReconciliationResults(message) {
+            posSyncResult = null;
+            document.getElementById('pos-matches-body').innerHTML = `<tr><td colspan="8" class="empty-cell">${escapePosHtml(message)}</td></tr>`;
+            document.getElementById('pos-ambiguous-body').innerHTML = '<tr><td colspan="7" class="empty-cell">Sin ambiguos</td></tr>';
+            document.getElementById('pos-nomatch-body').innerHTML = '<tr><td colspan="7" class="empty-cell">Sin filas</td></tr>';
+        }
+
+        async function confirmPosReconciliation() {
+            if (!posSyncResult) {
+                alert('Primero sincroniza');
+                return;
+            }
+            if (!posPaymentOperatorFeatureReady) {
+                alert('La API activa no permite elegir el usuario Odoo. Reinicia la API antes de registrar pagos.');
+                return;
+            }
+            const operatorSelect = document.getElementById('pos-payment-operator');
+            const operatorAppUsername = String(operatorSelect?.value || '').trim();
+            if (!operatorAppUsername) {
+                alert('Selecciona quien registrara el pago en Odoo');
+                operatorSelect?.focus();
+                return;
+            }
+            const journalSelect = document.getElementById('pos-payment-journal');
+            const selectedJournalValue = parseInt(journalSelect?.value || '', 10);
+            const selectedJournalId = Number.isInteger(selectedJournalValue) && selectedJournalValue > 0
+                ? selectedJournalValue
+                : null;
+            const roundToInteger = document.getElementById('pos-round-payment')?.checked === true;
+            const roundingAccountValue = parseInt(document.getElementById('pos-rounding-account')?.value || '', 10);
+            const roundingAccountId = Number.isInteger(roundingAccountValue) && roundingAccountValue > 0
+                ? roundingAccountValue
+                : null;
+            const attachReceiptPdf = document.getElementById('pos-attach-receipt-pdf')?.checked !== false;
+            const confirmingManualTicket = posSyncResult.source === 'manual_ticket';
+            const items = [];
+
+            document.querySelectorAll('.pos-match-checkbox:checked').forEach(cb => {
+                const idx = parseInt(cb.dataset.idx, 10);
+                const match = posSyncResult.matches_unicos[idx];
+                items.push({
+                    cupon: posPaymentCoupon(match.cupon),
+                    invoice_id: match.invoice.invoice_id,
+                    invoice_name: match.invoice.name || '',
+                    journal_id: selectedJournalId || match.suggested_journal_id || suggestPosJournalId(match.cupon),
+                    round_to_integer: roundToInteger,
+                    rounding_account_id: roundingAccountId,
+                    attach_receipt_pdf: attachReceiptPdf,
+                    memo: match.suggested_memo || ''
+                });
+            });
+
+            document.querySelectorAll('.pos-ambiguous-checkbox:checked').forEach(cb => {
+                const idx = parseInt(cb.dataset.idx, 10);
+                const ambiguous = posSyncResult.ambiguos[idx];
+                const select = document.querySelector(`.pos-ambiguous-select[data-idx="${idx}"]`);
+                if (!select || !select.value) return;
+                const selectedOption = select.options[select.selectedIndex];
+                items.push({
+                    cupon: posPaymentCoupon(ambiguous.cupon),
+                    invoice_id: parseInt(select.value, 10),
+                    invoice_name: selectedOption.dataset.name || '',
+                    journal_id: selectedJournalId || suggestPosJournalId(ambiguous.cupon),
+                    round_to_integer: roundToInteger,
+                    rounding_account_id: roundingAccountId,
+                    attach_receipt_pdf: attachReceiptPdf,
+                    memo: ''
+                });
+            });
+
+            document.querySelectorAll('.pos-manual-checkbox:checked').forEach(cb => {
+                const idx = parseInt(cb.dataset.idx, 10);
+                const row = posSyncResult.sin_match[idx];
+                const select = document.querySelector(`.pos-manual-select[data-idx="${idx}"]`);
+                if (!row || !select || !select.value) return;
+                const candidate = (row.amount_candidates || []).find(
+                    item => String(item.invoice_id) === String(select.value)
+                );
+                if (!candidate) return;
+                items.push({
+                    cupon: posPaymentCoupon(row.cupon),
+                    invoice_id: parseInt(select.value, 10),
+                    invoice_name: candidate.name || '',
+                    journal_id: selectedJournalId || suggestPosJournalId(row.cupon),
+                    round_to_integer: roundToInteger,
+                    rounding_account_id: roundingAccountId,
+                    attach_receipt_pdf: attachReceiptPdf,
+                    memo: ''
+                });
+            });
+
+            if (items.length === 0) {
+                alert('No hay filas seleccionadas');
+                return;
+            }
+            const missingJournalItems = items.filter(item => !item.journal_id);
+            if (missingJournalItems.length > 0) {
+                const sellos = [...new Set(missingJournalItems.map(item => item.cupon.sello || 'sin sello'))].join(', ');
+                alert(`Falta elegir el diario contable para: ${sellos}. Selecciónalo en "Diario para los pagos seleccionados" antes de confirmar.`);
+                journalSelect?.focus();
+                return;
+            }
+            if (roundToInteger && !roundingAccountId) {
+                alert('Selecciona la cuenta contable donde se registrarán las diferencias de redondeo.');
+                document.getElementById('pos-rounding-account')?.focus();
+                return;
+            }
+
+            const selectedOperatorLabel = operatorSelect.options[operatorSelect.selectedIndex]?.text || operatorAppUsername;
+            if (!window.confirm(
+                `Se registraran ${items.length} pago(s) reales en Odoo como ${selectedOperatorLabel}. ¿Continuar?`
+            )) {
+                return;
+            }
+
+            try {
+                const apiBase = await ensureApiPort();
+                const response = await fetch(`${apiBase}/api/pos-reconciliation/confirm`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        operator_app_username: operatorAppUsername,
+                        items
+                    })
+                });
+                const result = await response.json();
+                if (!response.ok) {
+                    const detail = result.detail || `HTTP ${response.status}`;
+                    document.getElementById('pos-confirm-summary').textContent = `No se registraron pagos: ${detail}`;
+                    alert(`Error registrando pagos: ${detail}`);
+                    return;
+                }
+                const ok = (result.items || []).filter(r => r.ok).length;
+                const failed = (result.items || []).filter(r => !r.ok);
+                const warnings = (result.items || []).filter(r => r.ok && r.warning);
+                const actor = result.operator?.odoo_username || selectedOperatorLabel;
+                document.getElementById('pos-confirm-summary').textContent =
+                    `${ok} pagos registrados en Odoo como ${actor}. ${failed.length} con error.` +
+                    (failed.length ? ' ' + failed.map(f => f.error).join(' | ') : '') +
+                    (warnings.length ? ` ${warnings.length} advertencia(s): ` + warnings.map(item => item.warning).join(' | ') : '');
+                if (confirmingManualTicket && ok > 0) {
+                    clearPosReconciliationResults('El ticket manual ya fue procesado. Puedes cargar otro comprobante.');
+                    await loadPosPendingInvoicesFromRange();
+                } else {
+                    await syncPosReconciliation({
+                        preservePaymentContext: true,
+                        preserveConfirmSummary: true
+                    });
+                }
+            } catch (error) {
+                alert(`Error de conexion: ${error.message}`);
+            }
+        }
+
         // Cargar configuraciones al iniciar
+        (() => {
+            const yesterday = new Date();
+            yesterday.setDate(yesterday.getDate() - 1);
+            const today = new Date();
+            const maxPosDate = [
+                yesterday.getFullYear(),
+                String(yesterday.getMonth() + 1).padStart(2, '0'),
+                String(yesterday.getDate()).padStart(2, '0')
+            ].join('-');
+            const todayPosDate = [
+                today.getFullYear(),
+                String(today.getMonth() + 1).padStart(2, '0'),
+                String(today.getDate()).padStart(2, '0')
+            ].join('-');
+            const fromInput = document.getElementById('pos-sync-date-from');
+            const toInput = document.getElementById('pos-sync-date-to');
+            fromInput?.setAttribute('max', maxPosDate);
+            toInput?.setAttribute('max', maxPosDate);
+            if (fromInput && !fromInput.value) fromInput.value = maxPosDate;
+            if (toInput && !toInput.value) toInput.value = maxPosDate;
+            const manualDate = document.getElementById('pos-manual-date');
+            manualDate?.setAttribute('max', todayPosDate);
+            if (manualDate && !manualDate.value) manualDate.value = maxPosDate;
+        })();
         initTheme();
         initViewMode();
-        focusSectionFromHash();
-        loadConfigs();
-        odooStatusTimer = setInterval(() => {
-            loadOdooAutomationStatus();
-            if (isDispatchAutoRefreshEnabled()) {
-                refreshDispatchPanel({ silent: true });
-            }
-        }, 15000);
+        if (POS_ONLY_VIEW) {
+            loadTotalNetConfig();
+            loadPosReconciliationConfig();
+            loadPosJournals();
+            loadPosRoundingAccounts();
+            loadPosPaymentOperators();
+            loadPosPendingInvoicesFromRange();
+        } else {
+            initAdministradoAutoRefreshSetting();
+            focusSectionFromHash();
+            loadConfigs();
+            updateAdministradoAutoRefreshToggle();
+            odooStatusTimer = setInterval(() => {
+                loadOdooAutomationStatus();
+            }, 15000);
+        }
         window.addEventListener('hashchange', () => {
-            if (adminOnlyMode && window.location.hash !== '#administrado') {
+            if (!POS_ONLY_VIEW && adminOnlyMode && window.location.hash !== '#administrado') {
                 window.location.hash = '#administrado';
                 return;
             }
             focusSectionFromHash();
-            autoSyncAdministradoIfNeeded(true);
-            if (isDispatchAutoRefreshEnabled()) {
-                refreshDispatchPanel({ silent: true });
+            if (!POS_ONLY_VIEW) autoSyncAdministradoIfNeeded(true);
+        });
+        window.addEventListener('visibilitychange', () => {
+            if (!POS_ONLY_VIEW && !document.hidden) {
+                autoRefreshAdministradoSales();
             }
         });
         window.addEventListener('beforeunload', () => {
@@ -3357,9 +4527,8 @@
                 clearInterval(odooStatusTimer);
                 odooStatusTimer = null;
             }
+            stopAdministradoAutoRefresh();
         });
     </script>
 </body>
 </html>
-
-

@@ -25,6 +25,7 @@ python -m pip install -r requirements.txt
 5. Si hace falta, usá los controles individuales de brillo, contraste, **Auto luz** y margen superior para cabello.
 6. Dejá activada **Alinear ojos en todo el lote** para mantener los ojos a una altura común. El 40% desde arriba es el valor predeterminado.
 7. Elegí la carpeta destino, el formato de salida y, si querés, un sufijo como `_credencial`.
+   La relación de aspecto completa automáticamente un tamaño final normalizado; podés editar ancho y alto si necesitás otra resolución.
 8. Presioná **Exportar todas**.
 
 Un punto lleno junto al archivo indica que se detectó un rostro. Un círculo vacío significa que se usó un encuadre centrado y conviene revisarlo manualmente.

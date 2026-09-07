@@ -30,6 +30,7 @@ for %%F in (
     restart_api_server.bat
     install_runtime_pc_b.bat
     enable_autostart_pc_b.bat
+    verificar_pc_b.bat
     start_public_web_quick.bat
     launcher_modern.py
     config.py

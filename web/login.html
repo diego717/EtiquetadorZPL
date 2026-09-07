@@ -156,9 +156,6 @@
                     const data = await response.json();
                     
                     // Guardar sesión
-                    localStorage.setItem('cloud_access_token', data.access_token || '');
-                    localStorage.setItem('cloud_username', data.username || username);
-                    localStorage.setItem('cloud_role', data.role || '');
                     localStorage.setItem('username', data.username || username);
                     localStorage.setItem('role', data.role || '');
                     

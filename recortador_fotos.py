@@ -18,7 +18,13 @@ from PIL import Image, ImageEnhance, ImageOps, ImageStat, ImageTk, UnidentifiedI
 import face_detection
 
 
-SUPPORTED_EXTENSIONS = {".jpg", ".jpeg", ".png", ".bmp", ".webp", ".tif", ".tiff"}
+SUPPORTED_EXTENSION_LIST = (
+    ".jpg", ".jpeg", ".jpe", ".jfif",
+    ".png", ".bmp", ".dib", ".webp",
+    ".tif", ".tiff", ".ppm", ".pgm", ".pbm", ".pnm",
+)
+SUPPORTED_EXTENSIONS = set(SUPPORTED_EXTENSION_LIST)
+IMAGE_FILE_PATTERN = " ".join(f"*{extension}" for extension in SUPPORTED_EXTENSION_LIST)
 ASPECT_PRESETS = {
     "3:4 (identificación)": 3 / 4,
     "4:5": 4 / 5,
@@ -36,6 +42,21 @@ EXPORT_FORMATS = {
     "WEBP": (".webp", "WEBP"),
     "TIFF": (".tiff", "TIFF"),
     "BMP": (".bmp", "BMP"),
+}
+JPEG_QUALITY = 92
+
+# Resoluciones estándar para que los recortes de un mismo lote no conserven
+# tamaños de píxel diferentes. El usuario puede editar estos campos.
+OUTPUT_SIZE_PRESETS = {
+    "3:4 (identificación)": (600, 800),
+    "4:5": (640, 800),
+    "1:1": (800, 800),
+    "2:3 (foto carné)": (533, 800),
+    "5:7 (retrato)": (571, 800),
+    "35 × 45 mm (documento)": (600, 771),
+    "9:16 (vertical)": (450, 800),
+    "4:3 (horizontal)": (800, 600),
+    "16:9": (800, 450),
 }
 
 
@@ -56,8 +77,9 @@ def compute_face_crop(
     image_w, image_h = image_size
     maximum_h = min(image_h, image_w / ratio)
     # La cara no incluye el cabello para la mayoría de detectores. Se reserva un
-    # margen superior y se aleja levemente el cuadro para incluir cabeza y hombros.
-    face_fill = max(0.34, min(0.46, 0.48 - hair_margin * 0.20))
+    # margen superior para cabeza y hombros, pero acotado: para un carnet la cara
+    # tiene que dominar el encuadre o se pierde de tamaño al imprimir.
+    face_fill = max(0.50, min(0.68, 0.72 - hair_margin * 0.55))
     crop_h = min(maximum_h, max(height / face_fill, width / (ratio * 0.68)))
     crop_h = max(min(crop_h, maximum_h), min(maximum_h, 100.0))
     crop_w = crop_h * ratio
@@ -153,12 +175,13 @@ class FaceCropperApp:
         self.hair_margin_var = tk.DoubleVar(value=20)
         self.align_eyes_var = tk.BooleanVar(value=True)
         self.eye_position_var = tk.DoubleVar(value=40)
+        self.detector_var = tk.StringVar(value=face_detection.detector_preference_label())
         self.brightness_text = tk.StringVar(value="0")
         self.contrast_text = tk.StringVar(value="0")
         self.hair_margin_text = tk.StringVar(value="20%")
         self.eye_position_text = tk.StringVar(value="40%")
-        self.width_var = tk.StringVar()
-        self.height_var = tk.StringVar()
+        self.width_var = tk.StringVar(value="600")
+        self.height_var = tk.StringVar(value="800")
         self.status_var = tk.StringVar(value="Agregá fotos para comenzar.")
 
         self._build_ui()
@@ -322,7 +345,7 @@ class FaceCropperApp:
         ttk.Entry(suffix_frame, textvariable=self.suffix_var, width=15).pack(side="left")
         ttk.Label(suffix_frame, text="  ej. _credencial").pack(side="left")
 
-        ttk.Label(settings, text="Tamaño final en px (opcional):").grid(row=3, column=0, sticky="w", pady=3)
+        ttk.Label(settings, text="Tamaño final en px (automático, editable):").grid(row=3, column=0, sticky="w", pady=3)
         dimensions = ttk.Frame(settings)
         dimensions.grid(row=3, column=1, sticky="w", padx=(8, 8), pady=3)
         ttk.Entry(dimensions, textvariable=self.width_var, width=7).pack(side="left")
@@ -355,6 +378,15 @@ class FaceCropperApp:
         ttk.Button(crop_controls, text="+ Acercar", command=lambda: self.zoom_current(0.89), style="Secondary.TButton").grid(row=0, column=1, sticky="ew", padx=(4, 0), pady=(0, 5))
         ttk.Button(crop_controls, text="Centrar marco", command=self.center_current, style="Secondary.TButton").grid(row=1, column=0, sticky="ew", padx=(0, 4))
         ttk.Button(crop_controls, text="Detectar foto", command=self.auto_crop_current, style="Auto.TButton").grid(row=1, column=1, sticky="ew", padx=(4, 0))
+        ttk.Label(crop_controls, text="Detector").grid(row=2, column=0, columnspan=2, sticky="w", pady=(8, 2))
+        detector_box = ttk.Combobox(
+            crop_controls,
+            textvariable=self.detector_var,
+            values=face_detection.DETECTOR_LABELS,
+            state="readonly",
+        )
+        detector_box.grid(row=3, column=0, columnspan=2, sticky="ew")
+        detector_box.bind("<<ComboboxSelected>>", lambda _event: self.change_detector())
 
         adjustments = ttk.LabelFrame(edit_tab, text="Ajustes de esta foto", padding=8)
         adjustments.grid(row=1, column=0, sticky="ew", pady=(0, 8))
@@ -405,7 +437,7 @@ class FaceCropperApp:
         ttk.Combobox(settings, textvariable=self.format_var, values=list(EXPORT_FORMATS), state="readonly").grid(row=8, column=0, sticky="ew", pady=(2, 5))
         ttk.Label(settings, text="Sufijo opcional (ej. _credencial)").grid(row=9, column=0, sticky="w")
         ttk.Entry(settings, textvariable=self.suffix_var).grid(row=10, column=0, sticky="ew", pady=(2, 5))
-        ttk.Label(settings, text="Tamaño final en px (opcional)").grid(row=11, column=0, sticky="w")
+        ttk.Label(settings, text="Tamaño final en px (automático, editable)").grid(row=11, column=0, sticky="w")
         dimensions = ttk.Frame(settings)
         dimensions.grid(row=12, column=0, sticky="w", pady=(2, 7))
         ttk.Entry(dimensions, textvariable=self.width_var, width=7).pack(side="left")
@@ -417,7 +449,7 @@ class FaceCropperApp:
     def add_photos(self) -> None:
         paths = filedialog.askopenfilenames(
             title="Seleccionar fotos",
-            filetypes=[("Imágenes", "*.jpg *.jpeg *.png *.bmp *.webp *.tif *.tiff"), ("Todos los archivos", "*.*")],
+            filetypes=[("Imágenes", IMAGE_FILE_PATTERN), ("Todos los archivos", "*.*")],
         )
         self._add_paths(Path(path) for path in paths)
 
@@ -704,10 +736,36 @@ class FaceCropperApp:
             + (f"  {note}" if note else "")
         )
 
-    def change_aspect(self) -> None:
+    def change_detector(self) -> None:
+        face_detection.set_detector_preference(self.detector_var.get())
+        for item in self.photos:
+            item.face_found = False
+            item.face_box = None
+            item.eye_line = None
+            item.eyes_checked = False
+        self.rebuild_list()
+        self.refresh_preview()
+        self.status_var.set(
+            f"Detector cambiado a {face_detection.detector_preference_label()}. "
+            "Volve a detectar la foto o el lote para comparar."
+        )
+
+    def default_output_size(self, ratio: float) -> tuple[int, int]:
+        """Devuelve una resolución normalizada para la relación seleccionada."""
+        preset_size = OUTPUT_SIZE_PRESETS.get(self.aspect_var.get())
+        if preset_size is not None:
+            return preset_size
+        output_height = 800
+        return max(1, round(output_height * ratio)), output_height
+
+    def change_aspect(self, *, auto_size: bool = True) -> None:
         ratio = self.get_aspect_ratio()
         if ratio is None:
             return
+        if auto_size:
+            width, height = self.default_output_size(ratio)
+            self.width_var.set(str(width))
+            self.height_var.set(str(height))
         for item in self.photos:
             left, top, right, bottom = item.crop
             current_w, current_h = right - left, bottom - top
@@ -877,7 +935,7 @@ class FaceCropperApp:
                         image = background
                     else:
                         image = image.convert("RGB")
-                    image.save(destination, pil_format, quality=95, optimize=True)
+                    image.save(destination, pil_format, quality=JPEG_QUALITY, optimize=True)
                 elif pil_format == "WEBP":
                     image.save(destination, pil_format, quality=95, method=6)
                 elif pil_format == "PNG":

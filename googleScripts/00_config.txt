@@ -1,0 +1,120 @@
+/**
+ * ============================================================================
+ * CONFIGURACIÓN GENERAL
+ * ============================================================================
+ */
+const CFG = {
+  SHEET_NAME: "TRABAJOS",
+  ORDER_COL: 2,
+  LINK_COL: 3,
+  CUSTOMER_COL: 4,
+  PRODUCT_COL: 5,
+  QUANTITY_COL: 6,
+  STATE_COL: 9,
+  NEW_ROW_CHECKBOX_COL: 11,
+  // Columna M: casilla "P" (trabajo con proveedor externo). Es visual, la
+  // marca el usuario. El codigo solo la desmarca cuando la fila se libera,
+  // para que un trabajo nuevo no herede la marca del anterior.
+  // getSecondaryOperationalCheckboxColumn_ igual verifica que la celda sea
+  // una casilla real antes de tocarla, asi que si el dia de mañana cambia de
+  // lugar alcanza con corregir este numero.
+  SECONDARY_CHECKBOX_COL: 13,
+  MFG_ID_COL: 18,
+  FIRST_DATA_ROW: 4,
+};
+
+const MFG_CFG = {
+  LAST_SYNC_PROPERTY: "ODOO_LAST_SYNC_UTC",
+  IMPORTED_IDS_PROPERTY: "ODOO_IMPORTED_IDS",
+  LOOKBACK_DAYS: 7,
+  MAX_SCAN_ROWS: 1000,
+  DEBUG_LOGS: true,
+  ALLOWED_STATES: ["confirmed", "to_close"],
+};
+const SALES_CFG = {
+  LAST_SYNC_PROPERTY: "ODOO_SALES_LAST_SYNC_UTC",
+  LINE_LAST_SYNC_PROPERTY: "ODOO_SALES_LINE_LAST_SYNC_UTC",
+  IMPORTED_IDS_PROPERTY: "ODOO_SALES_IMPORTED_IDS",
+  SKIPPED_IDS_PROPERTY: "ODOO_SALES_SKIPPED_NO_NOTE_IDS",
+  SYNC_OVERLAP_MINUTES: 5,
+  INITIAL_LOOKBACK_DAYS: 7,
+  AUTO_SYNC_FUNCTION: "syncOdooSalesOrdersNeo",
+  AUTO_SYNC_EVERY_MINUTES: 5,
+  DEFAULT_STATE_WHEN_NOTE_HAS_DATE: "Empezar",
+  MAX_ORDER_SCAN_ROWS: 1000,
+};
+
+const ODOO_MODELS = {
+  manufacturing: "mrp.production",
+  sales: "sale.order",
+  chatter: "mail.message",
+};
+
+const VALID_RESPONSIBLES = ["Marcelo", "Camila", "Valentina", "Roberto", "Eduardo", "Facundo", "Irina"];
+
+const DATE_REGEXES = [
+  /(\b\d{1,2}[\/\-]\d{1,2}[\/\-]\d{2,4}\b)/,
+  /(\b\d{1,2}\s+[A-Za-z]{3,}\s*\d{0,4}\b)/i,
+  /(\b\d{1,2}\s+[A-Za-z]{4,}\s*\d{0,4}\b)/i,
+];
+
+// Ventana razonable, relativa al año en curso, para cualquier fecha que se
+// escriba en la planilla. Fuera de esto se asume que se interpreto mal un
+// texto que no era una fecha (un codigo de producto, un numero suelto).
+// Subir SHEET_DATE_MAX_YEARS_AHEAD si alguna vez se cargan entregas mas lejanas.
+const SHEET_DATE_MAX_YEARS_BACK = 5;
+const SHEET_DATE_MAX_YEARS_AHEAD = 10;
+
+const MONTH_ALIASES = {
+  ene: 0,
+  feb: 1,
+  mar: 2,
+  abr: 3,
+  may: 4,
+  jun: 5,
+  jul: 6,
+  ago: 7,
+  sep: 8,
+  oct: 9,
+  nov: 10,
+  dic: 11,
+  jan: 0,
+  apr: 3,
+  aug: 7,
+  dec: 11,
+};
+
+const MANUFACTURING_STATE_ALIASES = {
+  confirmed: ["confirmed", "confirmado", "confirmada"],
+  to_close: ["to_close", "to close", "cerrar", "por cerrar", "cerrado", "cerrada"],
+  progress: ["progress", "in progress", "en progreso", "progreso"],
+  done: ["done", "hecho", "terminado", "terminada", "finalizado", "finalizada"],
+  draft: ["draft", "borrador"],
+  cancel: ["cancel", "cancelled", "canceled", "cancelado", "cancelada"],
+};
+
+const SHEET_STATE_LABELS = {
+  confirmed: "Empezar",
+  draft: "Empezar",
+  progress: "Procesando",
+  to_close: "Procesando",
+  done: "Finalizado",
+  cancel: "Cancelado",
+};
+
+const SHEET_DIRECT_STATE_LABELS = {
+  empezar: "Empezar",
+  procesando: "Procesando",
+  finalizado: "Finalizado",
+  cancelado: "Cancelado",
+  pausado: "Pausado",
+  cotizar: "Cotizar",
+  muestra: "Muestra",
+  aprobar: "Aprobar",
+  archivar: "Archivar",
+};
+
+const LINK_STYLE = SpreadsheetApp.newTextStyle()
+  .setForegroundColor("#B45F06")
+  .setUnderline(true)
+  .build();

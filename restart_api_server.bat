@@ -18,16 +18,26 @@ if not exist "%START_BAT%" (
 )
 
 echo [1/4] Buscando procesos en puerto %PORT%...
+set "KILL_FAILED=0"
 for /f "tokens=5" %%P in ('netstat -ano ^| findstr /R /C:":%PORT% .*LISTENING"') do (
     set "PID=%%P"
     if not "!PID!"=="" (
         echo    - Cerrando PID !PID!...
         taskkill /PID !PID! /F >nul 2>&1
+        if errorlevel 1 set "KILL_FAILED=1"
     )
 )
 
 echo [2/4] Esperando liberacion del puerto...
 timeout /t 2 /nobreak >nul
+
+netstat -ano | findstr /R /C:":%PORT% .*LISTENING" >nul 2>&1
+if not errorlevel 1 (
+    echo.
+    echo [ERROR] No se pudo cerrar la API anterior en el puerto %PORT%.
+    if "!KILL_FAILED!"=="1" echo         Cierra la API desde la aplicacion o ejecuta este script como administrador.
+    exit /b 1
+)
 
 echo [3/4] Iniciando API...
 start "" /MIN cmd /c ""%START_BAT%""

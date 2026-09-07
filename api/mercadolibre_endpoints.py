@@ -10,9 +10,10 @@ import logging
 from pathlib import Path
 from typing import Any, Dict, Optional
 
-import requests
 from fastapi import APIRouter, HTTPException, Query, Request
 from pydantic import BaseModel, Field
+
+from httpx_client import get_sync_http_client
 
 from mercadolibre_integration import mercadolibre_integration
 from print_dispatch_queue import print_dispatch_queue
@@ -66,7 +67,7 @@ def _dispatch_to_local_print(filename: str, content: str, printer: str, copies: 
         "copies": copies,
     }
     port = _read_api_port()
-    response = requests.post(
+    response = get_sync_http_client().post(
         f"http://localhost:{port}/api/process-file",
         json=payload,
         timeout=20,
@@ -231,7 +232,7 @@ async def oauth_callback(code: str, state: Optional[str] = None) -> Dict[str, An
 @router.post("/oauth/refresh")
 async def refresh_oauth_token() -> Dict[str, Any]:
     try:
-        return mercadolibre_integration.refresh_access_token()
+        return await asyncio.to_thread(mercadolibre_integration.refresh_access_token)
     except Exception as exc:
         mercadolibre_integration.save_config({"last_error": str(exc)})
         raise HTTPException(status_code=400, detail=str(exc))
@@ -257,7 +258,7 @@ async def print_shipment(request: PrintShipmentRequest) -> Dict[str, Any]:
 @router.post("/sales/sync")
 async def sync_ready_sales(request: SyncSalesRequest) -> Dict[str, Any]:
     try:
-        sales = mercadolibre_integration.list_ready_to_print_sales(limit=request.limit)
+        sales = await asyncio.to_thread(mercadolibre_integration.list_ready_to_print_sales, request.limit)
         ready_count = sum(1 for sale in sales if sale.get("ready_to_print"))
         return {
             "sales": sales,
@@ -272,7 +273,7 @@ async def sync_ready_sales(request: SyncSalesRequest) -> Dict[str, Any]:
 @router.get("/shipments/{shipment_id}")
 async def get_shipment(shipment_id: str) -> Dict[str, Any]:
     try:
-        return mercadolibre_integration.get_shipment(shipment_id)
+        return await asyncio.to_thread(mercadolibre_integration.get_shipment, shipment_id)
     except Exception as exc:
         raise HTTPException(status_code=400, detail=str(exc))
 
@@ -287,7 +288,10 @@ async def receive_webhook(request: Request) -> Dict[str, Any]:
     logger.info("Webhook Mercado Libre recibido: %s", payload)
 
     try:
-        shipment_id = mercadolibre_integration.resolve_shipment_id_from_notification(payload)
+        shipment_id = await asyncio.to_thread(
+            mercadolibre_integration.resolve_shipment_id_from_notification,
+            payload,
+        )
     except Exception as exc:
         mercadolibre_integration.save_config({"last_error": str(exc)})
         raise HTTPException(status_code=400, detail=f"No se pudo resolver shipment desde notificacion: {exc}")

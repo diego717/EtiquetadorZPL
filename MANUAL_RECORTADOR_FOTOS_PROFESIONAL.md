@@ -33,7 +33,7 @@ Aquí se define el resultado final:
 - Carpeta de destino.
 - Formato: JPG, PNG, WEBP, TIFF o BMP.
 - Nombre de archivo con `{nombre}`, `{sufijo}` y `{fecha}`.
-- Tamaño final opcional en píxeles.
+- Tamaño final en píxeles, completado automáticamente según la relación y editable si necesitás otra resolución.
 - Preset reutilizable para relación, ojos, cabello, formato, dimensiones y plantilla de nombre.
 
 Si dos archivos terminarían con el mismo nombre, la aplicación conserva ambos agregando un número al segundo archivo.

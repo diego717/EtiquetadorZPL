@@ -173,3 +173,5 @@ else:
 
 Developed with ❤️ for label printing automation.
 
+https://aramid.odoo.com/
+tdtconsultants-aramid-production-17625524 //  d.sasen@aramid.com.uy / api: 0df4a4d9c3cbf23d274f9311b68fcec118c19588 y sincronizar cada 30 minutos

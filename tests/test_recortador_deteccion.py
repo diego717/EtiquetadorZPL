@@ -247,8 +247,9 @@ def run_fallback() -> int:
     sample = Image.new("RGB", (640, 480), "white")
     failures = 0
 
-    def check(label: str, expected: str) -> None:
+    def check(label: str, expected: str | tuple[str, ...]) -> None:
         nonlocal failures
+        expected_values = (expected,) if isinstance(expected, str) else expected
         try:
             actual = face_detection.engine()
             face_detection.detect_primary_face(sample)
@@ -256,8 +257,8 @@ def run_fallback() -> int:
             print(f"  FALLA  {label}: tiró {type(error).__name__}: {error}")
             failures += 1
             return
-        if actual != expected:
-            print(f"  FALLA  {label}: motor {actual!r}, se esperaba {expected!r}")
+        if actual not in expected_values:
+            print(f"  FALLA  {label}: motor {actual!r}, se esperaba {expected_values!r}")
             failures += 1
             return
         print(f"  ok     {label}: motor {actual!r} · {face_detection.engine_note() or 'sin aviso'}")
@@ -270,7 +271,7 @@ def run_fallback() -> int:
     original_name = face_detection.MODEL_FILENAME
     face_detection.MODEL_FILENAME = "no_existe_este_modelo.onnx"
     face_detection.reset()
-    check("modelo faltante", "haar")
+    check("modelo faltante", ("mediapipe", "haar"))
     face_detection.MODEL_FILENAME = original_name
 
     truncated = Path(__file__).resolve().parent / "_modelo_truncado.onnx"
@@ -280,7 +281,7 @@ def run_fallback() -> int:
         original_model_path = face_detection.model_path
         face_detection.model_path = lambda: truncated
         face_detection.reset()
-        check("modelo corrupto", "haar")
+        check("modelo corrupto", ("mediapipe", "haar"))
         face_detection.model_path = original_model_path
     finally:
         truncated.unlink(missing_ok=True)
@@ -289,7 +290,7 @@ def run_fallback() -> int:
     if saved is not None:
         del cv2.FaceDetectorYN
         face_detection.reset()
-        check("OpenCV sin FaceDetectorYN", "haar")
+        check("OpenCV sin FaceDetectorYN", ("mediapipe", "haar"))
         cv2.FaceDetectorYN = saved
 
     face_detection.reset()

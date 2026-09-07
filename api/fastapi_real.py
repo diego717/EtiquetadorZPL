@@ -3,6 +3,7 @@ API usando FastAPI real
 """
 
 from fastapi import FastAPI, HTTPException, BackgroundTasks
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse, RedirectResponse
 from pydantic import BaseModel
@@ -54,6 +55,14 @@ app = FastAPI(
     version="1.0.0"
 )
 
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=False,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
 # Incluir endpoints de Electron
 try:
     from electron_endpoints import router as electron_router
@@ -81,6 +90,27 @@ try:
     app.include_router(odoo_router)
 except ImportError as e:
     print(f"ADVERTENCIA: Endpoints de Odoo no disponibles: {e}")
+
+# Incluir endpoints de TotalNet (API de cupones/liquidaciones)
+try:
+    from totalnet_endpoints import router as totalnet_router
+    app.include_router(totalnet_router)
+except ImportError as e:
+    print(f"ADVERTENCIA: Endpoints de TotalNet no disponibles: {e}")
+
+# Incluir endpoints de conciliacion de pagos POS (TotalNet + Odoo)
+try:
+    from pos_reconciliation_endpoints import router as pos_reconciliation_router
+    app.include_router(pos_reconciliation_router)
+except ImportError as e:
+    print(f"ADVERTENCIA: Endpoints de Conciliacion POS no disponibles: {e}")
+
+# Incluir endpoints de activos locales de clientes
+try:
+    from client_assets_endpoints import router as client_assets_router
+    app.include_router(client_assets_router)
+except ImportError as e:
+    print(f"ADVERTENCIA: Endpoints de Client Assets no disponibles: {e}")
 
 # Incluir endpoints de Auth Cloud (separado del flujo legacy)
 try:
@@ -121,7 +151,12 @@ cache = {
     "stats_cache_time": 0
 }
 
+ADMINISTRADO_REFRESH_INTERVAL_SECONDS = 3 * 60 * 60  # 3 horas
+ADMINISTRADO_REFRESH_THREAD: Optional[threading.Thread] = None
+ADMINISTRADO_REFRESH_STOP_EVENT = threading.Event()
+
 PNG_BASE64_PREFIX = "PNG_BASE64:"
+PRINT_AUDIT_INCLUDE_SPOOLER = os.environ.get("ETIQ_AUDIT_SPOOLER", "").strip().lower() in {"1", "true", "yes"}
 
 
 def _build_print_audit_logger() -> logging.Logger:
@@ -148,6 +183,20 @@ def _build_print_audit_logger() -> logging.Logger:
 PRINT_AUDIT_LOGGER = _build_print_audit_logger()
 
 
+def _administrado_refresh_loop() -> None:
+    while not ADMINISTRADO_REFRESH_STOP_EVENT.wait(ADMINISTRADO_REFRESH_INTERVAL_SECONDS):
+        try:
+            from administrado_integration import administrado_integration
+
+            if (
+                administrado_integration.config.get("use_playwright", True)
+                and administrado_integration.storage_state_path.exists()
+            ):
+                administrado_integration.refresh_playwright_session()
+        except Exception as e:
+            print(f"ADVERTENCIA: No se pudo refrescar sesion Administrado: {e}")
+
+
 @app.on_event("startup")
 async def startup_events():
     """Iniciar workers opcionales de automatizacion."""
@@ -157,6 +206,23 @@ async def startup_events():
         odoo_automation_worker.start()
     except Exception as e:
         print(f"ADVERTENCIA: No se pudo iniciar worker Odoo: {e}")
+
+    try:
+        from administrado_integration import administrado_integration
+
+        if (
+            administrado_integration.config.get("use_playwright", True)
+            and administrado_integration.storage_state_path.exists()
+        ):
+            ADMINISTRADO_REFRESH_STOP_EVENT.clear()
+            global ADMINISTRADO_REFRESH_THREAD
+            ADMINISTRADO_REFRESH_THREAD = threading.Thread(
+                target=_administrado_refresh_loop,
+                daemon=True,
+            )
+            ADMINISTRADO_REFRESH_THREAD.start()
+    except Exception as e:
+        print(f"ADVERTENCIA: No se pudo iniciar worker de refresco Administrado: {e}")
 
 
 @app.on_event("shutdown")
@@ -168,6 +234,13 @@ async def shutdown_events():
         odoo_automation_worker.stop()
     except Exception as e:
         print(f"ADVERTENCIA: No se pudo detener worker Odoo: {e}")
+
+    try:
+        ADMINISTRADO_REFRESH_STOP_EVENT.set()
+        if ADMINISTRADO_REFRESH_THREAD is not None:
+            ADMINISTRADO_REFRESH_THREAD.join(timeout=5)
+    except Exception as e:
+        print(f"ADVERTENCIA: No se pudo detener worker de refresco Administrado: {e}")
 
 @app.get("/")
 async def root():
@@ -469,8 +542,9 @@ def _log_print_dispatch(
         "result": result,
         "error": error,
         "processing_time_sec": round(processing_time, 4) if processing_time is not None else None,
-        "spooler": _spooler_snapshot(printer, max_jobs=5),
     }
+    if PRINT_AUDIT_INCLUDE_SPOOLER:
+        payload["spooler"] = _spooler_snapshot(printer, max_jobs=5)
 
     try:
         PRINT_AUDIT_LOGGER.info(json.dumps(payload, ensure_ascii=False))

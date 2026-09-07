@@ -10,10 +10,12 @@ import re
 import tempfile
 import time
 import xmlrpc.client
+import base64
+from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
-import requests
+import httpx
 
 logger = logging.getLogger(__name__)
 
@@ -121,6 +123,7 @@ class OdooIntegration:
             "default_order_printer": "Expedicion",
             "fallback_order_printer": "",
             "default_order_copies": 1,
+            "order_pdf_render_dpi": 300,
             "force_order_grayscale": False,
             "default_label_printer": "",
             "fallback_label_printer": "",
@@ -297,9 +300,291 @@ class OdooIntegration:
             return None
         return orders[0]
 
-    def _web_auth_session(self, auth_override: Optional[Dict[str, str]] = None) -> requests.Session:
+    @staticmethod
+    def _normalize_shipment_field_value(raw_value: Any) -> str:
+        if raw_value is None:
+            return ""
+        if isinstance(raw_value, (list, tuple)):
+            if len(raw_value) >= 2:
+                second = str(raw_value[1] or "").strip()
+                if second:
+                    return second
+            if len(raw_value) >= 1:
+                first = str(raw_value[0] or "").strip()
+                if first:
+                    return first
+            return ""
+        return str(raw_value).strip()
+
+    def get_cancelled_envio_ids(
+        self,
+        envio_ids: List[str],
+        auth_override: Optional[Dict[str, str]] = None,
+    ) -> set[str]:
+        normalized_envios: List[str] = []
+        seen: set[str] = set()
+        for envio_id in envio_ids or []:
+            envio = str(envio_id or "").strip()
+            if not envio or envio in seen:
+                continue
+            normalized_envios.append(envio)
+            seen.add(envio)
+
+        if not normalized_envios:
+            return set()
+
         runtime = self._build_runtime_config(auth_override)
-        session = requests.Session()
+        shipment_field = str(runtime.get("shipment_field", "")).strip()
+
+        # Fallback compatible: si no hay campo de envio configurado, mantenemos lookup individual.
+        if not shipment_field:
+            cancelled: set[str] = set()
+            for envio in normalized_envios:
+                order = self.find_sale_order_by_envio(
+                    envio,
+                    auth_override=auth_override,
+                    include_all_states=True,
+                )
+                if order and str(order.get("state") or "").strip().lower() == "cancel":
+                    cancelled.add(envio)
+            return cancelled
+
+        uid = self._authenticate(auth_override=auth_override)
+        models = self._xmlrpc_models(runtime)
+        db = runtime.get("database", "")
+        password = runtime.get("password", "")
+
+        orders = models.execute_kw(
+            db,
+            uid,
+            password,
+            "sale.order",
+            "search_read",
+            [[(shipment_field, "in", normalized_envios), ("state", "=", "cancel")]],
+            {
+                "fields": ["id", "state", shipment_field],
+                "limit": max(200, len(normalized_envios) * 10),
+                "order": "write_date desc, id desc",
+            },
+        )
+
+        cancelled = set()
+        normalized_set = set(normalized_envios)
+        for order in orders or []:
+            envio_value = self._normalize_shipment_field_value(order.get(shipment_field))
+            if envio_value and envio_value in normalized_set:
+                cancelled.add(envio_value)
+        return cancelled
+
+    def find_invoiced_sales(
+        self,
+        date_from: str = "",
+        date_to: str = "",
+        limit: Optional[int] = None,
+        auth_override: Optional[Dict[str, str]] = None,
+        only_pending: bool = False,
+        only_cash_payment_term: bool = False,
+    ) -> List[Dict[str, Any]]:
+        runtime = self._build_runtime_config(auth_override)
+        uid = self._authenticate(auth_override=auth_override)
+        models = self._xmlrpc_models(runtime)
+        db = runtime.get("database", "")
+        password = runtime.get("password", "")
+
+        date_from_value = str(date_from or "").strip()
+        date_to_value = str(date_to or "").strip()
+        if date_from_value and not re.match(r"^\d{4}-\d{2}-\d{2}$", date_from_value):
+            raise ValueError("date_from debe usar formato YYYY-MM-DD")
+        if date_to_value and not re.match(r"^\d{4}-\d{2}-\d{2}$", date_to_value):
+            raise ValueError("date_to debe usar formato YYYY-MM-DD")
+
+        limit_value = None
+        if limit is not None:
+            try:
+                limit_value = int(limit)
+            except (TypeError, ValueError):
+                limit_value = None
+            if limit_value is not None and limit_value <= 0:
+                limit_value = None
+
+        return self._search_invoices(
+            date_from_value,
+            date_to_value,
+            limit_value,
+            auth_override=auth_override,
+            only_pending=only_pending,
+            only_cash_payment_term=only_cash_payment_term,
+        )
+
+    def _search_invoices(
+        self,
+        date_from_value: str,
+        date_to_value: str,
+        limit_value: Optional[int],
+        auth_override: Optional[Dict[str, str]] = None,
+        only_pending: bool = False,
+        only_cash_payment_term: bool = False,
+    ) -> List[Dict[str, Any]]:
+        runtime = self._build_runtime_config(auth_override)
+        uid = self._authenticate(auth_override=auth_override)
+        models = self._xmlrpc_models(runtime)
+        db = runtime.get("database", "")
+        password = runtime.get("password", "")
+
+        invoice_date_fields = ["invoice_date", "date_invoice"]
+        payment_state_fields = ["invoice_payment_state", "payment_state"]
+        payment_term_fields = ["invoice_payment_term_id", "payment_term_id"]
+        origin_fields = ["invoice_origin", "origin"]
+        untaxed_fields = ["amount_untaxed"]
+
+        available_fields = models.execute_kw(
+            db,
+            uid,
+            password,
+            "account.move",
+            "fields_get",
+            [[], ["string"]],
+        ) or {}
+
+        invoice_date_field = next((f for f in invoice_date_fields if f in available_fields), None)
+        payment_state_field = next((f for f in payment_state_fields if f in available_fields), None)
+        payment_term_field = next((f for f in payment_term_fields if f in available_fields), None)
+        origin_field = next((f for f in origin_fields if f in available_fields), None)
+        untaxed_field = next((f for f in untaxed_fields if f in available_fields), None)
+
+        if not invoice_date_field:
+            raise ValueError(
+                "No se pudo obtener las facturas: verifica que el modelo account.move tenga fecha de factura."
+            )
+
+        try:
+            domain: List[Any] = [
+                ("move_type", "=", "out_invoice"),
+                ("state", "=", "posted"),
+                ("reversal_move_id", "=", False),
+            ]
+            if date_from_value:
+                domain.append((invoice_date_field, ">=", date_from_value))
+            if date_to_value:
+                domain.append((invoice_date_field, "<=", date_to_value))
+            if only_pending:
+                if not payment_state_field:
+                    raise ValueError(
+                        "No se pudo filtrar por facturas pendientes: el modelo account.move "
+                        "no expone un campo de estado de pago en esta instancia de Odoo."
+                    )
+                domain.append((payment_state_field, "in", ["not_paid", "partial"]))
+            if only_cash_payment_term:
+                if not payment_term_field:
+                    raise ValueError(
+                        "No se pudo filtrar facturas a contado: Odoo no expone el campo de condicion de pago."
+                    )
+                cash_term_ids = self._find_cash_payment_term_ids(models, db, uid, password)
+                if not cash_term_ids:
+                    raise ValueError(
+                        "No se encontro en Odoo una condicion de pago a contado "
+                        "(Contado/Immediate Payment/Pago inmediato)."
+                    )
+                domain.append((payment_term_field, "in", cash_term_ids))
+
+            fields = [
+                "id",
+                "name",
+                "partner_id",
+                "amount_total",
+                "currency_id",
+                invoice_date_field,
+            ]
+            if "amount_residual" in available_fields:
+                fields.append("amount_residual")
+            if payment_term_field:
+                fields.append(payment_term_field)
+            if untaxed_field:
+                fields.append(untaxed_field)
+            if payment_state_field:
+                fields.append(payment_state_field)
+            if origin_field:
+                fields.append(origin_field)
+
+            params: Dict[str, Any] = {
+                "fields": fields,
+                "order": f"{invoice_date_field} desc, id desc",
+            }
+            if limit_value is not None:
+                params["limit"] = limit_value
+
+            invoices = models.execute_kw(
+                db,
+                uid,
+                password,
+                "account.move",
+                "search_read",
+                [domain],
+                params,
+            )
+
+            invoices_list = invoices or []
+            for invoice in invoices_list:
+                if invoice_date_field != "invoice_date":
+                    invoice["invoice_date"] = invoice.get("date_invoice")
+                    invoice.pop("date_invoice", None)
+                if untaxed_field and untaxed_field != "amount_untaxed":
+                    invoice["amount_untaxed"] = invoice.get(untaxed_field)
+                    invoice.pop(untaxed_field, None)
+                elif not untaxed_field:
+                    invoice["amount_untaxed"] = ""
+                if payment_state_field and payment_state_field != "invoice_payment_state":
+                    invoice["invoice_payment_state"] = invoice.get(payment_state_field)
+                    invoice.pop(payment_state_field, None)
+                elif not payment_state_field:
+                    invoice["invoice_payment_state"] = ""
+                if payment_term_field and payment_term_field != "invoice_payment_term_id":
+                    invoice["invoice_payment_term_id"] = invoice.get(payment_term_field)
+                    invoice.pop(payment_term_field, None)
+                if origin_field and origin_field != "invoice_origin":
+                    invoice["invoice_origin"] = invoice.get(origin_field)
+                    invoice.pop(origin_field, None)
+            return invoices_list
+        except Exception as exc:
+            if isinstance(exc, xmlrpc.client.Fault):
+                raise ValueError(
+                    "No se pudo obtener las facturas: verifica que el modelo account.move tenga fecha de factura."
+                )
+            raise
+
+    @staticmethod
+    def _find_cash_payment_term_ids(
+        models: Any,
+        db: str,
+        uid: int,
+        password: str,
+    ) -> List[int]:
+        """Resuelve condiciones de contado por nombre, sin depender de IDs de una base."""
+        terms = models.execute_kw(
+            db,
+            uid,
+            password,
+            "account.payment.term",
+            "search_read",
+            [[("active", "=", True)]],
+            {"fields": ["id", "name"]},
+        ) or []
+        cash_names = {
+            "contado",
+            "immediate payment",
+            "pago inmediato",
+            "pago al contado",
+        }
+        return [
+            int(term["id"])
+            for term in terms
+            if term.get("id") is not None
+            and str(term.get("name") or "").strip().casefold() in cash_names
+        ]
+
+    def _web_auth_session(self, auth_override: Optional[Dict[str, str]] = None) -> httpx.Client:
+        runtime = self._build_runtime_config(auth_override)
+        session = httpx.Client(timeout=httpx.Timeout(30.0, connect=10.0))
         url = f"{self._base_url(runtime)}/web/session/authenticate"
         payload = {
             "jsonrpc": "2.0",
@@ -341,19 +626,22 @@ class OdooIntegration:
             raise ValueError("order_id invalido")
         runtime = self._build_runtime_config(auth_override)
         selected_report = (report_name or self.config.get("report_name") or "sale.report_saleorder").strip()
-        session = self._web_auth_session(auth_override=auth_override)
         report_url = f"{self._base_url(runtime)}/report/pdf/{selected_report}/{int(order_id)}"
-        response = session.get(report_url, timeout=60)
-        if response.status_code >= 400:
-            raise ValueError(f"Odoo devolvio {response.status_code} al descargar reporte {selected_report}")
-        content_type = (response.headers.get("Content-Type") or "").lower()
-        if "pdf" not in content_type and not response.content.startswith(b"%PDF"):
-            preview = response.text[:250].replace("\n", " ").strip()
-            raise ValueError(
-                "La respuesta de Odoo no parece PDF. "
-                f"Report={selected_report} Content-Type={content_type} Preview={preview}"
-            )
-        return response.content
+        session = self._web_auth_session(auth_override=auth_override)
+        try:
+            response = session.get(report_url, timeout=60)
+            if response.status_code >= 400:
+                raise ValueError(f"Odoo devolvio {response.status_code} al descargar reporte {selected_report}")
+            content_type = (response.headers.get("Content-Type") or "").lower()
+            if "pdf" not in content_type and not response.content.startswith(b"%PDF"):
+                preview = response.text[:250].replace("\n", " ").strip()
+                raise ValueError(
+                    "La respuesta de Odoo no parece PDF. "
+                    f"Report={selected_report} Content-Type={content_type} Preview={preview}"
+                )
+            return response.content
+        finally:
+            session.close()
 
     def confirm_sale_order(
         self,
@@ -463,14 +751,58 @@ class OdooIntegration:
 
     def resolve_operator_auth(self, app_username: str) -> Optional[Dict[str, str]]:
         app_key = str(app_username or "").strip().lower()
+        mapping = self.config.get("operator_odoo_users") or {}
+        if not isinstance(mapping, dict):
+            return None
+
+        def _entry_to_auth(entry: Any) -> Optional[Dict[str, str]]:
+            if not isinstance(entry, dict):
+                return None
+            odoo_user = str(entry.get("odoo_username") or "").strip()
+            odoo_pass = str(entry.get("odoo_password") or "").strip()
+            if not odoo_user or not odoo_pass:
+                return None
+            return {"username": odoo_user, "password": odoo_pass}
+
+        if app_key:
+            direct_entry = mapping.get(app_key)
+            direct_auth = _entry_to_auth(direct_entry)
+            if direct_auth:
+                return direct_auth
+
+            for stored_key, entry in mapping.items():
+                normalized_key = str(stored_key or "").strip().lower()
+                if normalized_key != app_key:
+                    continue
+                return _entry_to_auth(entry)
+
+        # Fallback de compatibilidad: si hay un unico usuario Odoo valido cargado,
+        # usarlo aunque no coincida el operador local.
+        valid_auth = [_entry_to_auth(entry) for entry in mapping.values()]
+        valid_auth = [item for item in valid_auth if item]
+        if len(valid_auth) == 1:
+            return valid_auth[0]
+
+        return None
+
+    def resolve_operator_auth_exact(self, app_username: str) -> Optional[Dict[str, str]]:
+        """Resuelve un operador exacto, sin el fallback historico de usuario unico."""
+        app_key = str(app_username or "").strip().lower()
         if not app_key:
             return None
         mapping = self.config.get("operator_odoo_users") or {}
         if not isinstance(mapping, dict):
             return None
-        entry = mapping.get(app_key) or {}
+
+        entry = mapping.get(app_key)
+        if entry is None:
+            for stored_key, stored_entry in mapping.items():
+                if str(stored_key or "").strip().lower() == app_key:
+                    entry = stored_entry
+                    break
         if not isinstance(entry, dict):
             return None
+
         odoo_user = str(entry.get("odoo_username") or "").strip()
         odoo_pass = str(entry.get("odoo_password") or "").strip()
         if not odoo_user or not odoo_pass:
@@ -598,6 +930,7 @@ class OdooIntegration:
                         "recortar_pdf": False,
                         "force_grayscale": bool(self.config.get("force_order_grayscale", False)),
                         "copias": safe_copies,
+                        "pdf_render_dpi": int(self.config.get("order_pdf_render_dpi", 300) or 300),
                         "poppler": "",
                     },
                     observer=None,
@@ -734,6 +1067,292 @@ class OdooIntegration:
                 "submit_attempts": submit_attempts,
                 "stages": stage_timeline,
             },
+        }
+
+    def get_payment_journals(
+        self,
+        auth_override: Optional[Dict[str, str]] = None,
+    ) -> List[Dict[str, Any]]:
+        """Lista los diarios contables de tipo banco/caja, para mapear POS -> diario."""
+        runtime = self._build_runtime_config(auth_override)
+        uid = self._authenticate(auth_override=auth_override)
+        models = self._xmlrpc_models(runtime)
+        db = runtime.get("database", "")
+        password = runtime.get("password", "")
+
+        journals = models.execute_kw(
+            db,
+            uid,
+            password,
+            "account.journal",
+            "search_read",
+            [[("type", "in", ["bank", "cash"])]],
+            {"fields": ["id", "name", "type", "currency_id"], "order": "name"},
+        )
+        return journals or []
+
+    def get_rounding_accounts(
+        self,
+        auth_override: Optional[Dict[str, str]] = None,
+    ) -> List[Dict[str, Any]]:
+        """Lista cuentas activas destinadas a diferencias de redondeo/cobro."""
+        runtime = self._build_runtime_config(auth_override)
+        uid = self._authenticate(auth_override=auth_override)
+        models = self._xmlrpc_models(runtime)
+        accounts = models.execute_kw(
+            runtime.get("database", ""),
+            uid,
+            runtime.get("password", ""),
+            "account.account",
+            "search_read",
+            [[("deprecated", "=", False), ("name", "ilike", "redonde")]],
+            {
+                "fields": ["id", "code", "name", "account_type", "currency_id"],
+                "order": "code, name",
+                "limit": 100,
+            },
+        )
+        return accounts or []
+
+    def attach_totalnet_receipt_to_payment(
+        self,
+        payment_id: int,
+        filename: str,
+        pdf_bytes: bytes,
+        auth_override: Optional[Dict[str, str]] = None,
+    ) -> Dict[str, Any]:
+        """Adjunta el PDF del comprobante TotalNet al pago, sin duplicar por nombre."""
+        if not payment_id or not pdf_bytes:
+            raise ValueError("Faltan datos para adjuntar el comprobante TotalNet")
+        runtime = self._build_runtime_config(auth_override)
+        uid = self._authenticate(auth_override=auth_override)
+        models = self._xmlrpc_models(runtime)
+        db = runtime.get("database", "")
+        password = runtime.get("password", "")
+
+        attachment_ids = models.execute_kw(
+            db,
+            uid,
+            password,
+            "ir.attachment",
+            "search",
+            [[
+                ("res_model", "=", "account.payment"),
+                ("res_id", "=", int(payment_id)),
+                ("name", "=", str(filename)),
+            ]],
+            {"limit": 1},
+        ) or []
+        attachment_created = False
+        if attachment_ids:
+            attachment_id = int(attachment_ids[0])
+        else:
+            attachment_id = int(
+                models.execute_kw(
+                    db,
+                    uid,
+                    password,
+                    "ir.attachment",
+                    "create",
+                    [{
+                        "name": str(filename),
+                        "type": "binary",
+                        "datas": base64.b64encode(pdf_bytes).decode("ascii"),
+                        "mimetype": "application/pdf",
+                        "res_model": "account.payment",
+                        "res_id": int(payment_id),
+                    }],
+                )
+            )
+            attachment_created = True
+
+        return {
+            "attachment_id": attachment_id,
+            "attachment_created": attachment_created,
+            "filename": str(filename),
+        }
+
+    def register_invoice_payment(
+        self,
+        invoice_id: int,
+        amount: float,
+        payment_date: str,
+        journal_id: int,
+        memo: str = "",
+        auth_override: Optional[Dict[str, str]] = None,
+        require_exact_invoice_total: bool = False,
+        rounding_account_id: Optional[int] = None,
+        rounding_source_amount: Optional[float] = None,
+    ) -> Dict[str, Any]:
+        """Registra un pago contra una factura via el wizard account.payment.register.
+
+        Es el mismo mecanismo que usa el boton "Registrar pago" de la interfaz de Odoo.
+        """
+        if not invoice_id:
+            raise ValueError("invoice_id invalido")
+        if not journal_id:
+            raise ValueError("journal_id invalido")
+        try:
+            amount_value = float(amount)
+        except (TypeError, ValueError):
+            raise ValueError("amount invalido")
+        if amount_value <= 0:
+            raise ValueError("amount debe ser mayor a 0")
+
+        runtime = self._build_runtime_config(auth_override)
+        uid = self._authenticate(auth_override=auth_override)
+        models = self._xmlrpc_models(runtime)
+        db = runtime.get("database", "")
+        password = runtime.get("password", "")
+
+        available_fields = models.execute_kw(
+            db,
+            uid,
+            password,
+            "account.move",
+            "fields_get",
+            [[], ["string"]],
+        ) or {}
+        payment_state_field = next(
+            (name for name in ("invoice_payment_state", "payment_state") if name in available_fields),
+            None,
+        )
+        if not payment_state_field:
+            raise ValueError("Odoo no expone el estado de pago de la factura")
+        invoice_read_fields = ["id", "name", "amount_total", payment_state_field]
+        if "amount_residual" in available_fields:
+            invoice_read_fields.append("amount_residual")
+        before_data = models.execute_kw(
+            db,
+            uid,
+            password,
+            "account.move",
+            "read",
+            [[int(invoice_id)]],
+            {"fields": invoice_read_fields},
+        )
+        if not before_data:
+            raise ValueError("La factura indicada no existe en Odoo")
+        payment_state_before = str(before_data[0].get(payment_state_field) or "")
+        if payment_state_before not in {"not_paid", "partial"}:
+            raise ValueError(
+                "No se puede registrar otro pago: la factura ya figura como "
+                f"'{payment_state_before or 'estado desconocido'}' en Odoo."
+            )
+        try:
+            invoice_due = float(
+                before_data[0].get("amount_residual")
+                if before_data[0].get("amount_residual") is not None
+                else before_data[0].get("amount_total")
+            )
+        except (TypeError, ValueError):
+            raise ValueError("Odoo no devolvio el total pendiente de la factura")
+        if require_exact_invoice_total:
+            difference = round(invoice_due - amount_value, 2)
+            if rounding_source_amount is not None:
+                try:
+                    source_amount = float(rounding_source_amount)
+                    expected_rounded = float(
+                        Decimal(str(invoice_due)).quantize(
+                            Decimal("1"), rounding=ROUND_HALF_UP
+                        )
+                    )
+                except (InvalidOperation, TypeError, ValueError):
+                    raise ValueError("No se pudo validar el redondeo del pago")
+                source_matches_invoice = round(source_amount - invoice_due, 2) == 0
+                source_matches_rounded = round(source_amount - expected_rounded, 2) == 0
+                if not (source_matches_invoice or source_matches_rounded):
+                    raise ValueError(
+                        "El importe TotalNet no corresponde al total Odoo ni a su "
+                        "redondeo al peso. No se registro el pago."
+                    )
+                if round(amount_value - expected_rounded, 2) != 0:
+                    raise ValueError(
+                        "El importe del pago no usa el redondeo esperado por Odoo."
+                    )
+            if difference != 0:
+                if not rounding_account_id or abs(difference) > 0.50:
+                    raise ValueError(
+                        "El importe de TotalNet no coincide con el total de la factura "
+                        f"(pago: {amount_value:.2f}; Odoo: {invoice_due:.2f}; "
+                        f"diferencia: {difference:+.2f}). No se registro el pago."
+                    )
+
+        payment_values: Dict[str, Any] = {
+            "amount": amount_value,
+            "journal_id": int(journal_id),
+        }
+        if payment_date:
+            payment_values["payment_date"] = payment_date
+        if memo:
+            payment_values["communication"] = memo
+        if rounding_account_id and round(invoice_due - amount_value, 2) != 0:
+            payment_values.update(
+                {
+                    "payment_difference_handling": "reconcile",
+                    "writeoff_account_id": int(rounding_account_id),
+                    "writeoff_label": "Redondeo cobro POS TotalNet",
+                }
+            )
+
+        try:
+            wizard_id = models.execute_kw(
+                db,
+                uid,
+                password,
+                "account.payment.register",
+                "create",
+                [payment_values],
+                {"context": {"active_model": "account.move", "active_ids": [int(invoice_id)]}},
+            )
+            result = models.execute_kw(
+                db,
+                uid,
+                password,
+                "account.payment.register",
+                "action_create_payments",
+                [[wizard_id]],
+            )
+        except Exception as exc:
+            logger.exception("Error registrando pago para invoice_id=%s", invoice_id)
+            raise ValueError(self.humanize_exception(exc)) from exc
+
+        after_data = models.execute_kw(
+            db,
+            uid,
+            password,
+            "account.move",
+            "read",
+            [[int(invoice_id)]],
+            {"fields": ["id", "name", payment_state_field]},
+        )
+        invoice_after = after_data[0] if after_data else {}
+
+        payment_id = None
+        try:
+            payment_records = models.execute_kw(
+                db,
+                uid,
+                password,
+                "account.payment",
+                "search_read",
+                [[("reconciled_invoice_ids", "in", [int(invoice_id)])]],
+                {"fields": ["id"], "order": "id desc", "limit": 1},
+            )
+            if payment_records:
+                payment_id = int(payment_records[0]["id"])
+        except Exception as exc:
+            logger.warning(
+                "No se pudo determinar el pago creado para invoice_id=%s: %s", invoice_id, exc
+            )
+
+        return {
+            "invoice_id": int(invoice_id),
+            "payment_id": payment_id,
+            "wizard_id": wizard_id,
+            "action_result": result,
+            "payment_state": invoice_after.get(payment_state_field),
+            "actor_username": str(runtime.get("username") or ""),
         }
 
 
