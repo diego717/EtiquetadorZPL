@@ -1061,7 +1061,10 @@ function isSalesMessageNewerThanAccepted_(
 }
 
 function getJobsHistorySheet_() {
-  const spreadsheet = SpreadsheetApp.getActiveSpreadsheet();
+  const spreadsheet =
+    typeof getApiSpreadsheet_ === "function"
+      ? getApiSpreadsheet_()
+      : SpreadsheetApp.getActiveSpreadsheet();
   return spreadsheet
     ? spreadsheet.getSheetByName("TRABAJOS HISTORICO")
     : null;

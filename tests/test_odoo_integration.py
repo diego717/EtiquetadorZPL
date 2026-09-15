@@ -140,6 +140,58 @@ class _AttachmentModels:
         raise AssertionError(f"Llamada Odoo inesperada: {model}.{method}")
 
 
+class _ProductModels:
+    def __init__(self):
+        self.count_domain = None
+        self.read_domain = None
+        self.read_kwargs = None
+
+    def execute_kw(self, _db, _uid, _password, model, method, args, kwargs=None):
+        if model == "product.product" and method == "fields_get":
+            return {
+                "name": {},
+                "display_name": {},
+                "default_code": {},
+                "barcode": {},
+                "product_tmpl_id": {},
+                "uom_id": {},
+                "categ_id": {},
+                "active": {},
+                "detailed_type": {},
+                "lst_price": {},
+                "qty_available": {},
+                "virtual_available": {},
+                "incoming_qty": {},
+                "outgoing_qty": {},
+            }
+        if model == "product.product" and method == "search_count":
+            self.count_domain = args[0]
+            return 1
+        if model == "product.product" and method == "search_read":
+            self.read_domain = args[0]
+            self.read_kwargs = kwargs or {}
+            return [
+                {
+                    "id": 55,
+                    "name": "Etiqueta Premium",
+                    "display_name": "[ETI-001] Etiqueta Premium",
+                    "default_code": "ETI-001",
+                    "barcode": "779000000001",
+                    "product_tmpl_id": [12, "Etiqueta Premium"],
+                    "uom_id": [1, "Units"],
+                    "categ_id": [8, "Etiquetas"],
+                    "active": True,
+                    "detailed_type": "product",
+                    "lst_price": 120.5,
+                    "qty_available": 9,
+                    "virtual_available": 7,
+                    "incoming_qty": 2,
+                    "outgoing_qty": 4,
+                }
+            ]
+        raise AssertionError(f"Llamada Odoo inesperada: {model}.{method}")
+
+
 class TestOdooIntegration(unittest.TestCase):
     def test_download_sale_order_report_pdf_reuses_authenticated_session_without_context_manager(self):
         integration = OdooIntegration()
@@ -327,6 +379,32 @@ class TestOdooIntegration(unittest.TestCase):
             integration.resolve_operator_auth_exact("GIANFRANCO"),
             {"username": "gianfranco@example.com", "password": "secret"},
         )
+
+    def test_list_products_reads_inventory_products_with_stock(self):
+        integration = OdooIntegration()
+        models = _ProductModels()
+        integration._build_runtime_config = lambda auth_override=None: {
+            "database": "test",
+            "password": "test",
+        }
+        integration._authenticate = lambda auth_override=None: 7
+        integration._xmlrpc_models = lambda runtime=None: models
+
+        result = integration.list_products(search="eti", limit=50, offset=10)
+
+        self.assertEqual(result["total"], 1)
+        self.assertFalse(result["has_more"])
+        self.assertIn(("active", "=", True), models.read_domain)
+        self.assertIn(("detailed_type", "in", ["product", "consu"]), models.read_domain)
+        self.assertIn(("default_code", "ilike", "eti"), models.read_domain)
+        self.assertEqual(models.read_kwargs["limit"], 50)
+        self.assertEqual(models.read_kwargs["offset"], 10)
+        self.assertIn("qty_available", models.read_kwargs["fields"])
+        self.assertEqual(result["items"][0]["default_code"], "ETI-001")
+        self.assertEqual(result["items"][0]["uom"], "Units")
+        self.assertEqual(result["items"][0]["category"], "Etiquetas")
+        self.assertEqual(result["items"][0]["list_price"], 120.5)
+        self.assertEqual(result["items"][0]["qty_available"], 9)
 
 
 if __name__ == "__main__":

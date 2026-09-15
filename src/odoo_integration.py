@@ -1069,6 +1069,188 @@ class OdooIntegration:
             },
         }
 
+    @staticmethod
+    def _build_or_domain(filters: List[Any]) -> List[Any]:
+        if not filters:
+            return []
+        if len(filters) == 1:
+            return [filters[0]]
+        return ["|"] * (len(filters) - 1) + filters
+
+    @staticmethod
+    def _many2one_parts(raw_value: Any) -> tuple[Optional[int], str]:
+        if raw_value is None or raw_value is False:
+            return None, ""
+        if isinstance(raw_value, (list, tuple)):
+            raw_id = raw_value[0] if raw_value else None
+            raw_name = raw_value[1] if len(raw_value) >= 2 else ""
+        else:
+            raw_id = raw_value
+            raw_name = ""
+        try:
+            value_id = int(raw_id) if raw_id not in (None, False, "") else None
+        except (TypeError, ValueError):
+            value_id = None
+        return value_id, str(raw_name or "").strip()
+
+    def list_products(
+        self,
+        search: str = "",
+        limit: int = 200,
+        offset: int = 0,
+        active_only: bool = True,
+        inventory_only: bool = True,
+        include_stock: bool = True,
+        auth_override: Optional[Dict[str, str]] = None,
+    ) -> Dict[str, Any]:
+        """Obtiene productos/variantes desde Odoo para consumo de APIs locales."""
+        try:
+            limit_value = max(1, min(int(limit), 1000))
+        except (TypeError, ValueError):
+            limit_value = 200
+        try:
+            offset_value = max(0, int(offset))
+        except (TypeError, ValueError):
+            offset_value = 0
+
+        runtime = self._build_runtime_config(auth_override)
+        uid = self._authenticate(auth_override=auth_override)
+        models = self._xmlrpc_models(runtime)
+        db = runtime.get("database", "")
+        password = runtime.get("password", "")
+
+        available_fields = models.execute_kw(
+            db,
+            uid,
+            password,
+            "product.product",
+            "fields_get",
+            [[], ["string"]],
+        ) or {}
+        available = set(available_fields.keys())
+
+        domain: List[Any] = []
+        if active_only and "active" in available:
+            domain.append(("active", "=", True))
+
+        type_field = "detailed_type" if "detailed_type" in available else "type" if "type" in available else ""
+        if inventory_only and type_field:
+            domain.append((type_field, "in", ["product", "consu"]))
+
+        search_value = str(search or "").strip()
+        if search_value:
+            search_filters = []
+            for field_name in ("name", "display_name", "default_code", "barcode"):
+                if field_name in available:
+                    search_filters.append((field_name, "ilike", search_value))
+            domain.extend(self._build_or_domain(search_filters))
+
+        fields = ["id"]
+        base_candidates = [
+            "name",
+            "display_name",
+            "default_code",
+            "barcode",
+            "product_tmpl_id",
+            "uom_id",
+            "categ_id",
+            "active",
+            "detailed_type",
+            "type",
+            "lst_price",
+            "list_price",
+            "standard_price",
+        ]
+        stock_candidates = [
+            "qty_available",
+            "virtual_available",
+            "incoming_qty",
+            "outgoing_qty",
+        ]
+        for field_name in base_candidates + (stock_candidates if include_stock else []):
+            if field_name in available and field_name not in fields:
+                fields.append(field_name)
+
+        order_fields = []
+        if "default_code" in available:
+            order_fields.append("default_code asc")
+        if "name" in available:
+            order_fields.append("name asc")
+        order_fields.append("id asc")
+
+        kwargs: Dict[str, Any] = {
+            "fields": fields,
+            "limit": limit_value,
+            "offset": offset_value,
+            "order": ", ".join(order_fields),
+        }
+        if not active_only:
+            kwargs["context"] = {"active_test": False}
+
+        total = models.execute_kw(
+            db,
+            uid,
+            password,
+            "product.product",
+            "search_count",
+            [domain],
+        )
+        products = models.execute_kw(
+            db,
+            uid,
+            password,
+            "product.product",
+            "search_read",
+            [domain],
+            kwargs,
+        ) or []
+
+        items = []
+        for product in products:
+            tmpl_id, tmpl_name = self._many2one_parts(product.get("product_tmpl_id"))
+            uom_id, uom_name = self._many2one_parts(product.get("uom_id"))
+            category_id, category_name = self._many2one_parts(product.get("categ_id"))
+            price_field = next((name for name in ("lst_price", "list_price", "standard_price") if name in product), "")
+            product_type = product.get("detailed_type") if "detailed_type" in product else product.get("type", "")
+
+            item: Dict[str, Any] = {
+                "id": product.get("id"),
+                "default_code": str(product.get("default_code") or ""),
+                "barcode": str(product.get("barcode") or ""),
+                "name": str(product.get("display_name") or product.get("name") or ""),
+                "display_name": str(product.get("display_name") or ""),
+                "list_price": product.get(price_field, "") if price_field else "",
+                "price_field": price_field,
+                "active": bool(product.get("active", True)),
+                "type": str(product_type or ""),
+                "product_tmpl_id": tmpl_id,
+                "product_template": tmpl_name,
+                "uom_id": uom_id,
+                "uom": uom_name,
+                "category_id": category_id,
+                "category": category_name,
+            }
+            if include_stock:
+                for field_name in stock_candidates:
+                    if field_name in product:
+                        item[field_name] = product.get(field_name)
+            items.append(item)
+
+        total_value = int(total or 0)
+        return {
+            "items": items,
+            "total": total_value,
+            "limit": limit_value,
+            "offset": offset_value,
+            "has_more": offset_value + len(items) < total_value,
+            "filters": {
+                "search": search_value,
+                "active_only": bool(active_only),
+                "inventory_only": bool(inventory_only),
+                "include_stock": bool(include_stock),
+            },
+        }
+
     def get_payment_journals(
         self,
         auth_override: Optional[Dict[str, str]] = None,

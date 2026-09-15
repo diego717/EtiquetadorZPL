@@ -9,7 +9,7 @@ import csv
 import io
 from typing import Any, Dict, Optional
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Query
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
@@ -121,6 +121,106 @@ async def find_order(request: OdooSearchOrderRequest) -> Dict[str, Any]:
             "found": bool(order),
             "order": order,
         }
+    except Exception as exc:
+        message = _friendly_error(exc)
+        odoo_integration.save_config({"last_error": message})
+        raise HTTPException(status_code=400, detail=message)
+
+
+@router.get("/products")
+async def list_products(
+    search: str = "",
+    limit: int = Query(default=200, ge=1, le=1000),
+    offset: int = Query(default=0, ge=0),
+    active_only: bool = True,
+    inventory_only: bool = True,
+    include_stock: bool = True,
+) -> Dict[str, Any]:
+    try:
+        return await asyncio.to_thread(
+            odoo_integration.list_products,
+            search,
+            limit,
+            offset,
+            active_only,
+            inventory_only,
+            include_stock,
+        )
+    except Exception as exc:
+        message = _friendly_error(exc)
+        odoo_integration.save_config({"last_error": message})
+        raise HTTPException(status_code=400, detail=message)
+
+
+def _csv_cell(value: Any) -> Any:
+    if value is None:
+        return ""
+    return value
+
+
+@router.get("/products/export")
+async def export_products(
+    search: str = "",
+    limit: int = Query(default=5000, ge=1, le=20000),
+    offset: int = Query(default=0, ge=0),
+    active_only: bool = True,
+    inventory_only: bool = True,
+    include_stock: bool = True,
+) -> StreamingResponse:
+    try:
+        products = []
+        current_offset = offset
+        remaining = limit
+        while remaining > 0:
+            page_limit = min(1000, remaining)
+            result = await asyncio.to_thread(
+                odoo_integration.list_products,
+                search,
+                page_limit,
+                current_offset,
+                active_only,
+                inventory_only,
+                include_stock,
+            )
+            page_items = result.get("items", [])
+            if not page_items:
+                break
+            products.extend(page_items)
+            if not result.get("has_more"):
+                break
+            current_offset += len(page_items)
+            remaining -= len(page_items)
+
+        output = io.StringIO()
+        writer = csv.writer(output)
+        columns = [
+            "id",
+            "default_code",
+            "barcode",
+            "name",
+            "list_price",
+            "qty_available",
+            "virtual_available",
+            "incoming_qty",
+            "outgoing_qty",
+            "uom",
+            "category",
+            "active",
+            "type",
+        ]
+        writer.writerow(columns)
+        for product in products:
+            writer.writerow([_csv_cell(product.get(column)) for column in columns])
+
+        csv_bytes = output.getvalue().encode("utf-8-sig")
+        output.close()
+
+        filename = "productos_odoo.csv"
+        headers = {
+            "Content-Disposition": f"attachment; filename={filename}",
+            "Content-Type": "text/csv; charset=utf-8",
+        }
+        return StreamingResponse(io.BytesIO(csv_bytes), media_type="text/csv", headers=headers)
     except Exception as exc:
         message = _friendly_error(exc)
         odoo_integration.save_config({"last_error": message})

@@ -200,6 +200,13 @@ function normalizeAutomationText_(value) {
 }
 
 function getAutomationSpreadsheet_() {
+  if (typeof getApiSpreadsheet_ === "function") {
+    const apiSpreadsheet = getApiSpreadsheet_();
+    if (apiSpreadsheet) {
+      return apiSpreadsheet;
+    }
+  }
+
   const activeSpreadsheet = SpreadsheetApp.getActiveSpreadsheet();
   if (activeSpreadsheet) {
     return activeSpreadsheet;
