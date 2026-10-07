@@ -664,9 +664,8 @@ class TestOdooIntegration(unittest.TestCase):
         self.assertTrue(result["success"])
         self.assertEqual(result["message_id"], 901)
         self.assertEqual(models.note_kwargs["subtype_xmlid"], "mail.mt_note")
-        self.assertNotIn("<script>", models.note_kwargs["body"])
-        self.assertIn("100&lt;script&gt;", models.note_kwargs["body"])
-        self.assertIn("Epson &amp; Deposito", models.note_kwargs["body"])
+        # Nota corta en texto plano: Odoo escapa el HTML recibido por XML-RPC.
+        self.assertEqual(models.note_kwargs["body"], "Orden y etiqueta impresas")
         self.assertNotIn("partner_ids", models.note_kwargs)
         self.assertNotIn("user_id", models.note_kwargs)
         self.assertNotIn("responsable", models.note_kwargs["body"].lower())
@@ -689,6 +688,8 @@ class TestOdooIntegration(unittest.TestCase):
         self.assertTrue(second["duplicate"])
         self.assertTrue(third["posted"])
         self.assertEqual(models.calls.count(("sale.order", "message_post")), 2)
+        self.assertNotIn("ref", models.note_kwargs["body"].lower())
+        self.assertEqual(models.note_kwargs["body"], "Orden impresa")
 
 
 if __name__ == "__main__":

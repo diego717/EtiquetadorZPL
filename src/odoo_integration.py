@@ -11,7 +11,6 @@ import tempfile
 import time
 import xmlrpc.client
 import base64
-from html import escape
 from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
 from pathlib import Path
 from typing import Any, Dict, List, Optional
@@ -27,6 +26,8 @@ class OdooIntegration:
     def __init__(self) -> None:
         self.config_path = self._resolve_config_path()
         self.config = self._load_config()
+        # event_key de notas de impresion ya publicadas -> message_id (orden de insercion).
+        self._posted_print_notes: Dict[str, Optional[int]] = {}
 
     @staticmethod
     def _collapse_whitespace(text: Any) -> str:
@@ -792,55 +793,25 @@ class OdooIntegration:
         db = runtime.get("database", "")
         password = runtime.get("password", "")
         safe_event_key = re.sub(r"[^A-Za-z0-9._:-]+", "-", str(event_key or "").strip())[:80]
+        dedupe_key = f"{int(order_id)}:{safe_event_key}" if safe_event_key else ""
 
-        if safe_event_key:
-            marker = f"EtiquetadorZPL ref: {safe_event_key}"
-            existing_ids = models.execute_kw(
-                db,
-                uid,
-                password,
-                "mail.message",
-                "search",
-                [[
-                    ("model", "=", "sale.order"),
-                    ("res_id", "=", int(order_id)),
-                    ("body", "ilike", marker),
-                ]],
-                {"limit": 1},
-            ) or []
-            if existing_ids:
-                return {
-                    "success": True,
-                    "posted": False,
-                    "duplicate": True,
-                    "order_id": int(order_id),
-                    "message_id": int(existing_ids[0]),
-                    "event_key": safe_event_key,
-                }
+        # La idempotencia (reintentos de la misma operacion) se resuelve en
+        # memoria para no ensuciar el chatter con una referencia tecnica.
+        if dedupe_key and dedupe_key in self._posted_print_notes:
+            return {
+                "success": True,
+                "posted": False,
+                "duplicate": True,
+                "order_id": int(order_id),
+                "message_id": self._posted_print_notes[dedupe_key],
+                "event_key": safe_event_key,
+            }
 
-        mode_label = {
-            "both": "Orden Odoo y etiqueta de envio",
-            "order_only": "Orden Odoo",
-        }.get(str(mode or "").strip().lower(), "Documentacion de despacho")
-        items = [
-            f"<li><strong>Envio:</strong> {escape(str(envio_id or '').strip())}</li>",
-            f"<li><strong>Documentos:</strong> {escape(mode_label)}</li>",
-        ]
-        if str(order_printer or "").strip():
-            items.append(
-                f"<li><strong>Impresora de orden:</strong> {escape(str(order_printer).strip())}</li>"
-            )
-        if str(mode or "").strip().lower() == "both" and str(label_printer or "").strip():
-            items.append(
-                f"<li><strong>Impresora de etiqueta:</strong> {escape(str(label_printer).strip())}</li>"
-            )
-
-        body = (
-            "<p><strong>Documentacion de despacho enviada a impresion desde EtiquetadorZPL.</strong></p>"
-            f"<ul>{''.join(items)}</ul>"
-        )
-        if safe_event_key:
-            body += f"<p><small>EtiquetadorZPL ref: {escape(safe_event_key)}</small></p>"
+        # Texto plano: por XML-RPC Odoo escapa el HTML del body y lo muestra literal.
+        body = {
+            "both": "Orden y etiqueta impresas",
+            "order_only": "Orden impresa",
+        }.get(str(mode or "").strip().lower(), "Documentacion de despacho impresa")
         message_id = models.execute_kw(
             db,
             uid,
@@ -854,6 +825,10 @@ class OdooIntegration:
                 "subtype_xmlid": "mail.mt_note",
             },
         )
+        if dedupe_key:
+            self._posted_print_notes[dedupe_key] = int(message_id) if message_id else None
+            while len(self._posted_print_notes) > 2000:
+                self._posted_print_notes.pop(next(iter(self._posted_print_notes)))
         return {
             "success": True,
             "posted": True,
