@@ -11,6 +11,7 @@ import tempfile
 import time
 import xmlrpc.client
 import base64
+from html import escape
 from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
 from pathlib import Path
 from typing import Any, Dict, List, Optional
@@ -205,6 +206,10 @@ class OdooIntegration:
             base_url = f"https://{base_url}"
         return base_url
 
+    def sale_order_url(self, order_id: int) -> str:
+        """URL del formulario de la orden. Odoo 17+ redirige este formato clasico a su ruta nueva."""
+        return f"{self._base_url()}/web#id={int(order_id)}&model=sale.order&view_type=form"
+
     def _xmlrpc_common(self, runtime: Optional[Dict[str, Any]] = None) -> xmlrpc.client.ServerProxy:
         return xmlrpc.client.ServerProxy(f"{self._base_url(runtime)}/xmlrpc/2/common", allow_none=True)
 
@@ -375,6 +380,488 @@ class OdooIntegration:
             if envio_value and envio_value in normalized_set:
                 cancelled.add(envio_value)
         return cancelled
+
+    def get_sale_order_stock_statuses(
+        self,
+        envio_ids: List[str],
+        auth_override: Optional[Dict[str, str]] = None,
+    ) -> Dict[str, Dict[str, Any]]:
+        """Resume en lote el estado de entrega/reserva para una lista de envios.
+
+        Es una consulta estrictamente informativa: no reserva stock ni valida pickings.
+        Usa campos opcionales cuando la version de Odoo los expone y degrada al estado
+        de ``stock.picking`` cuando no existen los textos calculados de disponibilidad.
+        """
+        normalized_envios: List[str] = []
+        seen: set[str] = set()
+        for raw_envio in envio_ids or []:
+            envio = str(raw_envio or "").strip()
+            if not envio or envio in seen:
+                continue
+            normalized_envios.append(envio)
+            seen.add(envio)
+
+        if not normalized_envios:
+            return {}
+
+        runtime = self._build_runtime_config(auth_override)
+        uid = self._authenticate(auth_override=auth_override)
+        models = self._xmlrpc_models(runtime)
+        db = runtime.get("database", "")
+        password = runtime.get("password", "")
+        order_prefix = str(runtime.get("order_prefix", "ML "))
+        shipment_field = str(runtime.get("shipment_field", "")).strip()
+
+        default_statuses: Dict[str, Dict[str, Any]] = {
+            envio: {
+                "code": "order_missing",
+                "label": "Sin orden Odoo",
+                "detail": "No se encontro una orden vinculada a este envio.",
+                "order_id": None,
+                "order_name": "",
+                "order_state": "",
+                "pickings": [],
+            }
+            for envio in normalized_envios
+        }
+
+        sale_fields = models.execute_kw(
+            db,
+            uid,
+            password,
+            "sale.order",
+            "fields_get",
+            [[], ["string"]],
+        ) or {}
+        available_sale_fields = set(sale_fields.keys())
+
+        match_fields = [field for field in ("name", "client_order_ref", "origin") if field in available_sale_fields]
+        if shipment_field and shipment_field not in available_sale_fields:
+            logger.warning("Campo shipment Odoo no disponible al consultar stock: %s", shipment_field)
+            shipment_field = ""
+
+        if shipment_field:
+            domain: List[Any] = [(shipment_field, "in", normalized_envios)]
+        else:
+            filters: List[Any] = []
+            for envio in normalized_envios:
+                if "name" in available_sale_fields:
+                    filters.append(("name", "=", f"{order_prefix}{envio}"))
+                if "client_order_ref" in available_sale_fields:
+                    filters.append(("client_order_ref", "ilike", envio))
+                if "origin" in available_sale_fields:
+                    filters.append(("origin", "ilike", envio))
+            domain = self._build_or_domain(filters)
+
+        if not domain:
+            return default_statuses
+
+        order_fields = [field for field in ("id", "name", "state", "picking_ids") if field in available_sale_fields]
+        for field in match_fields + ([shipment_field] if shipment_field else []):
+            if field and field not in order_fields:
+                order_fields.append(field)
+
+        orders = models.execute_kw(
+            db,
+            uid,
+            password,
+            "sale.order",
+            "search_read",
+            [domain],
+            {
+                "fields": order_fields,
+                "limit": max(200, len(normalized_envios) * 5),
+                "order": "write_date desc, id desc",
+            },
+        ) or []
+
+        orders_by_envio: Dict[str, Dict[str, Any]] = {}
+        for envio in normalized_envios:
+            expected_name = f"{order_prefix}{envio}".casefold()
+            for order in orders:
+                if shipment_field:
+                    candidate = self._normalize_shipment_field_value(order.get(shipment_field))
+                    matches = candidate == envio
+                else:
+                    name = str(order.get("name") or "").strip().casefold()
+                    reference = str(order.get("client_order_ref") or "").strip().casefold()
+                    origin = str(order.get("origin") or "").strip().casefold()
+                    envio_folded = envio.casefold()
+                    matches = name == expected_name or envio_folded in reference or envio_folded in origin
+                if matches:
+                    orders_by_envio[envio] = order
+                    break
+
+        order_ids = [int(order["id"]) for order in orders_by_envio.values() if order.get("id")]
+        pickings: List[Dict[str, Any]] = []
+        pickings_by_order: Dict[int, List[Dict[str, Any]]] = {order_id: [] for order_id in order_ids}
+        moves_by_picking: Dict[int, List[Dict[str, Any]]] = {}
+        picking_type_code_available = False
+
+        if order_ids:
+            picking_fields = models.execute_kw(
+                db,
+                uid,
+                password,
+                "stock.picking",
+                "fields_get",
+                [[], ["string"]],
+            ) or {}
+            available_picking_fields = set(picking_fields.keys())
+            picking_type_code_available = "picking_type_code" in available_picking_fields
+            wanted_picking_fields = (
+                "id",
+                "name",
+                "state",
+                "sale_id",
+                "picking_type_code",
+                "products_availability",
+                "products_availability_state",
+                "scheduled_date",
+            )
+            selected_picking_fields = [
+                field for field in wanted_picking_fields if field in available_picking_fields
+            ]
+
+            picking_ids = sorted({
+                int(picking_id)
+                for order in orders_by_envio.values()
+                for picking_id in (order.get("picking_ids") or [])
+                if picking_id
+            })
+            if picking_ids:
+                picking_domain: List[Any] = [("id", "in", picking_ids)]
+            elif "sale_id" in available_picking_fields:
+                picking_domain = [("sale_id", "in", order_ids)]
+            else:
+                picking_domain = []
+
+            if picking_domain:
+                pickings = models.execute_kw(
+                    db,
+                    uid,
+                    password,
+                    "stock.picking",
+                    "search_read",
+                    [picking_domain],
+                    {
+                        "fields": selected_picking_fields,
+                        "order": "id asc",
+                        "limit": max(200, len(order_ids) * 10),
+                    },
+                ) or []
+
+            picking_by_id = {
+                int(picking["id"]): picking
+                for picking in pickings
+                if picking.get("id")
+            }
+            for order in orders_by_envio.values():
+                order_id = int(order["id"])
+                linked_ids = [int(value) for value in (order.get("picking_ids") or []) if value]
+                if linked_ids:
+                    pickings_by_order[order_id] = [
+                        picking_by_id[picking_id]
+                        for picking_id in linked_ids
+                        if picking_id in picking_by_id
+                    ]
+                    continue
+                pickings_by_order[order_id] = [
+                    picking
+                    for picking in pickings
+                    if self._many2one_parts(picking.get("sale_id"))[0] == order_id
+                ]
+
+            loaded_picking_ids = [int(picking["id"]) for picking in pickings if picking.get("id")]
+            if loaded_picking_ids:
+                move_fields = models.execute_kw(
+                    db,
+                    uid,
+                    password,
+                    "stock.move",
+                    "fields_get",
+                    [[], ["string"]],
+                ) or {}
+                available_move_fields = set(move_fields.keys())
+                wanted_move_fields = (
+                    "id",
+                    "picking_id",
+                    "product_id",
+                    "product_uom_qty",
+                    "product_uom",
+                    "state",
+                    "reserved_availability",
+                    "quantity",
+                    "picked",
+                    "forecast_availability",
+                )
+                selected_move_fields = [
+                    field for field in wanted_move_fields if field in available_move_fields
+                ]
+                moves = models.execute_kw(
+                    db,
+                    uid,
+                    password,
+                    "stock.move",
+                    "search_read",
+                    [[("picking_id", "in", loaded_picking_ids)]],
+                    {
+                        "fields": selected_move_fields,
+                        "order": "picking_id asc, id asc",
+                        "limit": max(500, len(loaded_picking_ids) * 50),
+                    },
+                ) or []
+                for move in moves:
+                    picking_id = self._many2one_parts(move.get("picking_id"))[0]
+                    if picking_id is not None:
+                        moves_by_picking.setdefault(picking_id, []).append(move)
+
+        for envio, order in orders_by_envio.items():
+            order_id = int(order.get("id") or 0)
+            order_state = str(order.get("state") or "").strip().lower()
+            order_pickings = pickings_by_order.get(order_id, [])
+            outgoing_pickings = [
+                picking
+                for picking in order_pickings
+                if str(picking.get("picking_type_code") or "").strip().lower() == "outgoing"
+            ]
+            relevant_pickings = (
+                outgoing_pickings
+                if picking_type_code_available
+                else order_pickings
+            )
+            picking_states = [
+                str(picking.get("state") or "").strip().lower()
+                for picking in relevant_pickings
+            ]
+            active_states = [state for state in picking_states if state not in {"done", "cancel"}]
+            availability_texts = []
+            for picking in relevant_pickings:
+                text = self._collapse_whitespace(picking.get("products_availability"))
+                if text and text not in availability_texts:
+                    availability_texts.append(text)
+
+            relevant_moves = [
+                move
+                for picking in relevant_pickings
+                for move in moves_by_picking.get(int(picking.get("id") or 0), [])
+                if str(move.get("state") or "").strip().lower() not in {"done", "cancel"}
+            ]
+            shortages: List[Dict[str, Any]] = []
+            demanded_qty = 0.0
+            reserved_qty = 0.0
+            reservation_known = bool(relevant_moves)
+            complete_lines = 0
+            uom_names: set[str] = set()
+            for move in relevant_moves:
+                try:
+                    demand = max(0.0, float(move.get("product_uom_qty") or 0.0))
+                except (TypeError, ValueError):
+                    demand = 0.0
+
+                if "reserved_availability" in move:
+                    raw_reserved = move.get("reserved_availability")
+                elif "quantity" in move:
+                    # Odoo 17+ consolida la cantidad reservada/operada en ``quantity``.
+                    raw_reserved = move.get("quantity")
+                else:
+                    raw_reserved = None
+                    reservation_known = False
+
+                try:
+                    reserved = max(0.0, float(raw_reserved)) if raw_reserved is not None else 0.0
+                except (TypeError, ValueError):
+                    reserved = 0.0
+                    reservation_known = False
+
+                demanded_qty += demand
+                reserved_qty += min(reserved, demand) if demand > 0 else reserved
+                missing = max(0.0, demand - reserved)
+                _uom_id, uom_name = self._many2one_parts(move.get("product_uom"))
+                if uom_name:
+                    uom_names.add(uom_name)
+                if raw_reserved is not None and missing <= 0.00001:
+                    complete_lines += 1
+                if raw_reserved is not None and missing > 0.00001:
+                    _product_id, product_name = self._many2one_parts(move.get("product_id"))
+                    shortages.append(
+                        {
+                            "product": product_name or f"Producto {move.get('product_id') or '-'}",
+                            "demanded_qty": demand,
+                            "reserved_qty": reserved,
+                            "missing_qty": missing,
+                            "uom": uom_name,
+                        }
+                    )
+
+            quantities_share_uom = len(uom_names) <= 1
+            missing_qty = (
+                max(0.0, demanded_qty - reserved_qty)
+                if reservation_known and quantities_share_uom
+                else None
+            )
+
+            if order_state == "cancel":
+                code, label = "cancelled", "Orden cancelada"
+                detail = "La orden de venta esta cancelada en Odoo."
+            elif not relevant_pickings and order_state in {"draft", "sent"}:
+                code, label = "quotation", "Cotizacion sin entrega"
+                detail = "Odoo creara la entrega cuando se confirme la cotizacion."
+            elif not relevant_pickings:
+                code, label = "no_picking", "Sin entrega"
+                detail = "La orden existe, pero todavia no tiene una entrega asociada."
+            elif picking_states and all(state == "cancel" for state in picking_states):
+                code, label = "cancelled", "Entrega cancelada"
+                detail = "Las entregas asociadas estan canceladas."
+            elif picking_states and all(state in {"done", "cancel"} for state in picking_states):
+                code, label = "done", "Entrega realizada"
+                detail = "La entrega ya fue validada en Odoo."
+            elif reservation_known and relevant_moves and not shortages:
+                code, label = "ready", "Stock reservado"
+                detail = f"{complete_lines} de {len(relevant_moves)} lineas completamente reservadas."
+            elif reservation_known and shortages and reserved_qty > 0:
+                code, label = "partial", "Reserva parcial"
+                detail = f"{complete_lines} de {len(relevant_moves)} lineas completamente reservadas."
+            elif reservation_known and shortages:
+                code, label = "waiting", "Pendiente de stock"
+                detail = f"0 de {len(relevant_moves)} lineas completamente reservadas."
+            elif active_states and all(state == "assigned" for state in active_states):
+                code, label = "ready", "Entrega lista"
+                detail = "Odoo informa que la entrega esta lista; no expone cantidades reservadas."
+            elif "assigned" in active_states:
+                code, label = "partial", "Reserva parcial"
+                detail = "Hay entregas listas y otras aun pendientes; sin cantidades detalladas."
+            elif "waiting" in active_states:
+                code, label = "waiting_operation", "Esperando otra operacion"
+                detail = "La entrega depende de un movimiento de stock anterior."
+            elif "confirmed" in active_states:
+                code, label = "waiting", "Pendiente de stock"
+                detail = "Odoo aun no pudo reservar toda la mercaderia."
+            else:
+                code, label = "draft", "Entrega en borrador"
+                detail = "La entrega existe, pero todavia no esta lista para reservar."
+
+            if availability_texts:
+                detail = f"{detail} Odoo: {' | '.join(availability_texts[:2])}"
+
+            default_statuses[envio] = {
+                "code": code,
+                "label": label,
+                "detail": detail,
+                "order_id": order_id,
+                "order_name": str(order.get("name") or ""),
+                "order_state": order_state,
+                "demanded_qty": demanded_qty if reservation_known and quantities_share_uom else None,
+                "reserved_qty": reserved_qty if reservation_known and quantities_share_uom else None,
+                "missing_qty": missing_qty,
+                "complete_lines": complete_lines if reservation_known else None,
+                "total_lines": len(relevant_moves) if reservation_known else None,
+                "shortages": shortages,
+                "pickings": [
+                    {
+                        "id": picking.get("id"),
+                        "name": str(picking.get("name") or ""),
+                        "state": str(picking.get("state") or ""),
+                        "availability": self._collapse_whitespace(picking.get("products_availability")),
+                        "availability_state": str(picking.get("products_availability_state") or ""),
+                        "scheduled_date": picking.get("scheduled_date") or "",
+                    }
+                    for picking in relevant_pickings
+                ],
+            }
+
+        return default_statuses
+
+    def post_sale_order_print_note(
+        self,
+        order_id: int,
+        envio_id: str,
+        mode: str,
+        order_printer: str = "",
+        label_printer: str = "",
+        event_key: str = "",
+        auth_override: Optional[Dict[str, str]] = None,
+    ) -> Dict[str, Any]:
+        """Publica una nota de trazabilidad sin asignar responsable de preparacion."""
+        if not order_id:
+            raise ValueError("order_id invalido")
+
+        runtime = self._build_runtime_config(auth_override)
+        uid = self._authenticate(auth_override=auth_override)
+        models = self._xmlrpc_models(runtime)
+        db = runtime.get("database", "")
+        password = runtime.get("password", "")
+        safe_event_key = re.sub(r"[^A-Za-z0-9._:-]+", "-", str(event_key or "").strip())[:80]
+
+        if safe_event_key:
+            marker = f"EtiquetadorZPL ref: {safe_event_key}"
+            existing_ids = models.execute_kw(
+                db,
+                uid,
+                password,
+                "mail.message",
+                "search",
+                [[
+                    ("model", "=", "sale.order"),
+                    ("res_id", "=", int(order_id)),
+                    ("body", "ilike", marker),
+                ]],
+                {"limit": 1},
+            ) or []
+            if existing_ids:
+                return {
+                    "success": True,
+                    "posted": False,
+                    "duplicate": True,
+                    "order_id": int(order_id),
+                    "message_id": int(existing_ids[0]),
+                    "event_key": safe_event_key,
+                }
+
+        mode_label = {
+            "both": "Orden Odoo y etiqueta de envio",
+            "order_only": "Orden Odoo",
+        }.get(str(mode or "").strip().lower(), "Documentacion de despacho")
+        items = [
+            f"<li><strong>Envio:</strong> {escape(str(envio_id or '').strip())}</li>",
+            f"<li><strong>Documentos:</strong> {escape(mode_label)}</li>",
+        ]
+        if str(order_printer or "").strip():
+            items.append(
+                f"<li><strong>Impresora de orden:</strong> {escape(str(order_printer).strip())}</li>"
+            )
+        if str(mode or "").strip().lower() == "both" and str(label_printer or "").strip():
+            items.append(
+                f"<li><strong>Impresora de etiqueta:</strong> {escape(str(label_printer).strip())}</li>"
+            )
+
+        body = (
+            "<p><strong>Documentacion de despacho enviada a impresion desde EtiquetadorZPL.</strong></p>"
+            f"<ul>{''.join(items)}</ul>"
+        )
+        if safe_event_key:
+            body += f"<p><small>EtiquetadorZPL ref: {escape(safe_event_key)}</small></p>"
+        message_id = models.execute_kw(
+            db,
+            uid,
+            password,
+            "sale.order",
+            "message_post",
+            [[int(order_id)]],
+            {
+                "body": body,
+                "message_type": "comment",
+                "subtype_xmlid": "mail.mt_note",
+            },
+        )
+        return {
+            "success": True,
+            "posted": True,
+            "duplicate": False,
+            "order_id": int(order_id),
+            "message_id": int(message_id) if message_id else None,
+            "event_key": safe_event_key,
+        }
 
     def find_invoiced_sales(
         self,
@@ -1249,6 +1736,432 @@ class OdooIntegration:
                 "inventory_only": bool(inventory_only),
                 "include_stock": bool(include_stock),
             },
+        }
+
+    def get_replenishment_products(
+        self,
+        max_products: int = 5000,
+        auth_override: Optional[Dict[str, str]] = None,
+    ) -> List[Dict[str, Any]]:
+        """Productos almacenables con stock actual, proyectado, entradas y salidas pendientes.
+
+        Solo lectura. Detecta el campo de tipo segun la version de Odoo:
+        `is_storable` (17.2+/18), `detailed_type` (15-17) o `type` (<=14).
+        """
+        try:
+            max_value = max(1, min(int(max_products), 20000))
+        except (TypeError, ValueError):
+            max_value = 5000
+
+        runtime = self._build_runtime_config(auth_override)
+        uid = self._authenticate(auth_override=auth_override)
+        models = self._xmlrpc_models(runtime)
+        db = runtime.get("database", "")
+        password = runtime.get("password", "")
+
+        available = set(
+            (
+                models.execute_kw(
+                    db, uid, password, "product.product", "fields_get", [[], ["string"]]
+                )
+                or {}
+            ).keys()
+        )
+
+        domain: List[Any] = []
+        if "active" in available:
+            domain.append(("active", "=", True))
+        if "is_storable" in available:
+            domain.append(("is_storable", "=", True))
+        elif "detailed_type" in available:
+            domain.append(("detailed_type", "=", "product"))
+        elif "type" in available:
+            domain.append(("type", "=", "product"))
+
+        fields = ["id"]
+        for field_name in (
+            "display_name",
+            "name",
+            "default_code",
+            "barcode",
+            "uom_id",
+            "categ_id",
+            "qty_available",
+            "virtual_available",
+            "incoming_qty",
+            "outgoing_qty",
+        ):
+            if field_name in available:
+                fields.append(field_name)
+
+        items: List[Dict[str, Any]] = []
+        page_size = 500
+        offset = 0
+        while len(items) < max_value:
+            page = models.execute_kw(
+                db,
+                uid,
+                password,
+                "product.product",
+                "search_read",
+                [domain],
+                {
+                    "fields": fields,
+                    "limit": min(page_size, max_value - len(items)),
+                    "offset": offset,
+                    "order": "default_code asc, id asc" if "default_code" in available else "id asc",
+                },
+            ) or []
+            for product in page:
+                uom_id, uom_name = self._many2one_parts(product.get("uom_id"))
+                category_id, category_name = self._many2one_parts(product.get("categ_id"))
+                items.append(
+                    {
+                        "id": product.get("id"),
+                        "default_code": str(product.get("default_code") or ""),
+                        "barcode": str(product.get("barcode") or ""),
+                        "name": str(product.get("display_name") or product.get("name") or ""),
+                        "uom": uom_name,
+                        "category_id": category_id,
+                        "category": category_name,
+                        "qty_available": product.get("qty_available") or 0.0,
+                        "virtual_available": product.get("virtual_available") or 0.0,
+                        "incoming_qty": product.get("incoming_qty") or 0.0,
+                        "outgoing_qty": product.get("outgoing_qty") or 0.0,
+                    }
+                )
+            if len(page) < page_size:
+                break
+            offset += len(page)
+        return items
+
+    def get_reorder_rules(
+        self,
+        auth_override: Optional[Dict[str, str]] = None,
+    ) -> Optional[Dict[int, Dict[str, float]]]:
+        """Minimos/maximos de las reglas de reabastecimiento, sumados por producto.
+
+        Devuelve None si el usuario no puede leer `stock.warehouse.orderpoint`
+        (el monitor usa entonces el minimo por defecto de su propia config).
+        """
+        runtime = self._build_runtime_config(auth_override)
+        uid = self._authenticate(auth_override=auth_override)
+        models = self._xmlrpc_models(runtime)
+        db = runtime.get("database", "")
+        password = runtime.get("password", "")
+
+        try:
+            rules = models.execute_kw(
+                db,
+                uid,
+                password,
+                "stock.warehouse.orderpoint",
+                "search_read",
+                [[("active", "=", True)]],
+                {"fields": ["product_id", "product_min_qty", "product_max_qty"]},
+            ) or []
+        except xmlrpc.client.Fault as exc:
+            logger.warning("No se pudieron leer reglas de reabastecimiento: %s", self.humanize_exception(exc))
+            return None
+
+        by_product: Dict[int, Dict[str, float]] = {}
+        for rule in rules:
+            product_id, _ = self._many2one_parts(rule.get("product_id"))
+            if product_id is None:
+                continue
+            entry = by_product.setdefault(product_id, {"min_qty": 0.0, "max_qty": 0.0, "rules": 0})
+            entry["min_qty"] += float(rule.get("product_min_qty") or 0.0)
+            entry["max_qty"] += float(rule.get("product_max_qty") or 0.0)
+            entry["rules"] += 1
+        return by_product
+
+    def get_customer_delivered_quantities(
+        self,
+        since_date: str,
+        auth_override: Optional[Dict[str, str]] = None,
+    ) -> Dict[int, float]:
+        """Cantidad neta entregada a clientes por producto desde `since_date` (YYYY-MM-DD).
+
+        Suma movimientos `done` hacia ubicaciones de cliente y resta las devoluciones
+        desde cliente. Se agrega en Python para no depender de `read_group`, cuya
+        firma cambio entre versiones de Odoo.
+        """
+        runtime = self._build_runtime_config(auth_override)
+        uid = self._authenticate(auth_override=auth_override)
+        models = self._xmlrpc_models(runtime)
+        db = runtime.get("database", "")
+        password = runtime.get("password", "")
+
+        available = set(
+            (
+                models.execute_kw(db, uid, password, "stock.move", "fields_get", [[], ["string"]])
+                or {}
+            ).keys()
+        )
+        qty_field = "product_qty" if "product_qty" in available else "product_uom_qty"
+        since_value = f"{since_date} 00:00:00"
+
+        totals: Dict[int, float] = {}
+        # Solo movimientos que salen de / vuelven a stock propio: los dropship
+        # (proveedor -> cliente) no consumen inventario.
+        directions = (
+            ("location_id.usage", "location_dest_id.usage", 1.0),
+            ("location_dest_id.usage", "location_id.usage", -1.0),
+        )
+        for internal_side, customer_side, sign in directions:
+            domain = [
+                ("state", "=", "done"),
+                ("date", ">=", since_value),
+                (internal_side, "=", "internal"),
+                (customer_side, "=", "customer"),
+            ]
+            offset = 0
+            page_size = 2000
+            while True:
+                moves = models.execute_kw(
+                    db,
+                    uid,
+                    password,
+                    "stock.move",
+                    "search_read",
+                    [domain],
+                    {"fields": ["product_id", qty_field], "limit": page_size, "offset": offset, "order": "id asc"},
+                ) or []
+                for move in moves:
+                    product_id, _ = self._many2one_parts(move.get("product_id"))
+                    if product_id is None:
+                        continue
+                    totals[product_id] = totals.get(product_id, 0.0) + sign * float(move.get(qty_field) or 0.0)
+                if len(moves) < page_size:
+                    break
+                offset += len(moves)
+        return totals
+
+    def record_url(self, model: str, record_id: Any) -> str:
+        """URL de formulario clasica; Odoo 17+ la redirige a su ruta nueva."""
+        return f"{self._base_url()}/web#id={int(record_id)}&model={model}&view_type=form"
+
+    def _readonly_session(self, auth_override: Optional[Dict[str, str]] = None):
+        runtime = self._build_runtime_config(auth_override)
+        uid = self._authenticate(auth_override=auth_override)
+        models = self._xmlrpc_models(runtime)
+        db = runtime.get("database", "")
+        password = runtime.get("password", "")
+
+        def call(model: str, method: str, args: List[Any], kwargs: Optional[Dict[str, Any]] = None) -> Any:
+            return models.execute_kw(db, uid, password, model, method, args, kwargs or {})
+
+        return uid, call
+
+    @staticmethod
+    def _search_read_all(call: Any, model: str, domain: List[Any], fields: List[str], order: str, page_size: int = 2000) -> List[Dict[str, Any]]:
+        rows: List[Dict[str, Any]] = []
+        offset = 0
+        while True:
+            page = call(model, "search_read", [domain], {"fields": fields, "limit": page_size, "offset": offset, "order": order}) or []
+            rows.extend(page)
+            if len(page) < page_size:
+                return rows
+            offset += len(page)
+
+    def get_receivables_data(
+        self,
+        payments_since: str,
+        auth_override: Optional[Dict[str, str]] = None,
+    ) -> Dict[str, Any]:
+        """Facturas y notas de credito de cliente abiertas, contactos y ultimo cobro. Solo lectura."""
+        _, call = self._readonly_session(auth_override)
+        moves = self._search_read_all(
+            call,
+            "account.move",
+            [
+                ("move_type", "in", ["out_invoice", "out_refund"]),
+                ("state", "=", "posted"),
+                ("payment_state", "in", ["not_paid", "partial"]),
+            ],
+            [
+                "name",
+                "move_type",
+                "partner_id",
+                "commercial_partner_id",
+                "invoice_date",
+                "invoice_date_due",
+                "amount_total",
+                "amount_residual",
+                "amount_residual_signed",
+                "currency_id",
+                "invoice_payment_term_id",
+                "invoice_user_id",
+                "payment_state",
+            ],
+            "invoice_date_due asc, id asc",
+        )
+        partner_ids = set()
+        for move in moves:
+            for key in ("commercial_partner_id", "partner_id"):
+                partner_id, _ = self._many2one_parts(move.get(key))
+                if partner_id:
+                    partner_ids.add(partner_id)
+
+        partners: Dict[int, Dict[str, Any]] = {}
+        if partner_ids:
+            for partner in call(
+                "res.partner",
+                "read",
+                [sorted(partner_ids)],
+                {"fields": ["name", "display_name", "vat", "email", "phone", "mobile"]},
+            ) or []:
+                partners[int(partner["id"])] = partner
+
+        commercial_ids = sorted(
+            {
+                pid
+                for pid in (self._many2one_parts(m.get("commercial_partner_id"))[0] for m in moves)
+                if pid
+            }
+        )
+        last_payments: Dict[int, Dict[str, Any]] = {}
+        if commercial_ids:
+            try:
+                payments = self._search_read_all(
+                    call,
+                    "account.payment",
+                    [
+                        ("partner_type", "=", "customer"),
+                        ("payment_type", "=", "inbound"),
+                        ("state", "=", "posted"),
+                        ("date", ">=", payments_since),
+                        ("partner_id", "child_of", commercial_ids),
+                    ],
+                    ["partner_id", "date", "amount", "currency_id"],
+                    "date desc, id desc",
+                )
+                # child_of trae pagos de contactos hijos: agrupar por entidad comercial.
+                child_to_commercial: Dict[int, int] = {}
+                payment_partner_ids = sorted(
+                    {pid for pid in (self._many2one_parts(p.get("partner_id"))[0] for p in payments) if pid}
+                )
+                if payment_partner_ids:
+                    for partner in call(
+                        "res.partner", "read", [payment_partner_ids], {"fields": ["commercial_partner_id"]}
+                    ) or []:
+                        commercial_id, _ = self._many2one_parts(partner.get("commercial_partner_id"))
+                        child_to_commercial[int(partner["id"])] = commercial_id or int(partner["id"])
+                for payment in payments:
+                    partner_id, _ = self._many2one_parts(payment.get("partner_id"))
+                    commercial_id = child_to_commercial.get(partner_id or 0)
+                    if commercial_id and commercial_id not in last_payments:
+                        _, currency = self._many2one_parts(payment.get("currency_id"))
+                        last_payments[commercial_id] = {
+                            "date": payment.get("date"),
+                            "amount": payment.get("amount"),
+                            "currency": currency,
+                        }
+            except xmlrpc.client.Fault as exc:
+                logger.warning("No se pudieron leer los cobros de clientes: %s", self.humanize_exception(exc))
+
+        companies = call("res.company", "search_read", [[]], {"fields": ["name"], "limit": 1}) or []
+        return {
+            "moves": moves,
+            "partners": partners,
+            "last_payments": last_payments,
+            "company_name": str(companies[0].get("name") or "") if companies else "",
+        }
+
+    def get_company_branding(
+        self,
+        auth_override: Optional[Dict[str, str]] = None,
+    ) -> Dict[str, Any]:
+        """Logo (base64), colores de documentos y datos de contacto de la compania principal."""
+        _, call = self._readonly_session(auth_override)
+        available = set((call("res.company", "fields_get", [[], ["type"]]) or {}).keys())
+        wanted = [
+            name
+            for name in (
+                "name", "logo", "primary_color", "secondary_color", "street", "street2",
+                "city", "phone", "email", "website", "vat",
+            )
+            if name in available
+        ]
+        companies = call("res.company", "search_read", [[]], {"fields": wanted, "limit": 1, "order": "id asc"}) or []
+        return companies[0] if companies else {}
+
+    def get_uninvoiced_sale_orders(
+        self,
+        auth_override: Optional[Dict[str, str]] = None,
+    ) -> List[Dict[str, Any]]:
+        """Ordenes de venta confirmadas con algo pendiente de facturar. Solo lectura."""
+        _, call = self._readonly_session(auth_override)
+        return self._search_read_all(
+            call,
+            "sale.order",
+            [("state", "=", "sale"), ("invoice_status", "=", "to invoice")],
+            [
+                "name",
+                "date_order",
+                "partner_id",
+                "amount_total",
+                "amount_to_invoice",
+                "currency_id",
+                "team_id",
+                "user_id",
+                "client_order_ref",
+            ],
+            "date_order asc, id asc",
+        )
+
+    def get_today_alerts(
+        self,
+        today: str,
+        sample_size: int = 8,
+        auth_override: Optional[Dict[str, str]] = None,
+    ) -> Dict[str, Any]:
+        """Entregas y recepciones atrasadas y actividades vencidas, con una muestra de cada una."""
+        uid, call = self._readonly_session(auth_override)
+        pending_states = ["confirmed", "waiting", "assigned"]
+        picking_fields = ["name", "partner_id", "scheduled_date", "origin", "state"]
+
+        def block(model: str, domain: List[Any], fields: List[str], order: str) -> Dict[str, Any]:
+            try:
+                return {
+                    "count": int(call(model, "search_count", [domain]) or 0),
+                    "items": call(model, "search_read", [domain], {"fields": fields, "limit": sample_size, "order": order}) or [],
+                }
+            except xmlrpc.client.Fault as exc:
+                return {"count": None, "items": [], "error": self.humanize_exception(exc)}
+
+        late_deliveries = block(
+            "stock.picking",
+            [("picking_type_code", "=", "outgoing"), ("state", "in", pending_states), ("scheduled_date", "<", today)],
+            picking_fields,
+            # Primero lo recien atrasado: lo de hace meses suele ser arrastre a limpiar.
+            "scheduled_date desc",
+        )
+        late_receipts = block(
+            "stock.picking",
+            [("picking_type_code", "=", "incoming"), ("state", "in", pending_states), ("scheduled_date", "<", today)],
+            picking_fields,
+            "scheduled_date desc",
+        )
+        activity_fields = ["summary", "res_name", "res_model", "res_id", "date_deadline", "user_id", "activity_type_id"]
+        my_activities = block(
+            "mail.activity",
+            [("date_deadline", "<=", today), ("user_id", "=", uid)],
+            activity_fields,
+            "date_deadline asc",
+        )
+        all_activities = block("mail.activity", [("date_deadline", "<", today)], activity_fields, "date_deadline asc")
+
+        for item in late_deliveries["items"] + late_receipts["items"]:
+            item["url"] = self.record_url("stock.picking", item["id"])
+        for item in my_activities["items"] + all_activities["items"]:
+            if item.get("res_model") and item.get("res_id"):
+                item["url"] = self.record_url(item["res_model"], item["res_id"])
+        return {
+            "late_deliveries": late_deliveries,
+            "late_receipts": late_receipts,
+            "my_activities": my_activities,
+            "overdue_activities": all_activities,
         }
 
     def get_payment_journals(

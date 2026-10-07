@@ -6,6 +6,7 @@ function onOpen() {
     .addSubMenu(
       ui.createMenu("🔄 SINCRONIZACIÓN")
       .addItem("🔄 Sincronizar FABRICACION", "syncOdooManufacturingOrders")
+      .addItem("Filtro responsables FABRICACION", "openManufacturingResponsibleSyncFilter")
       .addItem("🔄 Sincronizar VENTAS NEO", "syncOdooSalesOrdersNeo")
       .addItem("🔃 Sincronizar todas", "syncAllOrders")
     )

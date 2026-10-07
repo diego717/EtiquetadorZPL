@@ -188,7 +188,52 @@ function handleJobsSheetEdit_(sheet, range) {
     }
   }
 
-  ejecutarOrdenadoAutomatico();
+  ejecutarOrdenadoAutomaticoRespetandoSync_();
+}
+
+const PENDING_AUTO_SORT_PROPERTY = "PENDING_AUTO_SORT";
+
+/**
+ * Ordena TRABAJOS solo si ninguna sincronización tiene el lock.
+ *
+ * Las sincronizaciones guardan números de fila al empezar y los usan durante
+ * varios minutos. Si una edición manual ordena la hoja en el medio, la sync
+ * escribe sobre filas que ya se movieron (así una venta en Finalizado volvió
+ * a aparecer como Empezar). Si el lock está ocupado, el orden queda pendiente
+ * y lo ejecuta la propia sync al terminar.
+ */
+function ejecutarOrdenadoAutomaticoRespetandoSync_() {
+  const lock = LockService.getScriptLock();
+
+  if (!lock.tryLock(5000)) {
+    PropertiesService.getScriptProperties().setProperty(
+      PENDING_AUTO_SORT_PROPERTY,
+      nowUtcString_()
+    );
+    return false;
+  }
+
+  try {
+    PropertiesService.getScriptProperties().deleteProperty(
+      PENDING_AUTO_SORT_PROPERTY
+    );
+    ejecutarOrdenadoAutomatico();
+    return true;
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+/**
+ * Devuelve true (y limpia la marca) si una edición manual dejó el orden
+ * pendiente mientras corría una sincronización.
+ */
+function consumePendingAutoSort_() {
+  const properties = PropertiesService.getScriptProperties();
+  if (!properties.getProperty(PENDING_AUTO_SORT_PROPERTY)) return false;
+
+  properties.deleteProperty(PENDING_AUTO_SORT_PROPERTY);
+  return true;
 }
 
 function rangeIncludesColumn_(range, column) {
@@ -595,6 +640,24 @@ function stampAutomationStateDateIfNeeded_(sheet, row, normalizedState) {
  * Mueve al histórico trabajos finalizados o marcados manualmente para archivar.
  */
 function moverFinalizadosAHistorico() {
+  // Mueve y limpia filas: no puede correr en medio de una sincronización.
+  // Si el lock está ocupado se reintenta en la próxima ejecución del activador.
+  const lock = LockService.getScriptLock();
+  if (!lock.tryLock(30000)) {
+    Logger.log(
+      "Movimiento al histórico omitido: hay una sincronización en curso."
+    );
+    return;
+  }
+
+  try {
+    moverFinalizadosAHistoricoUnlocked_();
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+function moverFinalizadosAHistoricoUnlocked_() {
   const spreadsheet = getAutomationSpreadsheet_();
   if (!spreadsheet) return;
   const sourceSheet = spreadsheet.getSheetByName(CFG.SHEET_NAME);

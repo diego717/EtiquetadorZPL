@@ -3,9 +3,11 @@
 from __future__ import annotations
 
 from io import BytesIO
-from typing import Any, Dict, Iterable, Tuple
+from typing import Any, Dict, Iterable, Optional, Tuple
 
 import fitz
+
+from company_branding import draw_footer, draw_header, hex_to_rgb, neutral_branding
 
 
 def _text(value: Any, default: str = "-") -> str:
@@ -67,67 +69,54 @@ def build_totalnet_receipt_filename(coupon: Dict[str, Any]) -> str:
     return f"TotalNet_Fact_{safe(invoice)}_Ticket_{safe(ticket)}_Cupon_{safe(coupon_id)}.pdf"
 
 
-def generate_totalnet_transaction_pdf(coupon: Dict[str, Any]) -> bytes:
+def generate_totalnet_transaction_pdf(coupon: Dict[str, Any], branding: Optional[Dict[str, Any]] = None) -> bytes:
     """Crea un PDF A4 legible sin depender de una captura o portal web."""
+    branding = branding or neutral_branding()
+    label_color = hex_to_rgb(branding.get("table"))
     document = fitz.open()
     try:
         page = document.new_page(width=595, height=842)
-        page.draw_rect(page.rect, color=(0.86, 0.88, 0.91), fill=(1, 1, 1), width=0.8)
-        title = "Detalle de la transacción"
-        title_width = fitz.get_text_length(title, fontname="helv", fontsize=17)
-        page.insert_text(
-            ((595 - title_width) / 2, 50),
-            title,
-            fontname="helv",
-            fontsize=17,
-            color=(0.10, 0.13, 0.18),
-        )
         subtitle = (
             "Comprobante transcripto manualmente desde el ticket TotalNet"
             if coupon.get("manual_entry")
             else "Comprobante generado desde la API de TotalNet"
         )
-        subtitle_width = fitz.get_text_length(subtitle, fontname="helv", fontsize=9)
-        page.insert_text(
-            ((595 - subtitle_width) / 2, 72),
-            subtitle,
-            fontname="helv",
-            fontsize=9,
-            color=(0.36, 0.40, 0.46),
-        )
-        y = 92.0
-        row_height = 33.0
-        for label, value in _rows(coupon):
-            page.draw_line((44, y + row_height - 5), (551, y + row_height - 5), color=(0.84, 0.86, 0.89), width=0.6)
+        y = draw_header(page, branding, "Detalle de la transacción", subtitle, margin=44)
+        row_height = 28.0
+        for index, (label, value) in enumerate(_rows(coupon)):
+            if index % 2 == 0:
+                page.draw_rect(fitz.Rect(44, y - 2, 551, y + row_height - 6), color=None, fill=(0.965, 0.97, 0.975))
             page.insert_textbox(
-                fitz.Rect(48, y, 235, y + row_height - 7),
+                fitz.Rect(52, y + 4, 235, y + row_height - 4),
                 f"{label}:",
                 fontname="hebo",
-                fontsize=10.2,
-                color=(0.13, 0.16, 0.21),
+                fontsize=10,
+                color=label_color,
             )
             page.insert_textbox(
-                fitz.Rect(235, y, 547, y + row_height - 7),
+                fitz.Rect(235, y + 4, 547, y + row_height - 4),
                 value,
                 fontname="helv",
-                fontsize=10.2,
-                color=(0.25, 0.29, 0.35),
+                fontsize=10,
+                color=(0.2, 0.24, 0.3),
             )
             y += row_height
 
         marker = f"Cupon TotalNet: {_text(coupon.get('cupon_id'))}"
         page.insert_textbox(
-            fitz.Rect(44, 775, 551, 808),
+            fitz.Rect(44, 772, 551, 800),
             marker,
             fontname="helv",
             fontsize=8,
             align=fitz.TEXT_ALIGN_CENTER,
             color=(0.48, 0.51, 0.56),
         )
+        draw_footer(page, branding, "Detalle de transacción TotalNet", margin=44)
         document.set_metadata(
             {
                 "title": f"Detalle TotalNet - Factura {_text(coupon.get('numero_factura'))}",
-            "subject": marker,
+                "subject": marker,
+                "author": branding.get("name") or "",
                 "creator": "EtiquetadorZPL",
             }
         )

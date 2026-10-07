@@ -175,8 +175,15 @@ function getIncompleteSalesOrderKeys_(sheet, existingSalesRowsMap, sheetSnapshot
   return keys;
 }
 
-function clearSalesOrderRows_(sheet, rows) {
+/**
+ * Vacía filas de venta de TRABAJOS. Cada fila quitada deja una entrada
+ * "remove" en LOG_SYNC con el motivo y lo que contenía, para que una fila
+ * que desaparece siempre se pueda rastrear.
+ */
+function clearSalesOrderRows_(sheet, rows, reason, logInfo) {
   for (const row of rows) {
+    logSalesRowRemoval_(sheet, row, reason, logInfo);
+
     // Limpia los datos operativos sin borrar la fórmula de la columna L.
     sheet.getRange(row, 1, 1, 10).clearContent();
     sheet.getRange(row, CFG.LINK_COL).clearNote();
@@ -191,6 +198,37 @@ function clearSalesOrderRows_(sheet, rows) {
     sheet.getRange(row, 14, 1, 2).clearContent().clearNote();
     clearSalesSyncMetadataForRow_(sheet, row);
     clearSalesRowHiddenMetadata_(sheet, row);
+  }
+}
+
+function logSalesRowRemoval_(sheet, row, reason, logInfo) {
+  try {
+    const rowValues = sheet.getRange(row, 1, 1, 10).getDisplayValues()[0];
+    const metadataValues = sheet
+      .getRange(row, getManufacturingIdColumn_(), 1, 4)
+      .getDisplayValues()[0];
+    const orderName =
+      cleanString_(logInfo && logInfo.orderName) ||
+      cleanString_(rowValues[CFG.ORDER_COL - 1]);
+    const saleId =
+      cleanString_(logInfo && logInfo.saleId) ||
+      cleanString_(metadataValues[1]);
+
+    appendSyncLog_({
+      module: "VENTAS",
+      action: "remove",
+      order: orderName,
+      odooId: saleId,
+      origin: "VENTA",
+      details:
+        `Fila ${row} quitada (${cleanString_(reason) || "sin motivo"}). ` +
+        `Producto: ${cleanString_(rowValues[CFG.PRODUCT_COL - 1])}; ` +
+        `Cantidad: ${cleanString_(rowValues[CFG.QUANTITY_COL - 1])}; ` +
+        `Estado: ${cleanString_(rowValues[CFG.STATE_COL - 1])}; ` +
+        `Linea Odoo: ${cleanString_(metadataValues[2]) || "-"}.`,
+    });
+  } catch (err) {
+    Logger.log(`No se pudo registrar la fila quitada ${row}: ${err}`);
   }
 }
 
@@ -1241,8 +1279,14 @@ function buildSalesHistoryRowKeysFromValues_(
   const normalizedSaleOrderId = cleanString_(saleOrderId);
   const orderKey = normalizeOrderNumberKey_(orderName);
 
+  // Con id de línea, el archivado es solo de esa línea. Si además se
+  // generaran las claves de orden, archivar un ítem (ej. pasar a Finalizado y
+  // de ahí al histórico) haría que la sync limpie el resto de los ítems de la
+  // orden en cuanto la orden cambie en Odoo (por ejemplo, al facturar).
+  // Las claves de orden quedan solo para filas viejas sin id de línea.
   if (normalizedSaleLineId) {
     keys.push(`line:${normalizedSaleLineId}`);
+    return keys;
   }
 
   if (normalizedSaleOrderId && orderKey) {
@@ -1856,7 +1900,12 @@ function syncOdooSalesOrdersNeoUnlocked_() {
           salesPausedNotificationsChanged = true;
         }
 
-        clearSalesOrderRows_(sheet, existingRows);
+        clearSalesOrderRows_(
+          sheet,
+          existingRows,
+          "orden archivada en historico",
+          { orderName, saleId }
+        );
         removed += existingRows.length;
         needsAutoSort = true;
         existingSalesRowsMap.delete(orderKey);
@@ -1910,7 +1959,12 @@ function syncOdooSalesOrdersNeoUnlocked_() {
           salesPausedNotificationsChanged = true;
         }
 
-        clearSalesOrderRows_(sheet, existingRows);
+        clearSalesOrderRows_(
+          sheet,
+          existingRows,
+          "orden cancelada en Odoo",
+          { orderName, saleId }
+        );
         removed += existingRows.length;
         needsAutoSort = true;
         existingSalesRowsMap.delete(orderKey);
@@ -1961,7 +2015,12 @@ function syncOdooSalesOrdersNeoUnlocked_() {
           salesPausedNotificationsChanged = true;
         }
 
-        clearSalesOrderRows_(sheet, existingRows);
+        clearSalesOrderRows_(
+          sheet,
+          existingRows,
+          "orden sin lineas de produccion (plazo > 0)",
+          { orderName, saleId }
+        );
         removed += existingRows.length;
         needsAutoSort = true;
         existingSalesRowsMap.delete(orderKey);
@@ -2029,7 +2088,12 @@ function syncOdooSalesOrdersNeoUnlocked_() {
           salesPausedNotificationsChanged = true;
         }
 
-        clearSalesOrderRows_(sheet, existingRows);
+        clearSalesOrderRows_(
+          sheet,
+          existingRows,
+          "orden sin fecha reconocible en las notas",
+          { orderName, saleId }
+        );
         removed += existingRows.length;
         needsAutoSort = true;
         existingSalesRowsMap.delete(orderKey);
@@ -2063,6 +2127,7 @@ function syncOdooSalesOrdersNeoUnlocked_() {
     );
     const usedRows = new Set();
     let processedLineCount = 0;
+    let archivedLineCount = 0;
 
     const clearedArchivedRows = new Set();
 
@@ -2127,7 +2192,12 @@ function syncOdooSalesOrdersNeoUnlocked_() {
             salesPausedNotificationsChanged = true;
           }
 
-          clearSalesOrderRows_(sheet, [targetRow]);
+          clearSalesOrderRows_(
+            sheet,
+            [targetRow],
+            "linea archivada en historico",
+            { orderName, saleId }
+          );
           clearedArchivedRows.add(targetRow);
           const rowIndex = existingRows.indexOf(targetRow);
           if (rowIndex !== -1) existingRows.splice(rowIndex, 1);
@@ -2135,6 +2205,7 @@ function syncOdooSalesOrdersNeoUnlocked_() {
           needsAutoSort = true;
         }
 
+        archivedLineCount++;
         logDebug_(
           `Orden de venta omitida por estar en histórico: ${orderName} | línea=${line.lineId}`
         );
@@ -2263,6 +2334,17 @@ function syncOdooSalesOrdersNeoUnlocked_() {
       importedIds.add(saleId);
     }
 
+    // Con todas sus líneas en el histórico la orden no tiene nada que mostrar:
+    // se omite hasta que vuelva a cambiar, como antes hacía la clave de orden.
+    if (archivedLineCount === productLines.length) {
+      skippedIds.add(saleId);
+      setSalesSkippedWriteDate_(
+        skippedWriteDateById,
+        saleId,
+        order.write_date
+      );
+    }
+
     if (processedLineCount === productLines.length) {
       const obsoleteRows = existingRows.filter(
         (existingRow) => !usedRows.has(existingRow)
@@ -2302,7 +2384,12 @@ function syncOdooSalesOrdersNeoUnlocked_() {
           salesPausedNotificationsChanged = true;
         }
 
-        clearSalesOrderRows_(sheet, obsoleteRows);
+        clearSalesOrderRows_(
+          sheet,
+          obsoleteRows,
+          "la linea ya no coincide con ninguna linea de produccion de la orden",
+          { orderName, saleId }
+        );
         removed += obsoleteRows.length;
         needsAutoSort = true;
         nextRow = getFirstAvailableRow_(sheet);
@@ -2349,6 +2436,10 @@ function syncOdooSalesOrdersNeoUnlocked_() {
     syncStartedAtMs,
     `importadas=${importedIds.size}; omitidas=${skippedIds.size}`
   );
+
+  if (consumePendingAutoSort_()) {
+    needsAutoSort = true;
+  }
 
   if (needsAutoSort) {
     SpreadsheetApp.flush();
@@ -2715,12 +2806,30 @@ function importSpecificNeoSaleOrder_(lookupValue) {
     };
   }
 
-  const productLines = fetchSaleOrderProductLines_(cfg, uid, order.id);
+  const allProductLines = fetchSaleOrderProductLines_(cfg, uid, order.id);
+
+  if (!allProductLines.length) {
+    return {
+      inserted: 0,
+      message: `La orden ${order.name} no tiene líneas de producto válidas.`,
+    };
+  }
+
+  // Solo se importan las líneas que no están en el histórico: un ítem ya
+  // finalizado y archivado no debe volver a la hoja operativa.
+  const productLines = allProductLines.filter(
+    (line) =>
+      !isArchivedSalesRowKey_(archivedSalesRowKeys, {
+        saleOrderId: cleanString_(order.id),
+        saleLineId: line.lineId,
+        orderName: order.name,
+      })
+  );
 
   if (!productLines.length) {
     return {
       inserted: 0,
-      message: `La orden ${order.name} no tiene líneas de producto válidas.`,
+      message: `Todas las líneas de ${order.name} ya están en el histórico.`,
     };
   }
 
@@ -3774,6 +3883,7 @@ function writeSalesOrderLineRow_(sheet, row, data) {
     originalDeliveryCellValue || detailValues[4]
   );
   const originalStateValue = cleanString_(detailValues[5]);
+  const originalStateDateValue = cleanString_(detailValues[6]);
   const parsedNoteDateValue = parseSalesSheetDateValue_(
     data.noteDateFormatted
   );
@@ -3968,7 +4078,46 @@ function writeSalesOrderLineRow_(sheet, row, data) {
     detailValues[4] = parsedDeliveryDateValue;
   }
 
-  sheet.getRange(row, 4, 1, 7).setValues([detailValues]);
+  // D:H siempre se reescriben. Estado (I) y fecha de estado (J) solo si la
+  // sync realmente los cambió: reescribirlos con el valor leído al principio
+  // pisaba un "Finalizado" cargado a mano mientras corría la sincronización.
+  sheet.getRange(row, 4, 1, 5).setValues([detailValues.slice(0, 5)]);
+
+  const stateChangedBySync =
+    cleanString_(detailValues[5]) !== originalStateValue;
+  const stateDateChangedBySync =
+    cleanString_(detailValues[6]) !== originalStateDateValue;
+
+  if (stateChangedBySync || stateDateChangedBySync) {
+    const liveStateValue = cleanString_(
+      sheet.getRange(row, CFG.STATE_COL).getDisplayValue()
+    );
+
+    if (liveStateValue !== originalStateValue) {
+      // Alguien cambió el estado después de que lo leímos: gana el valor
+      // actual de la hoja.
+      detailValues[5] = liveStateValue;
+      shouldMarkRowForMovement = false;
+      appendSyncLog_({
+        module: "VENTAS",
+        action: "skip_state_changed_during_sync",
+        order: data.orderName,
+        odooId: data.saleId,
+        origin: "VENTA",
+        details:
+          `Fila ${row}: estado leído "${originalStateValue || "(vacio)"}", ` +
+          `actual "${liveStateValue || "(vacio)"}". Se respeta el actual.`,
+      });
+    } else if (stateChangedBySync && stateDateChangedBySync) {
+      sheet
+        .getRange(row, CFG.STATE_COL, 1, 2)
+        .setValues([[detailValues[5], detailValues[6]]]);
+    } else if (stateChangedBySync) {
+      sheet.getRange(row, CFG.STATE_COL).setValue(detailValues[5]);
+    } else {
+      sheet.getRange(row, CFG.STATE_COL + 1).setValue(detailValues[6]);
+    }
+  }
 
   if (parsedIngressDateValue) {
     sheet.getRange(row, 7).setNumberFormat("d-mmm");

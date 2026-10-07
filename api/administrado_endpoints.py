@@ -64,6 +64,7 @@ class AdministradoShipmentPrintRequest(BaseModel):
     order_printer: str = ""
     label_printer: str = ""
     app_username: str = ""
+    operation_id: str = Field(default="", max_length=80)
 
 
 class AdministradoSyncRequest(BaseModel):
@@ -273,8 +274,62 @@ def _merge_print_state_into_sales(sales: list[Dict[str, Any]]) -> list[Dict[str,
         sale["_last_confirm_state_before"] = info.get("last_confirm_state_before") or ""
         sale["_last_confirm_state_after"] = info.get("last_confirm_state_after") or ""
         sale["_last_error"] = info.get("last_error") or ""
-        if info.get("print_mode"):
-            sale["print_mode"] = info.get("print_mode")
+        # Administrado es la fuente de verdad de si la etiqueta ya se imprimio (puede haberse
+        # impreso directo en la web). El historial local solo puede adelantar "reimprimir"
+        # cuando se imprimio desde la app y Administrado aun no lo refleja; nunca volver atras.
+        if info.get("print_mode") == "reimprimir":
+            sale["print_mode"] = "reimprimir"
+    return sales
+
+
+def _attach_odoo_stock_statuses(sales: list[Dict[str, Any]]) -> list[Dict[str, Any]]:
+    """Agrega disponibilidad Odoo sin convertirla en requisito para imprimir."""
+    if not isinstance(sales, list):
+        return []
+
+    enabled = bool(odoo_integration.config.get("enabled")) and odoo_integration.is_configured()
+    if not enabled:
+        fallback = {
+            "code": "unavailable",
+            "label": "Odoo no configurado",
+            "detail": "Configura y habilita Odoo para consultar entregas y stock.",
+            "pickings": [],
+        }
+        for sale in sales:
+            if isinstance(sale, dict):
+                sale["odoo_stock"] = dict(fallback)
+        return sales
+
+    envio_ids = [
+        str(sale.get("envio_id") or "").strip()
+        for sale in sales
+        if isinstance(sale, dict) and str(sale.get("envio_id") or "").strip()
+    ]
+    try:
+        statuses = odoo_integration.get_sale_order_stock_statuses(envio_ids)
+    except Exception as exc:
+        message = _friendly_error(exc)
+        logger.warning("No se pudo consultar stock Odoo en bloque: %s", message)
+        statuses = {}
+        fallback = {
+            "code": "error",
+            "label": "Stock no disponible",
+            "detail": message,
+            "pickings": [],
+        }
+    else:
+        fallback = {
+            "code": "unknown",
+            "label": "Stock sin datos",
+            "detail": "Odoo no devolvio informacion para este envio.",
+            "pickings": [],
+        }
+
+    for sale in sales:
+        if not isinstance(sale, dict):
+            continue
+        envio_id = str(sale.get("envio_id") or "").strip()
+        sale["odoo_stock"] = statuses.get(envio_id, dict(fallback))
     return sales
 
 
@@ -513,6 +568,7 @@ async def sync_sales(request: AdministradoSyncRequest) -> Dict[str, Any]:
         )
         sales = await asyncio.to_thread(_filter_non_printable_sales, sales)
         sales = _merge_print_state_into_sales(sales)
+        sales = await asyncio.to_thread(_attach_odoo_stock_statuses, sales)
         return {"sales": sales, "count": len(sales)}
     except Exception as exc:
         message = _friendly_error(exc)
@@ -627,6 +683,7 @@ async def print_shipment(
                     else str(odoo_integration.config.get("username", "")).strip()
                 )
 
+                order = None
                 order_result = None
                 confirm_result = None
                 if mode in {"both", "order_only"}:
@@ -671,6 +728,30 @@ async def print_shipment(
                             f"No se pudo imprimir etiqueta para envio {envio_id}: {label_result.get('error', 'sin detalle')}"
                         )
 
+                odoo_note_result = None
+                if order and mode in {"both", "order_only"}:
+                    try:
+                        odoo_note_result = odoo_integration.post_sale_order_print_note(
+                            order_id=int(order["id"]),
+                            envio_id=envio_id,
+                            mode=mode,
+                            order_printer=str((order_result or {}).get("printer") or ""),
+                            label_printer=str((label_result or {}).get("printer") or ""),
+                            event_key=str(request.operation_id or ""),
+                            auth_override=auth_override,
+                        )
+                    except Exception as exc:
+                        note_error = _friendly_error(exc)
+                        logger.warning(
+                            "Impresion correcta, pero no se pudo registrar nota Odoo para envio %s: %s",
+                            envio_id,
+                            note_error,
+                        )
+                        odoo_note_result = {
+                            "success": False,
+                            "error": note_error,
+                        }
+
                 _record_print_event(
                     envio_id=envio_id,
                     mode=mode,
@@ -690,6 +771,7 @@ async def print_shipment(
                     "confirm_result": confirm_result,
                     "order_result": order_result,
                     "label_result": label_result,
+                    "odoo_note_result": odoo_note_result,
                 }
             finally:
                 _release_print_inflight(envio_id)

@@ -18,10 +18,8 @@ from pydantic import BaseModel
 from odoo_integration import odoo_integration
 from totalnet_integration import totalnet_integration
 import pos_reconciliation as recon
-from totalnet_receipt_pdf import (
-    build_totalnet_receipt_filename,
-    generate_totalnet_transaction_pdf,
-)
+import pos_reconciliation_service as service
+from pos_reconciliation_worker import pos_reconciliation_worker
 
 router = APIRouter(prefix="/api/pos-reconciliation", tags=["pos-reconciliation"])
 
@@ -70,6 +68,12 @@ class PosReconciliationConfigRequest(BaseModel):
     amount_tolerance: Optional[float] = None
     date_window_days: Optional[int] = None
     journal_map: Optional[Dict[str, Any]] = None
+    auto_sync_enabled: Optional[bool] = None
+    auto_sync_interval_minutes: Optional[int] = None
+    auto_sync_lookback_days: Optional[int] = None
+    auto_sync_notify_desktop: Optional[bool] = None
+    auto_register_deterministic: Optional[bool] = None
+    auto_register_operator: Optional[str] = None
 
 
 @router.get("/config")
@@ -80,7 +84,40 @@ async def get_config() -> Dict[str, Any]:
 @router.post("/config")
 async def save_config(request: PosReconciliationConfigRequest) -> Dict[str, Any]:
     updates = {k: v for k, v in request.dict().items() if v is not None}
+    if "auto_register_operator" in updates:
+        updates["auto_register_operator"] = str(updates["auto_register_operator"]).strip().lower()
+    enabling_auto_register = updates.get("auto_register_deterministic") is True
+    operator = updates.get(
+        "auto_register_operator",
+        (await asyncio.to_thread(recon.load_recon_config)).get("auto_register_operator", ""),
+    )
+    if enabling_auto_register and not odoo_integration.resolve_operator_auth_exact(operator):
+        raise HTTPException(
+            status_code=400,
+            detail="Para registrar pagos automaticamente elige un operador con credenciales Odoo completas",
+        )
     return await asyncio.to_thread(recon.save_recon_config, updates)
+
+
+@router.get("/auto/status")
+async def get_auto_status() -> Dict[str, Any]:
+    return await asyncio.to_thread(pos_reconciliation_worker.get_status)
+
+
+@router.get("/auto/proposal")
+async def get_auto_proposal() -> Dict[str, Any]:
+    proposal = await asyncio.to_thread(pos_reconciliation_worker.get_last_proposal)
+    if not proposal:
+        raise HTTPException(status_code=404, detail="Todavia no hay una sincronizacion automatica")
+    return proposal
+
+
+@router.post("/auto/run-once")
+async def run_auto_once() -> Dict[str, Any]:
+    result = await asyncio.to_thread(pos_reconciliation_worker.run_cycle, True)
+    if not result.get("ok") and result.get("reason") != "cycle_in_progress":
+        raise HTTPException(status_code=400, detail=result.get("error") or "Fallo la sincronizacion")
+    return result
 
 
 @router.get("/journals")
@@ -118,52 +155,13 @@ async def sync(request: PosReconciliationSyncRequest) -> Dict[str, Any]:
         raise HTTPException(status_code=400, detail="Odoo no esta configurado")
 
     try:
-        recon_config = await asyncio.to_thread(recon.load_recon_config)
-        lookahead_days = int(
-            recon_config.get("settlement_lookahead_days", recon.DEFAULT_SETTLEMENT_LOOKAHEAD_DAYS)
+        return await asyncio.to_thread(
+            service.build_sync_proposal,
+            totalnet_integration,
+            odoo_integration,
+            request.date_from,
+            request.date_to,
         )
-        settlement_from, settlement_to = recon.resolve_settlement_query_range(
-            request.date_from, request.date_to, lookahead_days
-        )
-        cupones = await asyncio.to_thread(
-            totalnet_integration.get_all_cupones, settlement_from, settlement_to
-        )
-        cupones = recon.filter_cupones_by_transaction_date(cupones, request.date_from, request.date_to)
-        invoices = await asyncio.to_thread(
-            odoo_integration.find_invoiced_sales,
-            date_from=request.date_from,
-            date_to=request.date_to,
-            only_cash_payment_term=True,
-        )
-        processed_ids = await asyncio.to_thread(recon.load_processed_cupon_ids)
-
-        result = recon.match_cupones_to_invoices(
-            cupones,
-            invoices,
-            amount_tolerance=float(recon_config.get("amount_tolerance", recon.DEFAULT_AMOUNT_TOLERANCE)),
-            date_window_days=int(recon_config.get("date_window_days", recon.DEFAULT_DATE_WINDOW_DAYS)),
-            exclude_cupon_ids=processed_ids,
-        )
-
-        journal_map = recon_config.get("journal_map", {}) or {}
-        for match in result["matches_unicos"]:
-            match["suggested_journal_id"] = recon.resolve_journal_id(match["cupon"].get("sello"), journal_map)
-            match["suggested_memo"] = recon.build_payment_memo(match["invoice"].get("name"), match["cupon"])
-
-        return {
-            "matching_version": 4,
-            "date_from": request.date_from,
-            "date_to": request.date_to,
-            "settlement_date_from": settlement_from,
-            "settlement_date_to": settlement_to,
-            "total_cupones": len(cupones),
-            "total_facturas_contado": len(invoices),
-            "total_facturas_pendientes_contado": sum(
-                str(invoice.get("invoice_payment_state") or "") in {"not_paid", "partial"}
-                for invoice in invoices
-            ),
-            **result,
-        }
     except HTTPException:
         raise
     except Exception as exc:
@@ -312,7 +310,7 @@ async def manual_match(request: ManualPosTicketRequest) -> Dict[str, Any]:
                 match["invoice"].get("name"), match["cupon"]
             )
         return {
-            "matching_version": 4,
+            "matching_version": service.MATCHING_VERSION,
             "source": "manual_ticket",
             "date_from": search_from,
             "date_to": search_to,
@@ -380,61 +378,22 @@ async def confirm(request: PosReconciliationConfirmRequest) -> Dict[str, Any]:
             results.append(entry)
             continue
 
-        memo = item.memo or recon.build_payment_memo(item.invoice_name, cupon)
         try:
-            payment_date = recon.normalize_date_iso(cupon.get("fecha"))
-            original_amount = float(cupon.get("importe") or 0)
-            payment_amount = (
-                recon.round_payment_amount(original_amount)
-                if item.round_to_integer
-                else original_amount
+            entry.update(
+                await asyncio.to_thread(
+                    service.register_confirmed_payment,
+                    odoo_integration,
+                    cupon,
+                    item.invoice_id,
+                    item.invoice_name,
+                    int(journal_id),
+                    item.memo,
+                    auth_override,
+                    item.round_to_integer,
+                    item.rounding_account_id,
+                    item.attach_receipt_pdf,
+                )
             )
-            payment_result = await asyncio.to_thread(
-                odoo_integration.register_invoice_payment,
-                item.invoice_id,
-                payment_amount,
-                payment_date,
-                int(journal_id),
-                memo,
-                auth_override,
-                True,
-                item.rounding_account_id if item.round_to_integer else None,
-                original_amount if item.round_to_integer else None,
-            )
-            entry["ok"] = True
-            entry["result"] = payment_result
-            entry["original_amount"] = original_amount
-            entry["payment_amount"] = payment_amount
-            entry["rounding_difference"] = round(payment_amount - original_amount, 2)
-            if item.attach_receipt_pdf:
-                payment_id = payment_result.get("payment_id")
-                if not payment_id:
-                    # El pago ya fue creado. Informar la advertencia sin marcarlo
-                    # como fallido para evitar que un reintento duplique el cobro.
-                    entry["attachment_ok"] = False
-                    entry["warning"] = (
-                        "El pago se registro, pero no se pudo ubicar el pago creado en Odoo "
-                        "para adjuntar el PDF TotalNet."
-                    )
-                else:
-                    try:
-                        filename = build_totalnet_receipt_filename(cupon)
-                        pdf_bytes = generate_totalnet_transaction_pdf(cupon)
-                        attachment_result = await asyncio.to_thread(
-                            odoo_integration.attach_totalnet_receipt_to_payment,
-                            payment_id,
-                            filename,
-                            pdf_bytes,
-                            auth_override,
-                        )
-                        entry["attachment_ok"] = True
-                        entry["attachment"] = attachment_result
-                    except Exception as attachment_exc:
-                        entry["attachment_ok"] = False
-                        entry["warning"] = (
-                            "El pago se registro, pero no se pudo adjuntar el PDF TotalNet: "
-                            f"{_friendly_error(attachment_exc)}"
-                        )
             if cupon.get("cupon_id") is not None:
                 processed_cupon_ids.append(cupon.get("cupon_id"))
         except Exception as exc:

@@ -1,0 +1,417 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>EtiquetadorZPL - Cobranzas</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Manrope:wght@400;500;600;700&display=swap">
+    <link rel="stylesheet" href="panel.css">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <div>
+                <h1>Plata pendiente</h1>
+                <p class="sub">Cobranzas por cliente y ventas confirmadas sin facturar. Solo lee Odoo: no registra cobros ni envia mensajes por su cuenta.</p>
+            </div>
+            <div class="toolbar">
+                <button class="btn" id="refresh-btn" onclick="refreshAll()">Actualizar desde Odoo</button>
+            </div>
+        </header>
+
+        <nav aria-label="Paginas">
+            <a href="hoy.html">Hoy</a>
+            <a href="config.html?view=administrado#administrado">Envios Administrado</a>
+            <a href="config.html">Configuracion</a>
+            <a href="config.html?view=pos#pos-reconciliation-section">Conciliacion POS</a>
+            <a href="reposicion.html">Reposicion</a>
+            <a href="cobranzas.html" class="active" aria-current="page">Cobranzas</a>
+        </nav>
+
+        <div id="notices"></div>
+
+        <div class="tabs" role="tablist">
+            <button type="button" role="tab" id="tab-cobranzas" aria-selected="true" onclick="showTab('cobranzas')">Cobranzas</button>
+            <button type="button" role="tab" id="tab-sin-facturar" aria-selected="false" onclick="showTab('sin-facturar')">Sin facturar</button>
+        </div>
+
+        <!-- ============ Cobranzas ============ -->
+        <section id="panel-cobranzas" role="tabpanel" aria-labelledby="tab-cobranzas">
+            <div class="tiles" id="receivable-tiles"></div>
+
+            <div class="panel">
+                <strong>Antiguedad del saldo</strong>
+                <div class="aging-bar" id="aging-bar" aria-hidden="true"></div>
+                <div class="aging-legend" id="aging-legend"></div>
+            </div>
+
+            <div class="panel">
+                <div class="toolbar">
+                    <label class="field">Buscar
+                        <input type="text" id="client-search" placeholder="Cliente, documento, telefono" oninput="scheduleClients()">
+                    </label>
+                    <label class="field">Mostrar
+                        <select id="client-view" onchange="loadClients()">
+                            <option value="overdue">Con saldo vencido</option>
+                            <option value="balance">Con saldo</option>
+                            <option value="all">Todos</option>
+                        </select>
+                    </label>
+                    <label class="field">Vencido hace al menos
+                        <select id="client-min-days" onchange="loadClients()">
+                            <option value="0">Cualquier antiguedad</option>
+                            <option value="30">30 dias</option>
+                            <option value="60">60 dias</option>
+                            <option value="90">90 dias</option>
+                            <option value="180">180 dias</option>
+                        </select>
+                    </label>
+                    <a class="btn secondary" href="#" onclick="exportClients(event)">Exportar CSV</a>
+                </div>
+                <p class="meta" id="clients-meta" role="status" aria-live="polite">Cargando...</p>
+            </div>
+
+            <div class="table-scroll">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Cliente</th>
+                            <th class="num">Vencido</th>
+                            <th class="num">1-30</th>
+                            <th class="num">31-60</th>
+                            <th class="num">61-90</th>
+                            <th class="num">91-180</th>
+                            <th class="num">+180</th>
+                            <th class="num">Por vencer</th>
+                            <th>Ultimo cobro</th>
+                            <th>Contacto</th>
+                            <th>Acciones</th>
+                        </tr>
+                    </thead>
+                    <tbody id="clients-body">
+                        <tr><td colspan="11" class="empty">Cargando...</td></tr>
+                    </tbody>
+                </table>
+            </div>
+            <p class="meta">Importes en pesos (las facturas en dolares se convierten al tipo de cambio de Odoo). El detalle y el estado de cuenta muestran cada moneda por separado.</p>
+        </section>
+
+        <!-- ============ Sin facturar ============ -->
+        <section id="panel-sin-facturar" role="tabpanel" aria-labelledby="tab-sin-facturar" hidden>
+            <div class="tiles" id="uninvoiced-tiles"></div>
+            <div class="panel">
+                <div class="toolbar">
+                    <label class="field">Buscar
+                        <input type="text" id="uninvoiced-search" placeholder="Orden, cliente, referencia" oninput="scheduleUninvoiced()">
+                    </label>
+                    <label class="field">Mostrar
+                        <select id="uninvoiced-view" onchange="loadUninvoiced()">
+                            <option value="recent">Recientes</option>
+                            <option value="stale">Antiguas (revisar en Odoo)</option>
+                            <option value="all">Todas</option>
+                        </select>
+                    </label>
+                </div>
+                <p class="meta" id="uninvoiced-meta" role="status" aria-live="polite"></p>
+            </div>
+            <div class="table-scroll">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Orden</th>
+                            <th>Fecha</th>
+                            <th class="num">Antiguedad</th>
+                            <th>Cliente</th>
+                            <th>Ref. cliente</th>
+                            <th>Equipo / vendedor</th>
+                            <th class="num">Por facturar</th>
+                        </tr>
+                    </thead>
+                    <tbody id="uninvoiced-body">
+                        <tr><td colspan="7" class="empty">Cargando...</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </section>
+
+        <details class="panel" style="margin-top:16px;">
+            <summary>Configuracion</summary>
+            <div class="config-grid">
+                <label class="check"><input type="checkbox" id="cfg-auto"> Actualizar automaticamente</label>
+                <label class="field">Cada cuantos minutos
+                    <input type="number" id="cfg-interval" min="15" max="1440">
+                </label>
+                <label class="field">Sin facturar: marcar como antigua despues de (dias)
+                    <input type="number" id="cfg-stale" min="30" max="3650">
+                </label>
+                <label class="field">Nombre de la empresa en los mensajes
+                    <input type="text" id="cfg-company" placeholder="Vacio = el nombre de Odoo">
+                </label>
+            </div>
+            <label class="field" style="margin-bottom:12px;">Mensaje de WhatsApp
+                <textarea id="cfg-template" rows="3" style="background:transparent;color:var(--text-0);border:1px solid var(--line-strong);border-radius:var(--radius-sm);padding:8px 10px;font:inherit;"></textarea>
+                <span class="hint">Variables: {cliente}, {empresa}, {cantidad} (facturas vencidas), {saldo} (vencido), {saldo_total}, {vencimiento} (la mas antigua).</span>
+            </label>
+            <button class="btn" onclick="saveConfig()">Guardar configuracion</button>
+            <span class="meta" id="config-status" role="status"></span>
+        </details>
+    </div>
+
+    <script src="config.js"></script>
+    <script src="panel.js"></script>
+    <script>
+        const BUCKETS = [
+            ['d1_30', '1-30 dias'], ['d31_60', '31-60 dias'], ['d61_90', '61-90 dias'],
+            ['d91_180', '91-180 dias'], ['d180', 'Mas de 180'], ['por_vencer', 'Por vencer'],
+        ];
+        let clientsTimer = null;
+        let uninvoicedTimer = null;
+        let currentClients = [];
+        const openDetails = new Set();
+
+        function showTab(name) {
+            for (const tab of ['cobranzas', 'sin-facturar']) {
+                document.getElementById(`tab-${tab}`).setAttribute('aria-selected', String(tab === name));
+                document.getElementById(`panel-${tab}`).hidden = tab !== name;
+            }
+            history.replaceState(null, '', name === 'cobranzas' ? 'cobranzas.html' : `#${name}`);
+        }
+
+        function tile(value, label, tone = '', hint = '') {
+            return `<div class="tile static ${tone}"><div class="value">${value}</div><div class="label">${esc(label)}</div>${hint ? `<div class="hint">${esc(hint)}</div>` : ''}</div>`;
+        }
+
+        function renderSummary(summary) {
+            const s = summary || {};
+            document.getElementById('receivable-tiles').innerHTML = [
+                tile(money(s.total_overdue), 'Total vencido', s.total_overdue > 0 ? 'alert' : 'good', `${s.overdue_invoices || 0} facturas · ${s.clients_overdue || 0} clientes`),
+                tile(money(s.newly_overdue_amount), 'Vencio en los ultimos 7 dias', s.newly_overdue_count ? 'warn' : '', `${s.newly_overdue_count || 0} facturas`),
+                tile(money(s.due_this_week_amount), 'Vence en los proximos 7 dias', '', `${s.due_this_week_count || 0} facturas`),
+                tile(`${Number(s.top5_share || 0).toLocaleString('es-UY')} %`, 'Del vencido esta en 5 clientes', '', 'Las llamadas que mas mueven'),
+            ].join('');
+            document.getElementById('uninvoiced-tiles').innerHTML = [
+                tile(panelNumber.format(s.uninvoiced_recent_count || 0), 'Ordenes recientes sin facturar', s.uninvoiced_recent_count ? 'warn' : 'good', `${money(s.uninvoiced_recent_amount)} en pesos`),
+                tile(panelNumber.format(s.uninvoiced_stale_count || 0), 'Ordenes antiguas para revisar', '', 'Probablemente haya que facturarlas o cancelarlas en Odoo'),
+            ].join('');
+
+            const buckets = s.buckets || {};
+            const total = BUCKETS.reduce((acc, [key]) => acc + Math.max(0, buckets[key] || 0), 0);
+            document.getElementById('aging-bar').innerHTML = total
+                ? BUCKETS.map(([key]) => `<span class="b-${key}" style="width:${(Math.max(0, buckets[key] || 0) / total * 100).toFixed(2)}%"></span>`).join('')
+                : '';
+            document.getElementById('aging-legend').innerHTML = BUCKETS
+                .map(([key, label]) => `<span><i class="b-${key}"></i>${esc(label)}: <b>${money(buckets[key])}</b></span>`).join('');
+        }
+
+        function renderNotices(data) {
+            const notices = [];
+            if (data.last_error) notices.push(`El ultimo intento de actualizar fallo: ${data.last_error}`);
+            if (data.generated_at && (Date.now() - new Date(data.generated_at).getTime()) > 24 * 3600 * 1000) {
+                notices.push('Los datos tienen mas de un dia. Presiona "Actualizar desde Odoo".');
+            }
+            document.getElementById('notices').innerHTML = notices.map(text => `<div class="notice">${esc(text)}</div>`).join('');
+        }
+
+        function clientQuery() {
+            const params = new URLSearchParams({
+                view: document.getElementById('client-view').value,
+                min_days: document.getElementById('client-min-days').value,
+            });
+            const search = document.getElementById('client-search').value.trim();
+            if (search) params.set('search', search);
+            return params.toString();
+        }
+
+        function amountCell(value, strong = false) {
+            if (!value) return '<td class="num"><span class="code">-</span></td>';
+            return `<td class="num${strong ? ' overdue-strong' : ''}">${money(value)}</td>`;
+        }
+
+        function renderClients() {
+            const body = document.getElementById('clients-body');
+            if (!currentClients.length) {
+                body.innerHTML = '<tr><td colspan="11" class="empty">No hay clientes con este filtro</td></tr>';
+                return;
+            }
+            body.innerHTML = currentClients.map(c => {
+                const b = c.buckets || {};
+                const lastPayment = c.last_payment_date
+                    ? `${shortDate(c.last_payment_date)}<div class="code">${money(c.last_payment_amount, c.last_payment_currency || 'UYU')}</div>`
+                    : '<span class="code">sin cobros en 2 años</span>';
+                const contact = [c.phone, c.email].filter(Boolean).map(esc).join('<br>') || '<span class="code">sin datos</span>';
+                const id = Number(c.partner_id);
+                const actions = [
+                    c.whatsapp_url ? `<a class="btn small whatsapp" href="${esc(c.whatsapp_url)}" target="_blank" rel="noopener">WhatsApp</a>` : '',
+                    id ? `<a class="btn small secondary" href="${esc(panelApiBase)}/api/receivables/clients/${id}/statement.pdf" target="_blank" rel="noopener">Estado de cuenta</a>` : '',
+                    id ? `<button type="button" class="btn small secondary" onclick="toggleDetail(${id})" aria-expanded="${openDetails.has(id)}">Facturas</button>` : '',
+                    c.url ? `<a class="btn small secondary" href="${esc(c.url)}" target="_blank" rel="noopener">Odoo</a>` : '',
+                ].join('');
+                return `<tr id="client-${id}">
+                    <td class="name"><strong>${esc(c.name)}</strong>${c.vat ? `<div class="code">${esc(c.vat)}</div>` : ''}${c.max_days_overdue ? `<div class="code">${c.overdue_count} vencidas · la mas vieja ${c.max_days_overdue} dias</div>` : ''}</td>
+                    ${amountCell(c.overdue, true)}
+                    ${amountCell(b.d1_30)}${amountCell(b.d31_60)}${amountCell(b.d61_90)}${amountCell(b.d91_180)}${amountCell(b.d180)}
+                    ${amountCell(b.por_vencer)}
+                    <td>${lastPayment}</td>
+                    <td class="contact">${contact}</td>
+                    <td><div class="actions">${actions}</div></td>
+                </tr>${openDetails.has(id) ? `<tr class="detail" id="detail-${id}"><td colspan="11">Cargando facturas...</td></tr>` : ''}`;
+            }).join('');
+            openDetails.forEach(id => loadDetail(id));
+        }
+
+        async function loadClients() {
+            const meta = document.getElementById('clients-meta');
+            try {
+                const data = await panelApi(`/api/receivables/clients?${clientQuery()}`);
+                renderSummary(data.summary);
+                renderNotices(data);
+                currentClients = data.items || [];
+                renderClients();
+                if (!data.generated_at) {
+                    meta.textContent = 'Todavia no se genero el tablero. Presiona "Actualizar desde Odoo".';
+                    return;
+                }
+                const shown = currentClients.length < data.total ? `mostrando ${currentClients.length} de ${data.total}` : `${data.total} clientes`;
+                meta.className = 'meta';
+                meta.textContent = `${shown} · actualizado ${timeAgo(data.generated_at)} (${new Date(data.generated_at).toLocaleString()})`;
+            } catch (error) {
+                meta.className = 'meta error';
+                meta.textContent = `No se pudo cargar cobranzas: ${error.message}`;
+            }
+        }
+
+        function scheduleClients() {
+            clearTimeout(clientsTimer);
+            clientsTimer = setTimeout(loadClients, 300);
+        }
+
+        function toggleDetail(id) {
+            if (openDetails.has(id)) openDetails.delete(id); else openDetails.add(id);
+            renderClients();
+        }
+
+        async function loadDetail(id) {
+            const row = document.getElementById(`detail-${id}`);
+            if (!row) return;
+            try {
+                const data = await panelApi(`/api/receivables/clients/${id}`);
+                const rows = data.invoices.map(inv => `<tr>
+                    <td>${inv.url ? `<a class="link" href="${esc(inv.url)}" target="_blank" rel="noopener">${esc(inv.name)}</a>` : esc(inv.name)}${inv.is_refund ? ' <span class="code">(nota de credito)</span>' : ''}</td>
+                    <td>${shortDate(inv.invoice_date)}</td>
+                    <td>${shortDate(inv.due_date)}</td>
+                    <td class="num${inv.days_overdue ? ' overdue-strong' : ''}">${inv.days_overdue || '-'}</td>
+                    <td class="num">${money(inv.residual, inv.currency, 2)}</td>
+                    <td>${esc(inv.payment_term || '')}</td>
+                    <td>${esc(inv.salesperson || '')}</td>
+                </tr>`).join('');
+                row.firstElementChild.innerHTML = `<table><thead><tr><th>Comprobante</th><th>Fecha</th><th>Vencimiento</th><th class="num">Dias venc.</th><th class="num">Saldo</th><th>Plazo</th><th>Vendedor</th></tr></thead><tbody>${rows}</tbody></table>`;
+            } catch (error) {
+                row.firstElementChild.textContent = `No se pudieron cargar las facturas: ${error.message}`;
+            }
+        }
+
+        async function exportClients(event) {
+            event.preventDefault();
+            window.location.href = `${await panelApiBaseUrl()}/api/receivables/clients-export?${clientQuery()}`;
+        }
+
+        async function loadUninvoiced() {
+            const meta = document.getElementById('uninvoiced-meta');
+            const view = document.getElementById('uninvoiced-view').value;
+            const params = new URLSearchParams({ view });
+            const search = document.getElementById('uninvoiced-search').value.trim();
+            if (search) params.set('search', search);
+            try {
+                const data = await panelApi(`/api/receivables/uninvoiced?${params}`);
+                const body = document.getElementById('uninvoiced-body');
+                body.innerHTML = data.items.length ? data.items.map(o => `<tr>
+                    <td>${o.url ? `<a class="link" href="${esc(o.url)}" target="_blank" rel="noopener">${esc(o.name)}</a>` : esc(o.name)}</td>
+                    <td>${shortDate(o.date_order)}</td>
+                    <td class="num">${o.age_days} d</td>
+                    <td class="name">${esc(o.partner)}</td>
+                    <td>${esc(o.client_order_ref)}</td>
+                    <td>${esc([o.team, o.salesperson].filter(Boolean).join(' · '))}</td>
+                    <td class="num">${money(o.amount_to_invoice, o.currency, 2)}</td>
+                </tr>`).join('') : '<tr><td colspan="7" class="empty">No hay ordenes con este filtro</td></tr>';
+                meta.className = 'meta';
+                meta.textContent = view === 'stale'
+                    ? `${data.total} ordenes antiguas: revisa en Odoo si hay que facturarlas o cancelarlas para que dejen de figurar.`
+                    : `${data.total} ordenes · ordenadas de la mas vieja a la mas nueva`;
+            } catch (error) {
+                meta.className = 'meta error';
+                meta.textContent = `No se pudo cargar: ${error.message}`;
+            }
+        }
+
+        function scheduleUninvoiced() {
+            clearTimeout(uninvoicedTimer);
+            uninvoicedTimer = setTimeout(loadUninvoiced, 300);
+        }
+
+        async function refreshAll() {
+            const btn = document.getElementById('refresh-btn');
+            const meta = document.getElementById('clients-meta');
+            btn.disabled = true;
+            btn.textContent = 'Actualizando...';
+            meta.className = 'meta';
+            meta.textContent = 'Consultando Odoo, puede tardar unos segundos...';
+            try {
+                await panelApi('/api/receivables/refresh', { method: 'POST' });
+                await Promise.all([loadClients(), loadUninvoiced()]);
+            } catch (error) {
+                meta.className = 'meta error';
+                meta.textContent = `No se pudo actualizar: ${error.message}`;
+            } finally {
+                btn.disabled = false;
+                btn.textContent = 'Actualizar desde Odoo';
+            }
+        }
+
+        async function loadConfig() {
+            try {
+                const cfg = await panelApi('/api/receivables/config');
+                document.getElementById('cfg-auto').checked = !!cfg.auto_refresh_enabled;
+                document.getElementById('cfg-interval').value = cfg.refresh_interval_minutes;
+                document.getElementById('cfg-stale').value = cfg.stale_uninvoiced_days;
+                document.getElementById('cfg-company').value = cfg.company_name || '';
+                document.getElementById('cfg-template').value = cfg.whatsapp_template || '';
+            } catch (error) {
+                document.getElementById('config-status').textContent = `No se pudo cargar la configuracion: ${error.message}`;
+            }
+        }
+
+        async function saveConfig() {
+            const status = document.getElementById('config-status');
+            const body = {
+                auto_refresh_enabled: document.getElementById('cfg-auto').checked,
+                refresh_interval_minutes: parseInt(document.getElementById('cfg-interval').value, 10),
+                stale_uninvoiced_days: parseInt(document.getElementById('cfg-stale').value, 10),
+                company_name: document.getElementById('cfg-company').value.trim(),
+                whatsapp_template: document.getElementById('cfg-template').value.trim(),
+            };
+            Object.keys(body).forEach(key => Number.isNaN(body[key]) && delete body[key]);
+            try {
+                await panelApi('/api/receivables/config', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(body),
+                });
+                status.className = 'meta';
+                status.textContent = 'Guardado. Los mensajes y la antiguedad se recalculan en la proxima actualizacion.';
+                await loadConfig();
+            } catch (error) {
+                status.className = 'meta error';
+                status.textContent = `Error guardando: ${error.message}`;
+            }
+        }
+
+        if (window.location.hash === '#sin-facturar') showTab('sin-facturar');
+        renderSummary({});
+        loadConfig();
+        loadClients();
+        loadUninvoiced();
+        setInterval(() => { if (!document.hidden) loadClients(); }, 5 * 60 * 1000);
+    </script>
+</body>
+</html>

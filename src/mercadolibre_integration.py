@@ -87,6 +87,8 @@ class MercadoLibreIntegration:
 
     def get_public_config(self) -> Dict[str, Any]:
         safe = dict(self.config)
+        safe["has_access_token"] = bool(self.config.get("access_token"))
+        safe["has_refresh_token"] = bool(self.config.get("refresh_token"))
         for key in ("client_secret", "access_token", "refresh_token"):
             if safe.get(key):
                 safe[key] = "***"
@@ -94,6 +96,43 @@ class MercadoLibreIntegration:
         safe["authenticated"] = bool(self.config.get("access_token"))
         safe["config_path"] = str(self.config_path)
         return safe
+
+    def save_manual_tokens(
+        self,
+        *,
+        access_token: str,
+        refresh_token: str = "",
+        expires_in: Optional[int] = None,
+        user_id: Optional[int] = None,
+    ) -> Dict[str, Any]:
+        """Guarda credenciales OAuth obtenidas fuera del flujo integrado."""
+        clean_access_token = str(access_token or "").strip()
+        if not clean_access_token:
+            raise ValueError("El access_token no puede estar vacio")
+
+        updates: Dict[str, Any] = {
+            "access_token": clean_access_token,
+            "token_type": "Bearer",
+            "last_oauth_at": time.strftime("%Y-%m-%d %H:%M:%S"),
+            "last_error": "",
+        }
+
+        clean_refresh_token = str(refresh_token or "").strip()
+        if clean_refresh_token:
+            updates["refresh_token"] = clean_refresh_token
+
+        if expires_in is not None:
+            safe_expires_in = max(int(expires_in), 0)
+            updates["expires_at"] = int(time.time()) + max(safe_expires_in - 60, 0)
+        else:
+            # Un token importado sin vencimiento se prueba normalmente. Si ML
+            # responde 401, request() utilizara el refresh_token disponible.
+            updates["expires_at"] = 0
+
+        if user_id is not None:
+            updates["user_id"] = int(user_id)
+
+        return self.save_config(updates)
 
     def is_configured(self) -> bool:
         return bool(self.config.get("client_id") and self.config.get("client_secret"))

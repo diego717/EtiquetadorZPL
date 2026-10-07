@@ -1,0 +1,164 @@
+/** ---------- NAVEGACION SIMPLE A IMPRESION ---------- */
+
+/*
+ * En todo el proyecto debe existir una sola funcion onSelectionChange(e).
+ * El gid de una pestaña es su sheetId en Apps Script.
+ */
+var NAV_IMPRESION_CONFIG_ = {
+  SPREADSHEET_ID: "11feBKeE-ZxKcYHjHGBoXmZ8HeP1SiGbxOSDiH4jRtgM",
+  SHEET_ID: 252140840,
+  TARGET_COLUMN: 7,      // Columna G
+  FIRST_DATA_ROW: 4,
+  STATE_KEY_PREFIX: "NAV_IMPRESION_SIMPLE_V1_"
+};
+
+/**
+ * Solo actua cuando el usuario pasa desde otra pestaña a la pestaña cuyo
+ * gid es 252140840. Los clics posteriores dentro de esa pestaña no navegan.
+ */
+function onSelectionChange(e) {
+  if (!e || !e.range) return;
+
+  var eventSheet = e.range.getSheet();
+  var spreadsheet = eventSheet.getParent();
+
+  if (spreadsheet.getId() !== NAV_IMPRESION_CONFIG_.SPREADSHEET_ID) return;
+
+  var activeSheet = spreadsheet.getActiveSheet();
+  if (!activeSheet) return;
+
+  var activeSheetId = activeSheet.getSheetId();
+  var eventSheetId = eventSheet.getSheetId();
+  var properties = PropertiesService.getUserProperties();
+  var stateKey = claveEstadoNavegacionImpresion_(spreadsheet.getId());
+  var previousSheetId = properties.getProperty(stateKey);
+
+  // El estado se basa en la hoja realmente activa, no solamente en el evento.
+  properties.setProperty(stateKey, String(activeSheetId));
+
+  // Un evento atrasado de otra pestaña nunca debe cambiar la hoja visible.
+  if (eventSheetId !== activeSheetId) return;
+
+  // Comparacion exacta con el gid indicado por el usuario.
+  if (activeSheetId !== NAV_IMPRESION_CONFIG_.SHEET_ID) return;
+
+  // Ya estaba en IMPRESION: permite seleccionar cualquier celda normalmente.
+  if (previousSheetId === String(NAV_IMPRESION_CONFIG_.SHEET_ID)) return;
+
+  activarPrimeraCeldaDisponibleImpresion_(activeSheet);
+}
+
+/**
+ * Activa la celda de G inmediatamente posterior al ultimo valor visible.
+ * Las validaciones/autocompletados de celdas vacias no cuentan como contenido.
+ */
+function activarPrimeraCeldaDisponibleImpresion_(sheet) {
+  var targetRow = obtenerProximaFilaDisponibleImpresion_(sheet);
+
+  if (targetRow > sheet.getMaxRows()) {
+    sheet.insertRowsAfter(sheet.getMaxRows(), targetRow - sheet.getMaxRows());
+  }
+
+  var targetRange = sheet.getRange(
+    targetRow,
+    NAV_IMPRESION_CONFIG_.TARGET_COLUMN
+  );
+
+  // setActiveRange actualiza explicitamente la seleccion visible de la UI.
+  // activateAsCurrentCell asegura que la celda unica quede como celda actual.
+  SpreadsheetApp.setActiveRange(targetRange);
+  targetRange.activateAsCurrentCell();
+  SpreadsheetApp.flush();
+
+  var activeRange = SpreadsheetApp.getActiveRange();
+
+  console.log(JSON.stringify({
+    navImpresion: "destino_activado",
+    sheetId: sheet.getSheetId(),
+    target: targetRange.getA1Notation(),
+    activeAfter: activeRange ? activeRange.getA1Notation() : null
+  }));
+
+  return targetRange;
+}
+
+function obtenerProximaFilaDisponibleImpresion_(sheet) {
+  var firstRow = NAV_IMPRESION_CONFIG_.FIRST_DATA_ROW;
+  var lastRowToRead = Math.max(firstRow, sheet.getLastRow());
+  var rowCount = lastRowToRead - firstRow + 1;
+  var values = sheet
+    .getRange(
+      firstRow,
+      NAV_IMPRESION_CONFIG_.TARGET_COLUMN,
+      rowCount,
+      1
+    )
+    .getDisplayValues();
+
+  for (var index = values.length - 1; index >= 0; index--) {
+    if (String(values[index][0]).trim() !== "") {
+      return firstRow + index + 1;
+    }
+  }
+
+  return firstRow;
+}
+
+function claveEstadoNavegacionImpresion_(spreadsheetId) {
+  return NAV_IMPRESION_CONFIG_.STATE_KEY_PREFIX + spreadsheetId;
+}
+
+/**
+ * Prueba manual. Debe activar G posterior al ultimo cliente de la hoja fija.
+ */
+function probarNavegacionImpresion() {
+  var spreadsheet = SpreadsheetApp.getActiveSpreadsheet();
+
+  if (!spreadsheet) {
+    throw new Error("No hay una planilla activa.");
+  }
+  if (spreadsheet.getId() !== NAV_IMPRESION_CONFIG_.SPREADSHEET_ID) {
+    throw new Error("Esta no es la planilla configurada para la navegacion.");
+  }
+
+  var targetSheet = null;
+  var sheets = spreadsheet.getSheets();
+
+  for (var index = 0; index < sheets.length; index++) {
+    if (sheets[index].getSheetId() === NAV_IMPRESION_CONFIG_.SHEET_ID) {
+      targetSheet = sheets[index];
+      break;
+    }
+  }
+
+  if (!targetSheet) {
+    throw new Error(
+      "No existe una pestaña con gid=" + NAV_IMPRESION_CONFIG_.SHEET_ID + "."
+    );
+  }
+
+  var targetRange = activarPrimeraCeldaDisponibleImpresion_(targetSheet);
+  PropertiesService.getUserProperties().setProperty(
+    claveEstadoNavegacionImpresion_(spreadsheet.getId()),
+    String(targetSheet.getSheetId())
+  );
+
+  return targetRange.getA1Notation();
+}
+
+// Conserva el nombre de la funcion manual que podia estar usado en un menu.
+function irAProximaFilaLibreImpresion() {
+  return probarNavegacionImpresion();
+}
+
+/**
+ * Ejecutar una vez si se quiere olvidar la ultima pestaña registrada.
+ */
+function reiniciarNavegacionImpresion() {
+  var spreadsheet = SpreadsheetApp.getActiveSpreadsheet();
+  if (!spreadsheet) return;
+
+  PropertiesService.getUserProperties().deleteProperty(
+    claveEstadoNavegacionImpresion_(spreadsheet.getId())
+  );
+}

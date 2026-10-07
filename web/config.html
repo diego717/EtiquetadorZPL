@@ -38,7 +38,7 @@
                 radial-gradient(1200px 700px at 80% -10%, rgba(66, 208, 199, 0.17), transparent 58%),
                 radial-gradient(900px 500px at -10% 20%, rgba(30, 138, 255, 0.18), transparent 55%),
                 linear-gradient(160deg, var(--bg-0) 0%, var(--bg-1) 100%);
-            min-height: 100vh;
+            min-height: 100dvh;
             position: relative;
             overflow-x: hidden;
         }
@@ -71,8 +71,9 @@
         }
 
         @keyframes drift {
-            from { transform: translate3d(0, 0, 0) scale(1); }
-            to { transform: translate3d(-70px, 35px, 0) scale(1.07); }
+            0% { transform: translate3d(0, 0, 0) scale(1); opacity: .72; }
+            50% { transform: translate3d(-90px, 54px, 0) scale(1.08); opacity: 1; }
+            100% { transform: translate3d(-34px, 118px, 0) scale(.94); opacity: .78; }
         }
 
         .container {
@@ -81,6 +82,47 @@
             max-width: 1120px;
             margin: 0 auto;
             padding: 22px 20px 48px;
+        }
+
+        .container::before,
+        .container::after {
+            content: "";
+            position: fixed;
+            z-index: -1;
+            border-radius: 999px;
+            pointer-events: none;
+        }
+
+        .container::before {
+            width: 24rem;
+            height: 24rem;
+            left: -11rem;
+            top: 34%;
+            border: 1px solid rgba(255, 189, 89, 0.18);
+            background: radial-gradient(circle at 64% 42%, rgba(255, 189, 89, 0.16), rgba(255, 117, 74, 0) 68%);
+            animation: float-accent-left 20s ease-in-out infinite alternate;
+        }
+
+        .container::after {
+            width: 17rem;
+            height: 17rem;
+            right: -7rem;
+            bottom: 8%;
+            border: 1px solid rgba(255, 117, 74, 0.16);
+            background: radial-gradient(circle at 32% 38%, rgba(255, 117, 74, 0.18), rgba(255, 117, 74, 0) 70%);
+            animation: float-accent-right 26s ease-in-out infinite alternate-reverse;
+        }
+
+        @keyframes float-accent-left {
+            0% { transform: translate3d(0, -24px, 0) scale(.92); opacity: .45; }
+            50% { transform: translate3d(76px, 28px, 0) scale(1.08); opacity: .78; }
+            100% { transform: translate3d(18px, 112px, 0) scale(.98); opacity: .55; }
+        }
+
+        @keyframes float-accent-right {
+            0% { transform: translate3d(0, 18px, 0) scale(1); opacity: .38; }
+            50% { transform: translate3d(-84px, -62px, 0) scale(1.12); opacity: .72; }
+            100% { transform: translate3d(-28px, -128px, 0) scale(.9); opacity: .46; }
         }
 
         .header {
@@ -105,9 +147,29 @@
             background: radial-gradient(circle, rgba(66, 208, 199, 0.26) 0%, rgba(66, 208, 199, 0) 72%);
         }
 
+        .header {
+            display: flex;
+            align-items: flex-end;
+            justify-content: space-between;
+            gap: 16px;
+            flex-wrap: wrap;
+        }
+
+        .header-kicker {
+            display: block;
+            font-size: 11px;
+            font-weight: 700;
+            letter-spacing: .14em;
+            text-transform: uppercase;
+            color: var(--accent);
+            margin-bottom: 6px;
+            position: relative;
+            z-index: 1;
+        }
+
         .header h1 {
             font-family: 'Space Grotesk', 'Manrope', sans-serif;
-            font-size: clamp(2rem, 3.8vw, 3rem);
+            font-size: clamp(1.6rem, 2.6vw, 2.2rem);
             letter-spacing: 0.01em;
             line-height: 1.06;
             margin-bottom: 4px;
@@ -122,16 +184,114 @@
             z-index: 1;
         }
 
-        .header-actions { margin-top: 14px; display: flex; gap: 10px; flex-wrap: wrap; position: relative; z-index: 1; }
+        .header-actions { display: flex; gap: 10px; flex-wrap: wrap; position: relative; z-index: 1; }
         #theme-toggle-btn { min-width: 132px; }
         .muted { color: var(--text-1); }
 
         .nav {
             display: flex;
             gap: 10px;
-            margin-bottom: 18px;
+            margin-bottom: 22px;
             flex-wrap: wrap;
+            justify-content: space-between;
+            align-items: center;
+            /* Barra flotante: queda fija arriba al desplazarse. Solo las pastillas capturan clics. */
+            position: sticky;
+            top: 12px;
+            z-index: 60;
+            pointer-events: none;
         }
+
+        .nav > * { pointer-events: auto; }
+
+        .nav-pages {
+            padding: 4px;
+            border-radius: 999px;
+            background: rgba(8, 18, 32, 0.72);
+            backdrop-filter: blur(10px);
+        }
+
+        .nav-pages,
+        .nav-jump {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+            align-items: center;
+        }
+
+        .nav-jump {
+            padding: 4px;
+            border: 1px solid var(--line);
+            border-radius: 999px;
+            background: rgba(8, 18, 32, 0.86);
+            backdrop-filter: blur(10px);
+        }
+
+        .nav-jump-label {
+            font-size: 11px;
+            font-weight: 700;
+            letter-spacing: .08em;
+            text-transform: uppercase;
+            color: #8ea6c6;
+            padding: 0 6px 0 10px;
+        }
+
+        .nav-jump button {
+            border: 0;
+            background: transparent;
+            color: var(--text-1);
+            font: inherit;
+            font-size: 13px;
+            font-weight: 600;
+            padding: 6px 12px;
+            border-radius: 999px;
+            cursor: pointer;
+            transition: background 0.2s ease, color 0.2s ease;
+        }
+
+        .nav-jump button:hover,
+        .nav-jump button:focus-visible {
+            outline: none;
+            background: rgba(66, 208, 199, 0.16);
+            color: #ddfffc;
+        }
+
+        /* ---- Grupos de secciones ---- */
+        .section-group { margin-bottom: 30px; scroll-margin-top: 76px; }
+        [id$="-section"], .section-group [id] { scroll-margin-top: 76px; }
+
+        .group-head {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            margin: 0 2px 12px;
+        }
+
+        .group-index {
+            width: 28px;
+            height: 28px;
+            flex: none;
+            display: grid;
+            place-items: center;
+            border-radius: 999px;
+            font-family: 'Space Grotesk', 'Manrope', sans-serif;
+            font-weight: 700;
+            font-size: 14px;
+            color: #04121a;
+            background: linear-gradient(135deg, var(--accent), var(--accent-strong));
+        }
+
+        .group-title {
+            font-size: 12px;
+            font-weight: 800;
+            letter-spacing: .14em;
+            text-transform: uppercase;
+            color: #e6f3ff;
+        }
+
+        .group-sub { font-size: 13px; color: #8ea6c6; }
+
+        body.admin-only .group-index { display: none; }
 
         .nav a {
             padding: 8px 14px;
@@ -164,8 +324,8 @@
         .card h2 {
             margin-bottom: 14px;
             font-family: 'Space Grotesk', 'Manrope', sans-serif;
-            font-size: clamp(1.5rem, 2.1vw, 1.95rem);
-            line-height: 1.1;
+            font-size: clamp(1.2rem, 1.6vw, 1.45rem);
+            line-height: 1.15;
             color: #f3f7ff;
             letter-spacing: 0.01em;
         }
@@ -173,10 +333,168 @@
         .card h3 {
             margin-bottom: 10px;
             font-family: 'Space Grotesk', 'Manrope', sans-serif;
-            font-size: 1.2rem;
-            line-height: 1.15;
+            font-size: 1rem;
+            line-height: 1.2;
             color: #e9f2ff;
         }
+
+        .card h4 {
+            margin: 18px 0 8px;
+            font-size: 13px;
+            font-weight: 700;
+            color: #cfe0f7;
+        }
+
+        .card-head {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            gap: 14px;
+            flex-wrap: wrap;
+            margin-bottom: 16px;
+            padding-bottom: 14px;
+            border-bottom: 1px solid var(--line);
+        }
+
+        .card-head h2 { margin-bottom: 4px; }
+        .card-sub { color: #9cb2d1; font-size: 13px; max-width: 64ch; }
+
+        .card-head-meta {
+            display: flex;
+            align-items: center;
+            gap: 14px;
+            flex-wrap: wrap;
+        }
+
+        .meta-status {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 12px;
+            font-weight: 700;
+            color: #9cb2d1;
+            text-transform: uppercase;
+            letter-spacing: .06em;
+        }
+
+        .card-primary {
+            border-color: rgba(66, 208, 199, 0.42);
+            box-shadow: var(--shadow-strong), inset 0 3px 0 rgba(66, 208, 199, 0.75);
+        }
+
+        .subsection-title {
+            font-size: 11px;
+            font-weight: 800;
+            letter-spacing: .1em;
+            text-transform: uppercase;
+            color: #8ea6c6;
+            margin: 14px 0 8px;
+        }
+
+        .subsection-gap {
+            margin-top: 20px;
+            padding-top: 16px;
+            border-top: 1px dashed var(--line);
+        }
+
+        .inline-check {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            font-weight: 600;
+            font-size: 13px;
+            color: #d9e8fc;
+            cursor: pointer;
+        }
+
+        .inline-check input[type="checkbox"] {
+            width: 16px;
+            height: 16px;
+            margin: 0;
+            accent-color: var(--accent);
+        }
+
+        .toolbar-primary {
+            display: flex;
+            gap: 12px 16px;
+            align-items: flex-end;
+            flex-wrap: wrap;
+            margin-bottom: 14px;
+        }
+
+        .toolbar-primary .inline-check,
+        .toolbar-primary .summary-pill { align-self: center; }
+
+        .form-group.compact { margin-bottom: 0; }
+        .form-group.compact label { font-size: 12px; color: #9cb2d1; }
+        .form-group.compact input { width: 150px; }
+        .adm-quick-print .form-group.compact input { width: 210px; }
+
+        .form-row {
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 0 12px;
+        }
+
+        .form-row-3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+        .form-row-select-count { grid-template-columns: minmax(0, 1fr) 84px; }
+
+        /* Si una etiqueta ocupa dos lineas, los campos de la fila siguen alineados */
+        .form-row > .form-group {
+            display: flex;
+            flex-direction: column;
+            justify-content: flex-end;
+        }
+
+        .form-row > .form-group > label { line-height: 1.25; }
+        .form-hint { display: block; margin: -4px 0 4px; color: #8ea6c6; font-size: 12px; }
+
+        .btn-row { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 10px; }
+
+        .card-tools {
+            margin-top: 18px;
+            padding-top: 4px;
+            border-top: 1px solid var(--line);
+        }
+
+        .card-tools .adm-quick-print { margin-bottom: 14px; }
+
+        .kv-list p {
+            display: flex;
+            justify-content: space-between;
+            align-items: baseline;
+            gap: 12px;
+            padding: 6px 0;
+            margin: 0;
+            border-bottom: 1px solid rgba(122, 146, 179, 0.16);
+            color: #9cb2d1;
+            font-size: 13px;
+        }
+
+        .kv-list p:last-child { border-bottom: 0; }
+
+        .kv-list p > span {
+            color: #e3eefc;
+            text-align: right;
+            overflow-wrap: anywhere;
+            min-width: 0;
+        }
+
+        .danger-zone {
+            margin-top: 14px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 12px;
+            flex-wrap: wrap;
+            padding: 12px 14px;
+            border: 1px solid rgba(239, 106, 106, 0.38);
+            border-radius: var(--radius-md);
+            background: rgba(239, 106, 106, 0.07);
+        }
+
+        .danger-zone strong { color: #ffc6c6; font-size: 13px; }
+        .danger-zone p { color: #c9a3a8; font-size: 12px; }
 
         .grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 18px; }
         .grid > * { min-width: 0; }
@@ -323,13 +641,13 @@
         }
 
         body.admin-only .admin-hide { display: none !important; }
-        body.admin-only .container { max-width: 960px; }
+        body.admin-only .container { max-width: 1180px; }
         body.admin-only #administrado-section { margin-top: 0; }
 
         body:not(.pos-only-view) #pos-reconciliation-section { display: none !important; }
         body.pos-only-view .container { max-width: 1480px; }
-        body.pos-only-view .container > .grid,
-        body.pos-only-view .container > .card:not(#pos-reconciliation-section) { display: none !important; }
+        body.pos-only-view .container > .section-group,
+        body.pos-only-view .nav-jump { display: none !important; }
         body.pos-only-view #toggle-admin-view-btn,
         body.pos-only-view .header-actions a[href="cloud.html"] { display: none !important; }
         body.pos-only-view #pos-reconciliation-section { display: block !important; }
@@ -362,10 +680,31 @@
 
         .pos-manual-grid .form-group { margin-bottom: 0; }
         .pos-manual-actions { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-top: 14px; }
+        .pos-auto-banner {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 12px;
+            align-items: center;
+            justify-content: space-between;
+            border: 1px solid var(--line);
+            border-left: 4px solid var(--line-strong);
+            border-radius: var(--radius-md);
+            background: rgba(7, 17, 31, 0.54);
+            padding: 12px 14px;
+            margin-bottom: 18px;
+        }
+        .pos-auto-banner[data-state="ready"] { border-left-color: var(--accent); }
+        .pos-auto-banner[data-state="error"] { border-left-color: var(--danger); }
+        .pos-auto-banner-text { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+        .pos-auto-banner-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+        .pos-auto-events { list-style: none; display: grid; gap: 4px; font-size: 0.9em; max-height: 220px; overflow-y: auto; }
+        .pos-auto-events time { color: #9cb2d1; margin-right: 8px; font-variant-numeric: tabular-nums; }
         .pos-inline-message { min-height: 20px; color: #9cb2d1; }
         .pos-inline-message.error { color: #ffb8b8; }
         .pos-inline-message.success { color: #7af0c2; }
         .pos-money { font-variant-numeric: tabular-nums; }
+        .pos-warn-text { color: #ffb454; font-weight: 600; }
+        .error-text { color: #ffb3b3; }
 
         .inline-toolbar { display: flex; gap: 10px; align-items: end; flex-wrap: wrap; margin: 18px 0 14px; }
 
@@ -539,6 +878,7 @@
 
         .table-scroll {
             overflow-x: auto;
+            overscroll-behavior-inline: contain;
             border: 1px solid var(--line);
             border-radius: var(--radius-md);
             background: rgba(6, 15, 27, 0.6);
@@ -607,15 +947,43 @@
         .table-clean tbody tr:last-child td { border-bottom: none; }
         .table-clean tbody tr:hover { background: rgba(26, 54, 88, 0.35); }
 
+        #administrado-section .table-clean { min-width: 1040px; }
+
         #administrado-section .table-clean th:nth-child(3),
         #administrado-section .table-clean td:nth-child(3) {
-            width: 184px;
-            min-width: 184px;
+            width: 210px;
+            min-width: 210px;
         }
 
         #administrado-section .table-clean th:nth-child(4),
         #administrado-section .table-clean td:nth-child(4) {
+            width: 272px;
+            min-width: 272px;
+        }
+
+        #administrado-section .table-clean th:nth-child(5),
+        #administrado-section .table-clean td:nth-child(5) {
             min-width: 260px;
+        }
+
+        .stock-cell { font-variant-numeric: tabular-nums; }
+        .stock-cell .status { margin-bottom: 4px; }
+        .stock-detail,
+        .stock-picking {
+            display: block;
+            color: #93aacb;
+            font-size: 11px;
+            line-height: 1.35;
+            overflow-wrap: anywhere;
+        }
+        .stock-picking { color: #c7d7eb; font-weight: 700; }
+        .stock-shortage {
+            display: block;
+            margin-top: 3px;
+            color: #ffd28f;
+            font-size: 11px;
+            line-height: 1.35;
+            overflow-wrap: anywhere;
         }
 
         .mono-id {
@@ -642,16 +1010,64 @@
         }
 
         .action-stack {
-            display: flex;
-            flex-direction: column;
-            align-items: flex-start;
-            gap: 4px;
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 6px;
         }
 
         .action-stack .btn {
-            min-width: 98px;
+            min-width: 0;
             line-height: 1.12;
+            white-space: nowrap;
+            padding-inline: 8px;
         }
+
+        .action-stack .btn.success { grid-column: 1 / -1; }
+
+        /* Acciones secundarias de la fila: menos peso que la principal */
+        .action-stack .btn:not(.success) {
+            color: #dce8f9;
+            background: rgba(10, 23, 41, 0.92);
+            border-color: rgba(126, 151, 186, 0.55);
+            box-shadow: none;
+        }
+
+        .btn:disabled {
+            opacity: .55;
+            cursor: not-allowed;
+            transform: none;
+            filter: none;
+        }
+
+        .btn-lg { padding: 11px 18px; font-size: 14px; min-height: 42px; }
+
+        .btn-link-odoo {
+            grid-column: 1 / -1;
+            justify-self: start;
+            border: 0;
+            background: none;
+            padding: 4px 2px;
+            margin-top: 2px;
+            color: #7fd8d2;
+            font: inherit;
+            font-size: 12px;
+            font-weight: 700;
+            cursor: pointer;
+            text-decoration: underline;
+            text-decoration-color: rgba(127, 216, 210, 0.35);
+            text-underline-offset: 3px;
+            transition: color .2s ease, text-decoration-color .2s ease;
+        }
+
+        .btn-link-odoo:hover,
+        .btn-link-odoo:focus-visible {
+            outline: none;
+            color: #bdf8f0;
+            text-decoration-color: currentColor;
+        }
+
+        .btn-link-odoo:disabled { opacity: .6; cursor: wait; }
+        html[data-theme="light"] .btn-link-odoo { color: #1d6fa8; text-decoration-color: rgba(29, 111, 168, 0.35); }
 
         .status-block p {
             margin-bottom: 6px;
@@ -668,11 +1084,12 @@
             color: #cfddf2;
         }
 
-        #odoo-automation-section {
-            background: linear-gradient(180deg, rgba(11, 25, 43, 0.84) 0%, rgba(8, 19, 34, 0.84) 100%);
-            border: 1px solid var(--line-strong);
-            box-shadow: var(--shadow-strong);
-        }
+        .status-cell small { color: #93aacb; font-size: 12px; line-height: 1.45; }
+        .status-cell .status { margin-bottom: 4px; }
+
+        .odoo-side { display: grid; gap: 14px; }
+        .odoo-operators { margin-top: 18px; }
+        .actions-spacer { flex: 1 1 auto; }
 
         .odoo-grid {
             display: grid;
@@ -951,6 +1368,770 @@
             box-shadow: 0 16px 40px rgba(66, 91, 126, 0.14);
         }
 
+        /* ---- Animaciones ---- */
+        @keyframes rise-in {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: none; }
+        }
+
+        @keyframes pulse-dot {
+            0%, 100% { box-shadow: 0 0 0 0 rgba(103, 160, 255, 0.55); }
+            50% { box-shadow: 0 0 0 6px rgba(103, 160, 255, 0); }
+        }
+
+        @keyframes spin { to { transform: rotate(360deg); } }
+
+        .section-group > .card,
+        .section-group > .grid,
+        .container > #pos-reconciliation-section {
+            animation: rise-in .45s ease both;
+        }
+
+        .section-group > :nth-child(3) { animation-delay: .06s; }
+        .section-group > :nth-child(4) { animation-delay: .12s; }
+
+        .card { transition: border-color .25s ease, box-shadow .25s ease; }
+
+        .summary-pill { transition: background .25s ease, border-color .25s ease, color .25s ease; }
+
+        /* Estado "imprimiendo" en la fila */
+        .status-cell .status.is-printing {
+            position: relative;
+            padding-left: 20px;
+        }
+
+        .status-cell .status.is-printing::before {
+            content: "";
+            position: absolute;
+            left: 7px;
+            top: 50%;
+            width: 7px;
+            height: 7px;
+            margin-top: -3.5px;
+            border-radius: 999px;
+            background: #67a0ff;
+            animation: pulse-dot 1.4s ease-in-out infinite;
+        }
+
+        details.adm-advanced-panel[open] > :not(summary),
+        details.pos-settings[open] > :not(summary),
+        details.pos-manual-panel[open] > :not(summary) {
+            animation: rise-in .28s ease both;
+        }
+
+        /* ---- Modal de confirmacion ---- */
+        .ui-modal-backdrop {
+            position: fixed;
+            inset: 0;
+            z-index: 100;
+            display: grid;
+            place-items: center;
+            padding: 16px;
+            background: rgba(2, 7, 15, 0.62);
+            backdrop-filter: blur(4px);
+            opacity: 0;
+            transition: opacity .18s ease;
+        }
+
+        .ui-modal-backdrop.is-open { opacity: 1; }
+
+        /* display:grid pisa el atributo hidden; sin esto el backdrop invisible bloquea los clicks */
+        .ui-modal-backdrop[hidden],
+        .ui-modal-details[hidden],
+        .ui-modal-message[hidden] { display: none; }
+
+        .ui-modal {
+            width: min(460px, 100%);
+            max-height: calc(100dvh - 32px);
+            overflow: auto;
+            background: linear-gradient(180deg, #0f2036, #0a1728);
+            border: 1px solid var(--line-strong);
+            border-radius: var(--radius-lg);
+            box-shadow: var(--shadow-strong);
+            padding: 22px;
+            transform: translateY(14px) scale(.97);
+            transition: transform .22s cubic-bezier(.2, .9, .3, 1.2);
+        }
+
+        .ui-modal-backdrop.is-open .ui-modal { transform: none; }
+
+        .ui-modal h2 {
+            font-family: 'Space Grotesk', 'Manrope', sans-serif;
+            font-size: 1.3rem;
+            margin-bottom: 6px;
+            color: #f3f7ff;
+        }
+
+        .ui-modal-icon {
+            width: 44px;
+            height: 44px;
+            border-radius: 12px;
+            display: grid;
+            place-items: center;
+            margin-bottom: 14px;
+            color: #04121a;
+            background: linear-gradient(135deg, var(--accent), var(--accent-strong));
+        }
+
+        .ui-modal-icon svg { width: 24px; height: 24px; }
+        .ui-modal[data-tone="danger"] .ui-modal-icon { background: linear-gradient(140deg, #da5a68, #bb3d4d); color: #fff; }
+        .ui-modal[data-tone="print"] .ui-modal-icon { background: linear-gradient(140deg, #46ca8b, #2c9965); color: #04160d; }
+
+        .ui-modal-message { color: #b9cbe4; white-space: pre-line; }
+
+        .ui-modal-details {
+            display: grid;
+            grid-template-columns: auto 1fr;
+            gap: 8px 14px;
+            margin: 16px 0 0;
+            padding: 14px;
+            border: 1px solid var(--line);
+            border-radius: var(--radius-md);
+            background: rgba(4, 11, 21, 0.55);
+            font-size: 13px;
+        }
+
+        .ui-modal-details dt { color: #8ea6c6; font-weight: 600; }
+        .ui-modal-details dd { color: #eef5ff; font-weight: 700; overflow-wrap: anywhere; }
+
+        .ui-modal-actions {
+            display: flex;
+            justify-content: flex-end;
+            gap: 10px;
+            margin-top: 20px;
+            flex-wrap: wrap;
+        }
+
+        /* ---- Toasts ---- */
+        .ui-toasts {
+            position: fixed;
+            right: 16px;
+            bottom: calc(16px + env(safe-area-inset-bottom, 0px));
+            z-index: 110;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            width: min(400px, calc(100vw - 32px));
+            pointer-events: none;
+        }
+
+        .ui-toast {
+            pointer-events: auto;
+            display: grid;
+            grid-template-columns: auto 1fr auto;
+            gap: 10px;
+            align-items: start;
+            padding: 12px 12px 14px 14px;
+            border-radius: var(--radius-md);
+            border: 1px solid var(--line-strong);
+            border-left: 4px solid #67a0ff;
+            background: rgba(10, 22, 39, 0.97);
+            box-shadow: var(--shadow-strong);
+            color: #e6edf8;
+            font-size: 13px;
+            position: relative;
+            overflow: hidden;
+            animation: toast-in .32s cubic-bezier(.2, .9, .3, 1.2) both;
+        }
+
+        .ui-toast.is-leaving { animation: toast-out .22s ease forwards; }
+        .ui-toast.success { border-left-color: var(--success); }
+        .ui-toast.error { border-left-color: var(--danger); }
+        .ui-toast-icon { font-weight: 800; font-size: 15px; line-height: 1.2; }
+        .ui-toast.success .ui-toast-icon { color: var(--success); }
+        .ui-toast.error .ui-toast-icon { color: var(--danger); }
+        .ui-toast.info .ui-toast-icon { color: #67a0ff; }
+        .ui-toast-body { white-space: pre-line; overflow-wrap: anywhere; line-height: 1.4; }
+        .ui-toast-body strong { display: block; margin-bottom: 2px; }
+
+        .ui-toast-close {
+            border: 0;
+            background: transparent;
+            color: #8ea6c6;
+            font-size: 18px;
+            line-height: 1;
+            cursor: pointer;
+            padding: 0 2px;
+        }
+
+        .ui-toast-timer {
+            position: absolute;
+            left: 0;
+            bottom: 0;
+            height: 3px;
+            width: 100%;
+            background: currentColor;
+            opacity: .35;
+            transform-origin: left;
+            animation: toast-timer linear forwards;
+        }
+
+        .ui-toast.success .ui-toast-timer { color: var(--success); }
+        .ui-toast.error .ui-toast-timer { color: var(--danger); }
+        .ui-toast.info .ui-toast-timer { color: #67a0ff; }
+
+        @keyframes toast-in {
+            from { opacity: 0; transform: translateY(16px) scale(.96); }
+            to { opacity: 1; transform: none; }
+        }
+
+        @keyframes toast-out {
+            to { opacity: 0; transform: translateX(24px); }
+        }
+
+        @keyframes toast-timer { from { transform: scaleX(1); } to { transform: scaleX(0); } }
+
+        /* ---- Barra de salud ---- */
+        .health-bar {
+            display: grid;
+            grid-template-columns: repeat(4, minmax(0, 1fr));
+            gap: 10px;
+            margin-bottom: 22px;
+        }
+
+        body.pos-only-view .health-bar { display: none; }
+
+        .health-item {
+            --tone: #7f93b0;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            min-width: 0;
+            padding: 10px 12px;
+            border-radius: var(--radius-md);
+            border: 1px solid var(--line);
+            background: rgba(9, 20, 36, 0.78);
+            color: inherit;
+            font: inherit;
+            text-align: left;
+            cursor: pointer;
+            transition: border-color .2s ease, transform .2s ease, background .2s ease;
+        }
+
+        .health-item:hover,
+        .health-item:focus-visible {
+            outline: none;
+            transform: translateY(-1px);
+            border-color: var(--tone);
+        }
+
+        .health-item[data-state="ok"] { --tone: var(--success); }
+        .health-item[data-state="warn"] { --tone: var(--warn); }
+        .health-item[data-state="error"] { --tone: var(--danger); background: rgba(239, 106, 106, 0.08); border-color: rgba(239, 106, 106, 0.45); }
+
+        .health-dot {
+            width: 10px;
+            height: 10px;
+            flex: none;
+            border-radius: 999px;
+            background: var(--tone);
+            box-shadow: 0 0 0 4px color-mix(in srgb, var(--tone) 22%, transparent);
+        }
+
+        .health-item[data-state="error"] .health-dot { animation: health-blink 1.2s ease-in-out infinite; }
+
+        @keyframes health-blink { 50% { opacity: .35; } }
+
+        .health-text { display: flex; flex-direction: column; min-width: 0; }
+        .health-label { font-size: 11px; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; color: #8ea6c6; }
+        .health-value { font-size: 13px; font-weight: 700; color: #e6f0fd; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+        .flash-target { animation: flash-target 1.6s ease; }
+
+        @keyframes flash-target {
+            0%, 60% { box-shadow: 0 0 0 3px rgba(66, 208, 199, 0.65), var(--shadow-soft); }
+            100% { box-shadow: var(--shadow-soft); }
+        }
+
+        /* ---- Pestañas de filtro de envios ---- */
+        .seg-tabs {
+            display: inline-flex;
+            gap: 4px;
+            padding: 4px;
+            margin-bottom: 12px;
+            border: 1px solid var(--line);
+            border-radius: 999px;
+            background: rgba(6, 14, 26, 0.6);
+        }
+
+        .seg-tab {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            border: 0;
+            border-radius: 999px;
+            padding: 7px 14px;
+            background: transparent;
+            color: #9cb2d1;
+            font: inherit;
+            font-size: 13px;
+            font-weight: 700;
+            cursor: pointer;
+            transition: background .2s ease, color .2s ease;
+        }
+
+        .seg-tab:hover { color: #e6f0fd; }
+        .seg-tab:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+        .seg-tab.is-active { background: rgba(66, 208, 199, 0.18); color: #ddfffc; }
+
+        .seg-count {
+            min-width: 22px;
+            padding: 1px 7px;
+            border-radius: 999px;
+            background: rgba(124, 148, 182, 0.2);
+            font-size: 11px;
+            text-align: center;
+        }
+
+        .seg-tab[data-adm-filter="pending"] .seg-count.has-items { background: var(--warn); color: #2a1d00; }
+
+        #adm-sales-body tr.is-pending td:first-child { box-shadow: inset 3px 0 0 var(--warn); }
+        #adm-sales-body tr.is-pending { background: rgba(240, 198, 116, 0.05); }
+
+        .row-details { margin-top: 4px; }
+
+        .row-details > summary {
+            cursor: pointer;
+            font-size: 12px;
+            font-weight: 700;
+            color: #8ea6c6;
+            list-style: none;
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+        }
+
+        .row-details > summary::-webkit-details-marker { display: none; }
+        .row-details > summary::before { content: "▸"; transition: transform .2s ease; }
+        .row-details[open] > summary::before { transform: rotate(90deg); }
+        .row-details > div { margin-top: 4px; }
+
+        .status-time { display: block; font-size: 12px; color: #93aacb; }
+
+        /* ---- Cambios sin guardar ---- */
+        .card-title-row {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 10px;
+            flex-wrap: wrap;
+            margin-bottom: 14px;
+        }
+
+        .card-title-row h2,
+        .card-title-row h3 { margin-bottom: 0; }
+
+        .dirty-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            border: 1px solid rgba(240, 198, 116, 0.55);
+            background: rgba(240, 198, 116, 0.14);
+            color: #ffdca2;
+            border-radius: 999px;
+            padding: 4px 10px;
+            font: inherit;
+            font-size: 12px;
+            font-weight: 700;
+            cursor: pointer;
+            animation: rise-in .25s ease both;
+        }
+
+        .dirty-badge::before {
+            content: "";
+            width: 7px;
+            height: 7px;
+            border-radius: 999px;
+            background: var(--warn);
+        }
+
+        .dirty-badge[hidden] { display: none; }
+
+        .is-dirty { border-color: rgba(240, 198, 116, 0.55) !important; }
+
+        .btn.needs-save { animation: needs-save 1.8s ease-in-out infinite; }
+
+        @keyframes needs-save {
+            0%, 100% { box-shadow: 0 0 0 0 rgba(240, 198, 116, 0.55); }
+            50% { box-shadow: 0 0 0 6px rgba(240, 198, 116, 0); }
+        }
+
+        /* ---- Vista de envios: configuracion de Odoo plegada ---- */
+        .odoo-config-stub {
+            display: none;
+            align-items: center;
+            justify-content: space-between;
+            gap: 14px;
+            flex-wrap: wrap;
+        }
+
+        .odoo-config-stub h2 { margin-bottom: 4px; }
+        body.admin-only .odoo-config-stub { display: flex; }
+        body.admin-only:not(.show-odoo-config) #odoo-automation-section { display: none; }
+
+        /* ---- Advertencias del modal ---- */
+        .ui-modal-warnings {
+            list-style: none;
+            margin: 14px 0 0;
+            padding: 12px 14px;
+            display: grid;
+            gap: 6px;
+            border: 1px solid rgba(240, 198, 116, 0.45);
+            border-radius: var(--radius-md);
+            background: rgba(240, 198, 116, 0.1);
+            color: #ffe2ad;
+            font-size: 13px;
+        }
+
+        .ui-modal-warnings[hidden] { display: none; }
+        .ui-modal-warnings li { display: flex; gap: 8px; }
+        .ui-modal-warnings li::before { content: "⚠"; flex: none; }
+
+        /* ---- Tema claro: elementos nuevos ---- */
+        html[data-theme="light"] .health-item { background: rgba(255, 255, 255, 0.92); border-color: rgba(123, 147, 181, 0.4); }
+        html[data-theme="light"] .health-item[data-state="error"] { background: #fdeef0; border-color: #d98a95; }
+        html[data-theme="light"] .health-label { color: #56739a; }
+        html[data-theme="light"] .health-value { color: #12304f; }
+        html[data-theme="light"] .seg-tabs { background: rgba(240, 247, 255, 0.95); border-color: rgba(123, 147, 181, 0.45); }
+        html[data-theme="light"] .seg-tab { color: #4b688c; }
+        html[data-theme="light"] .seg-tab.is-active { background: rgba(52, 123, 205, 0.14); color: #12365f; }
+        html[data-theme="light"] #adm-sales-body tr.is-pending { background: #fff8ea; }
+        html[data-theme="light"] .row-details > summary,
+        html[data-theme="light"] .status-time { color: #56739a; }
+        html[data-theme="light"] .dirty-badge { color: #7a4b00; background: #fbecc9; border-color: #d9aa4d; }
+        html[data-theme="light"] .ui-modal-warnings { color: #6b4400; background: #fdf3dc; border-color: #d9aa4d; }
+        html[data-theme="light"] .nav-pages { background: rgba(255, 255, 255, 0.82); }
+        html[data-theme="light"] .nav-jump { background: rgba(255, 255, 255, 0.92); border-color: rgba(123, 147, 181, 0.45); }
+        html[data-theme="light"] .nav-jump button { color: #274567; }
+        html[data-theme="light"] .nav-jump button:hover { background: rgba(52, 123, 205, 0.12); color: #12365f; }
+        html[data-theme="light"] .group-title { color: #12304f; }
+        html[data-theme="light"] .group-sub,
+        html[data-theme="light"] .card-sub,
+        html[data-theme="light"] .meta-status,
+        html[data-theme="light"] .subsection-title,
+        html[data-theme="light"] .nav-jump-label,
+        html[data-theme="light"] .form-hint,
+        html[data-theme="light"] .form-group.compact label,
+        html[data-theme="light"] .kv-list p { color: #56739a; }
+        html[data-theme="light"] .kv-list p > span { color: #163252; }
+        html[data-theme="light"] .inline-check,
+        html[data-theme="light"] .card h4 { color: #153150; }
+        html[data-theme="light"] .card-primary {
+            border-color: rgba(31, 184, 207, 0.55);
+            box-shadow: 0 16px 40px rgba(66, 91, 126, 0.16), inset 0 3px 0 rgba(31, 184, 207, 0.8);
+        }
+        html[data-theme="light"] .action-stack .btn:not(.success) {
+            color: #244160;
+            background: rgba(240, 247, 255, 0.95);
+            border-color: rgba(123, 147, 181, 0.58);
+        }
+        html[data-theme="light"] .status-cell small { color: #56739a; }
+        html[data-theme="light"] .danger-zone { background: rgba(217, 93, 107, 0.07); }
+        html[data-theme="light"] .danger-zone strong { color: #922d38; }
+        html[data-theme="light"] .danger-zone p { color: #8a5a61; }
+        html[data-theme="light"] .ui-modal-backdrop { background: rgba(20, 37, 58, 0.38); }
+        html[data-theme="light"] .ui-modal { background: #ffffff; border-color: rgba(123, 147, 181, 0.45); box-shadow: 0 24px 60px rgba(40, 62, 92, 0.28); }
+        html[data-theme="light"] .ui-modal h2 { color: #12304f; }
+        html[data-theme="light"] .ui-modal-message { color: #3b587c; }
+        html[data-theme="light"] .ui-modal-details { background: #f2f7fd; border-color: rgba(123, 147, 181, 0.4); }
+        html[data-theme="light"] .ui-modal-details dt { color: #56739a; }
+        html[data-theme="light"] .ui-modal-details dd { color: #12304f; }
+        html[data-theme="light"] .ui-toast { background: #ffffff; color: #16253a; border-color: rgba(123, 147, 181, 0.45); box-shadow: 0 14px 34px rgba(40, 62, 92, 0.2); }
+
+        /* ---- Refresh visual: energia calida, sin perder lectura operativa ---- */
+        :root {
+            --bg-0: #07111f;
+            --bg-1: #10233d;
+            --panel: rgba(10, 24, 43, 0.88);
+            --panel-strong: rgba(8, 20, 37, 0.94);
+            --line: rgba(118, 158, 205, 0.3);
+            --line-strong: rgba(255, 155, 84, 0.58);
+            --text-0: #f4f7fb;
+            --text-1: #c6d5e8;
+            --accent: #ffbd59;
+            --accent-strong: #ff754a;
+            --success: #35d391;
+            --warn: #ffd166;
+            --shadow-soft: 0 16px 42px rgba(1, 8, 20, 0.44);
+            --shadow-strong: 0 24px 68px rgba(1, 8, 20, 0.62);
+            --radius-lg: 20px;
+            --radius-md: 14px;
+        }
+
+        body {
+            background:
+                radial-gradient(1050px 620px at 92% -8%, rgba(255, 117, 74, 0.24), transparent 60%),
+                radial-gradient(760px 540px at -8% 24%, rgba(255, 189, 89, 0.1), transparent 58%),
+                linear-gradient(155deg, var(--bg-0) 0%, var(--bg-1) 100%);
+        }
+
+        body::before {
+            background: radial-gradient(circle at 32% 34%, rgba(255, 117, 74, 0.3), rgba(7, 17, 31, 0));
+        }
+
+        .header {
+            align-items: center;
+            border-color: rgba(255, 167, 91, 0.46);
+            border-left: 6px solid var(--accent-strong);
+            background: linear-gradient(120deg, rgba(13, 32, 57, 0.98), rgba(20, 53, 82, 0.94));
+        }
+
+        .header::after {
+            background: radial-gradient(circle, rgba(255, 189, 89, 0.34) 0%, rgba(255, 117, 74, 0) 70%);
+        }
+
+        .header-kicker,
+        .group-title { color: var(--accent); }
+
+        .header h1 {
+            font-size: clamp(1.75rem, 3vw, 2.5rem);
+            color: #fffaf3;
+        }
+
+        .group-index {
+            color: #331306;
+            background: linear-gradient(135deg, var(--accent), var(--accent-strong));
+            box-shadow: 0 8px 20px rgba(255, 117, 74, 0.24);
+        }
+
+        .nav a.active {
+            border-color: rgba(255, 189, 89, 0.7);
+            color: #fff5de;
+            background: rgba(255, 117, 74, 0.16);
+        }
+
+        .nav-jump button:hover,
+        .nav-jump button:focus-visible {
+            background: rgba(255, 117, 74, 0.16);
+            color: #fff3dd;
+        }
+
+        .card-primary {
+            border-color: rgba(255, 155, 84, 0.62);
+            box-shadow: var(--shadow-strong), inset 0 4px 0 var(--accent-strong);
+        }
+
+        body.admin-only #administrado-section .card-head {
+            margin: -2px -2px 16px;
+            padding: 2px 2px 16px;
+        }
+
+        body.admin-only #administrado-section .toolbar-primary {
+            padding: 14px;
+            border: 1px solid rgba(255, 155, 84, 0.26);
+            border-radius: var(--radius-md);
+            background: rgba(255, 117, 74, 0.07);
+        }
+
+        .btn {
+            color: #2b1308;
+            background: linear-gradient(135deg, var(--accent), var(--accent-strong));
+            border-color: rgba(255, 211, 151, 0.7);
+            box-shadow: 0 10px 24px rgba(255, 104, 62, 0.22);
+        }
+
+        .btn:hover {
+            box-shadow: 0 13px 28px rgba(255, 104, 62, 0.32);
+        }
+
+        .btn:focus-visible {
+            box-shadow: 0 0 0 3px rgba(255, 189, 89, 0.32), 0 13px 28px rgba(255, 104, 62, 0.3);
+        }
+
+        .btn.secondary,
+        .action-stack .btn:not(.success) { color: #e7effa; }
+
+        .btn.success {
+            color: #042417;
+            background: linear-gradient(135deg, #63e6ad, #27bd7d);
+            border-color: rgba(147, 244, 195, 0.68);
+            box-shadow: 0 10px 22px rgba(24, 153, 94, 0.2);
+        }
+
+        .summary-pill {
+            border-color: rgba(255, 189, 89, 0.54);
+            background: rgba(255, 117, 74, 0.14);
+            color: #ffe7bd;
+        }
+
+        .seg-tab.is-active {
+            background: rgba(255, 117, 74, 0.2);
+            color: #fff3dd;
+            box-shadow: inset 0 0 0 1px rgba(255, 189, 89, 0.24);
+        }
+
+        .seg-tab:focus-visible { outline-color: var(--accent); }
+
+        .table-scroll {
+            border-color: rgba(113, 160, 210, 0.38);
+            box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.025);
+        }
+
+        .table-clean thead th,
+        #meli-sales-table th {
+            background: #173654;
+            color: #ffdca5;
+            border-bottom-color: rgba(255, 155, 84, 0.46);
+        }
+
+        .table-clean tbody tr:nth-child(even),
+        #meli-sales-table tbody tr:nth-child(even) td {
+            background: rgba(29, 57, 88, 0.2);
+        }
+
+        .table-clean tbody tr:hover,
+        #meli-sales-table tr:hover td {
+            background: rgba(255, 117, 74, 0.09);
+        }
+
+        .mono-id,
+        .btn-link-odoo { color: #ffc978; }
+
+        .btn-link-odoo { text-decoration-color: rgba(255, 189, 89, 0.42); }
+
+        .btn-link-odoo:hover,
+        .btn-link-odoo:focus-visible { color: #fff0cf; }
+
+        .adm-advanced-panel > summary {
+            color: #ffe4bb;
+        }
+
+        .health-item:hover,
+        .health-item:focus-visible {
+            background: rgba(24, 49, 78, 0.94);
+        }
+
+        html[data-theme="light"] body {
+            color: #17283c;
+            background:
+                radial-gradient(1000px 580px at 92% -8%, rgba(255, 117, 74, 0.18), transparent 60%),
+                radial-gradient(760px 520px at -8% 20%, rgba(255, 189, 89, 0.16), transparent 58%),
+                linear-gradient(155deg, #fff9f0 0%, #f4eee5 100%);
+        }
+
+        html[data-theme="light"] body::before {
+            background: radial-gradient(circle at 32% 34%, rgba(255, 112, 57, 0.42), rgba(255, 249, 240, 0) 68%);
+        }
+
+        html[data-theme="light"] .container::before {
+            border-color: rgba(211, 82, 30, 0.48);
+            background: radial-gradient(
+                circle at 64% 42%,
+                rgba(255, 184, 67, 0.58) 0%,
+                rgba(255, 122, 55, 0.28) 42%,
+                rgba(255, 122, 55, 0) 72%
+            );
+        }
+
+        html[data-theme="light"] .container::after {
+            border-color: rgba(214, 75, 30, 0.46);
+            background: radial-gradient(
+                circle at 32% 38%,
+                rgba(255, 103, 54, 0.5) 0%,
+                rgba(255, 151, 66, 0.24) 46%,
+                rgba(255, 103, 54, 0) 72%
+            );
+        }
+
+        html[data-theme="light"] .header {
+            color: #162c45;
+            border-color: rgba(217, 111, 57, 0.42);
+            border-left-color: var(--accent-strong);
+            background: linear-gradient(120deg, rgba(255, 255, 255, 0.98), rgba(255, 238, 218, 0.96));
+        }
+
+        html[data-theme="light"] .header h1 { color: #162c45; }
+        html[data-theme="light"] .header-kicker,
+        html[data-theme="light"] .group-title { color: #bd4b22; }
+
+        html[data-theme="light"] .btn {
+            color: #301509;
+            background: linear-gradient(135deg, #ffc35f, #ff784d);
+            border-color: rgba(205, 92, 47, 0.42);
+            box-shadow: 0 10px 22px rgba(211, 91, 44, 0.2);
+        }
+
+        html[data-theme="light"] .btn.secondary,
+        html[data-theme="light"] .action-stack .btn:not(.success) {
+            color: #26425f;
+            background: #fffdf9;
+            border-color: rgba(102, 128, 159, 0.5);
+            box-shadow: none;
+        }
+
+        html[data-theme="light"] .btn.success {
+            color: #06331f;
+            background: linear-gradient(135deg, #70e4b2, #38bd82);
+            border-color: rgba(30, 139, 88, 0.4);
+        }
+
+        html[data-theme="light"] .card-primary {
+            border-color: rgba(224, 105, 54, 0.52);
+            box-shadow: 0 18px 42px rgba(89, 63, 45, 0.14), inset 0 4px 0 var(--accent-strong);
+        }
+
+        html[data-theme="light"] body.admin-only #administrado-section .toolbar-primary {
+            border-color: rgba(224, 105, 54, 0.24);
+            background: rgba(255, 151, 82, 0.08);
+        }
+
+        html[data-theme="light"] .summary-pill {
+            border-color: rgba(211, 91, 44, 0.36);
+            background: #fff0dc;
+            color: #98401f;
+        }
+
+        html[data-theme="light"] .seg-tab.is-active {
+            background: #ffe7cf;
+            color: #873818;
+            box-shadow: inset 0 0 0 1px rgba(211, 91, 44, 0.18);
+        }
+
+        html[data-theme="light"] .table-clean thead th,
+        html[data-theme="light"] #meli-sales-table th {
+            background: #244765;
+            color: #ffe3b6;
+            border-bottom-color: #e48a55;
+        }
+
+        html[data-theme="light"] .table-clean tbody tr:nth-child(even),
+        html[data-theme="light"] #meli-sales-table tbody tr:nth-child(even) td {
+            background: rgba(255, 244, 229, 0.72);
+        }
+
+        html[data-theme="light"] .table-clean tbody tr:hover,
+        html[data-theme="light"] #meli-sales-table tr:hover td {
+            background: #ffead6;
+        }
+
+        html[data-theme="light"] .mono-id,
+        html[data-theme="light"] .btn-link-odoo { color: #b74820; }
+
+        html[data-theme="light"] .stock-detail { color: #607b9c; }
+        html[data-theme="light"] .stock-picking { color: #294a69; }
+        html[data-theme="light"] .stock-shortage { color: #a84520; }
+
+        html[data-theme="light"] .adm-advanced-panel > summary { color: #7d351b; }
+
+        html[data-theme="light"] .pos-settings,
+        html[data-theme="light"] .pos-manual-panel,
+        html[data-theme="light"] .pos-auto-banner {
+            background: rgba(248, 252, 255, 0.94);
+            border-color: rgba(123, 147, 181, 0.38);
+        }
+        html[data-theme="light"] .pos-auto-banner { border-left-color: rgba(123, 147, 181, 0.7); }
+        html[data-theme="light"] .pos-auto-banner[data-state="ready"] { border-left-color: var(--accent); }
+        html[data-theme="light"] .pos-auto-banner[data-state="error"] { border-left-color: var(--danger); }
+        html[data-theme="light"] .pos-auto-banner strong { color: #12304f; }
+        html[data-theme="light"] .pos-settings > summary,
+        html[data-theme="light"] .pos-manual-panel > summary { color: #7d351b; }
+        html[data-theme="light"] .pos-auto-events time,
+        html[data-theme="light"] .pos-inline-message { color: #56739a; }
+        html[data-theme="light"] .pos-inline-message.error,
+        html[data-theme="light"] .error-text { color: #b3261e; }
+        html[data-theme="light"] .pos-inline-message.success { color: #1d7a4f; }
+        html[data-theme="light"] .pos-warn-text { color: #a5520f; }
+
         @media (max-width: 980px) {
             .grid { grid-template-columns: 1fr; }
             .pos-manual-grid { grid-template-columns: repeat(2, minmax(150px, 1fr)); }
@@ -961,23 +2142,37 @@
 
         @media (max-width: 900px) {
             .odoo-grid { grid-template-columns: 1fr; }
+            .health-bar { grid-template-columns: repeat(2, minmax(0, 1fr)); }
         }
 
         @media (max-width: 620px) {
             .pos-manual-grid { grid-template-columns: 1fr; }
+            .form-row,
+            .form-row-3 { grid-template-columns: 1fr; }
+            .toolbar-primary > .btn-lg { width: 100%; }
+            .seg-tabs { display: flex; width: 100%; }
+            .seg-tab { flex: 1 1 0; justify-content: center; padding-inline: 8px; }
         }
 
         @media (prefers-reduced-motion: reduce) {
             body::before { animation: none; }
             .btn { transition: none; }
+            *, *::before, *::after {
+                animation-duration: 1ms !important;
+                animation-iteration-count: 1 !important;
+                transition-duration: 1ms !important;
+            }
         }
     </style>
 </head>
 <body>
     <div class="container">
         <div class="header">
-            <h1 id="page-title">Configuracion EtiquetadorZPL</h1>
-            <p id="page-subtitle">Panel de administracion del sistema</p>
+            <div class="header-main">
+                <span class="header-kicker">EtiquetadorZPL</span>
+                <h1 id="page-title">Configuracion EtiquetadorZPL</h1>
+                <p id="page-subtitle">Panel de administracion del sistema</p>
+            </div>
             <div class="header-actions">
                 <button id="toggle-admin-view-btn" class="btn" onclick="toggleAdminOnlyMode()">Mostrar panel completo</button>
                 <button id="theme-toggle-btn" class="btn secondary" onclick="toggleTheme()">Tema claro</button>
@@ -986,382 +2181,417 @@
         </div>
 
         <div class="nav admin-hide">
-            <a href="index.html">Dashboard</a>
-            <a href="config.html" id="nav-config-link" class="active">Configuracion</a>
-            <a href="config.html?view=pos#pos-reconciliation-section" id="nav-pos-link">Conciliacion POS</a>
-        </div>
-
-        <div class="grid admin-hide">
-            <!-- Notificaciones -->
-            <div class="card">
-                <h2>Notificaciones</h2>
-                <div class="form-group">
-                    <label>
-                        <input type="checkbox" id="desktop-notifications"> Notificaciones de escritorio
-                    </label>
-                </div>
-                <div class="form-group">
-                    <label>
-                        <input type="checkbox" id="error-notifications"> Notificar errores
-                    </label>
-                </div>
-                <div class="form-group">
-                    <label>
-                        <input type="checkbox" id="success-notifications"> Notificar exitos
-                    </label>
-                </div>
-                
-                <h3>Email</h3>
-                <div class="form-group">
-                    <label>
-                        <input type="checkbox" id="email-enabled"> Habilitar email
-                    </label>
-                </div>
-                <div class="form-group">
-                    <label>Servidor SMTP:</label>
-                    <input type="text" id="smtp-server" placeholder="smtp.gmail.com">
-                </div>
-                <div class="form-group">
-                    <label>Puerto:</label>
-                    <input type="number" id="smtp-port" value="587">
-                </div>
-                <div class="form-group">
-                    <label>Usuario:</label>
-                    <input type="email" id="smtp-user" placeholder="usuario@gmail.com">
-                </div>
-                <div class="form-group">
-                    <label>Contrasena:</label>
-                    <input type="password" id="smtp-password">
-                </div>
-                <div class="form-group">
-                    <label>Emails destino (separados por coma):</label>
-                    <textarea id="to-emails" placeholder="admin@empresa.com, soporte@empresa.com"></textarea>
-                </div>
-                
-                <button class="btn" onclick="saveNotificationConfig()">Guardar Notificaciones</button>
+            <div class="nav-pages">
+                <a href="index.html">Dashboard</a>
+                <a href="hoy.html" id="nav-today-link">Hoy</a>
+                <a href="config.html?view=administrado#administrado" id="nav-admin-link">Envios Administrado</a>
+                <a href="config.html" id="nav-config-link" class="active">Configuracion</a>
+                <a href="config.html?view=pos#pos-reconciliation-section" id="nav-pos-link">Conciliacion POS</a>
+                <a href="reposicion.html" id="nav-stock-link">Reposicion</a>
+                <a href="cobranzas.html" id="nav-receivables-link">Cobranzas</a>
             </div>
-
-            <!-- Backup -->
-            <div class="card">
-                <h2>Backup</h2>
-                <div class="form-group">
-                    <label>
-                        <input type="checkbox" id="backup-enabled"> Habilitar backup automatico
-                    </label>
-                </div>
-                <div class="form-group">
-                    <label>
-                        <input type="checkbox" id="daily-backup"> Backup diario (2:00 AM)
-                    </label>
-                </div>
-                <div class="form-group">
-                    <label>
-                        <input type="checkbox" id="weekly-backup"> Backup semanal (Domingo 3:00 AM)
-                    </label>
-                </div>
-                <div class="form-group">
-                    <label>Mantener backups diarios:</label>
-                    <input type="number" id="keep-daily" value="7" min="1" max="30">
-                </div>
-                <div class="form-group">
-                    <label>Mantener backups semanales:</label>
-                    <input type="number" id="keep-weekly" value="4" min="1" max="12">
-                </div>
-                
-                <div style="display: flex; gap: 10px; margin-top: 15px;">
-                    <button class="btn" onclick="saveBackupConfig()">Guardar Config</button>
-                    <button class="btn success" onclick="createManualBackup()">Backup Manual</button>
-                </div>
+            <div class="nav-jump" aria-label="Ir a una seccion">
+                <span class="nav-jump-label">Ir a</span>
+                <button type="button" onclick="scrollToSection('group-operacion')">Operacion</button>
+                <button type="button" onclick="scrollToSection('group-integraciones')">Integraciones</button>
+                <button type="button" onclick="scrollToSection('group-sistema')">Sistema</button>
             </div>
         </div>
 
-        <div class="card admin-hide" id="mercadolibre-section">
-            <h2>Mercado Libre</h2>
-            <div class="grid">
+        <div class="health-bar" id="health-bar" aria-label="Estado del sistema">
+            <button type="button" class="health-item" id="health-adm" data-state="idle" onclick="focusHealthTarget('administrado-section')">
+                <span class="health-dot" aria-hidden="true"></span>
+                <span class="health-text"><span class="health-label">Administrado</span><span class="health-value">Cargando...</span></span>
+            </button>
+            <button type="button" class="health-item" id="health-odoo" data-state="idle" onclick="focusHealthTarget('odoo-automation-section')">
+                <span class="health-dot" aria-hidden="true"></span>
+                <span class="health-text"><span class="health-label">Odoo</span><span class="health-value">Cargando...</span></span>
+            </button>
+            <button type="button" class="health-item" id="health-worker" data-state="idle" onclick="focusHealthTarget('odoo-automation-section')">
+                <span class="health-dot" aria-hidden="true"></span>
+                <span class="health-text"><span class="health-label">Worker</span><span class="health-value">Cargando...</span></span>
+            </button>
+            <button type="button" class="health-item" id="health-printers" data-state="idle" onclick="focusHealthTarget('odoo-printers-panel')">
+                <span class="health-dot" aria-hidden="true"></span>
+                <span class="health-text"><span class="health-label">Impresoras</span><span class="health-value">Cargando...</span></span>
+            </button>
+        </div>
+
+        <!-- ============ 1. Operacion diaria ============ -->
+        <section class="section-group" id="group-operacion">
+            <div class="group-head">
+                <span class="group-index">1</span>
                 <div>
-                    <div class="form-group">
-                        <label>
-                            <input type="checkbox" id="meli-enabled"> Habilitar integracion
-                        </label>
-                    </div>
-                    <div class="form-group">
-                        <label>Client ID:</label>
-                        <input type="text" id="meli-client-id" placeholder="APP_USR-...">
-                    </div>
-                    <div class="form-group">
-                        <label>Client Secret:</label>
-                        <input type="password" id="meli-client-secret" placeholder="Client Secret">
-                    </div>
-                    <div class="form-group">
-                        <label>Redirect URI:</label>
-                        <input type="text" id="meli-redirect-uri" placeholder="http://localhost:8002/api/mercadolibre/oauth/callback">
-                    </div>
-                    <div class="form-group">
-                        <label>Impresora por defecto:</label>
-                        <input type="text" id="meli-default-printer" placeholder="Godex GE300 Red">
-                    </div>
-                    <div class="form-group">
-                        <label>Copias por defecto:</label>
-                        <input type="number" id="meli-default-copies" min="1" max="10" value="1">
-                    </div>
-                    <div class="form-group">
-                        <label>
-                            <input type="checkbox" id="meli-auto-print"> Auto imprimir desde webhook
-                        </label>
-                    </div>
-                    <div style="display: flex; gap: 10px; flex-wrap: wrap;">
-                        <button class="btn" onclick="saveMercadoLibreConfig()">Guardar Mercado Libre</button>
-                        <button class="btn success" onclick="startMercadoLibreOAuth()">Conectar cuenta</button>
-                        <button class="btn" onclick="refreshMercadoLibreStatus()">Actualizar estado</button>
-                    </div>
-                </div>
-                <div>
-                    <h3>Estado</h3>
-                    <p>Configurado: <span class="status" id="meli-configured-status">-</span></p>
-                    <p>Autenticado: <span class="status" id="meli-auth-status">-</span></p>
-                    <p>Usuario ML: <span id="meli-user-id">-</span></p>
-                    <p>Nickname: <span id="meli-nickname">-</span></p>
-                    <p>Ruta config: <span id="meli-config-path">-</span></p>
-                    <p>Ultimo error: <span id="meli-last-error">-</span></p>
-                    <div class="form-group" style="margin-top: 20px;">
-                        <label>Shipment ID para prueba:</label>
-                        <input type="text" id="meli-test-shipment-id" placeholder="12345678901">
-                    </div>
-                    <button class="btn success" onclick="testMercadoLibrePrint()">Probar impresion de shipment</button>
-                </div>
-            </div>
-        </div>
-
-        <div class="card admin-hide">
-            <h2>Ventas listas para imprimir</h2>
-            <div style="display: flex; gap: 10px; align-items: end; flex-wrap: wrap; margin-bottom: 15px;">
-                <div class="form-group" style="margin-bottom: 0; min-width: 180px;">
-                    <label>Traer ultimas ventas:</label>
-                    <input type="number" id="meli-sync-limit" min="1" max="50" value="20">
-                </div>
-                <button class="btn" onclick="syncMercadoLibreSales()">Sincronizar ventas</button>
-                <span id="meli-sync-summary" class="summary-pill is-empty">Sin datos</span>
-            </div>
-            <div class="table-scroll">
-                <table id="meli-sales-table">
-                    <thead>
-                        <tr>
-                            <th>Order</th>
-                            <th>Shipment</th>
-                            <th>Comprador</th>
-                            <th>Titulo</th>
-                            <th>Estado envio</th>
-                            <th>Lista</th>
-                            <th>Accion</th>
-                        </tr>
-                    </thead>
-                    <tbody id="meli-sales-body">
-                        <tr><td colspan="7">Sincroniza para ver ventas</td></tr>
-                    </tbody>
-                </table>
-            </div>
-        </div>
-
-        <div class="card" id="administrado-section">
-            <h2>Administrado</h2>
-            <div class="adm-ops-shell">
-                <div class="adm-ops-head">
-                    <label>
-                        <input type="checkbox" id="adm-enabled"> Habilitar integracion
-                    </label>
-                    <span>Estado: <span class="status" id="adm-configured-status">-</span></span>
-                </div>
-                <p class="muted adm-ops-note">
-                    Modo operativo: sincroniza envios e imprime orden + etiqueta. Las impresoras se gestionan en
-                    <strong>Automatizacion Odoo + Administrado</strong>.
-                </p>
-                <div class="adm-quick-print">
-                    <div class="form-group" style="margin-bottom: 0; min-width: 210px;">
-                        <label>Envio ID para prueba:</label>
-                        <input type="text" id="adm-test-envio-id" placeholder="46624465730">
-                    </div>
-                    <button class="btn success" onclick="printAdministradoLabel()">Imprimir solo etiqueta (prueba)</button>
+                    <p class="group-title">Operacion diaria</p>
+                    <p class="group-sub">Envios pendientes de imprimir</p>
                 </div>
             </div>
 
-            <details class="adm-advanced-panel">
-                <summary>Configuracion y diagnostico avanzado</summary>
-                <div class="grid" style="margin-top: 12px;">
+            <div class="card card-primary" id="administrado-section">
+                <div class="card-head">
                     <div>
-                        <div class="form-group">
-                            <label>URL ventas:</label>
-                            <input type="text" id="adm-sales-url" placeholder="https://www.administrado.net/seller/ventas3">
+                        <h2>Administrado</h2>
+                        <p class="card-sub">
+                            Sincroniza envios e imprime orden + etiqueta. Las impresoras se gestionan en
+                            <strong>Automatizacion Odoo + Administrado</strong>.
+                        </p>
+                    </div>
+                    <div class="card-head-meta">
+                        <button type="button" class="dirty-badge" data-dirty-badge="adm" hidden>Cambios sin guardar</button>
+                        <span class="meta-status">Estado <span class="status" id="adm-configured-status">-</span></span>
+                        <label class="inline-check">
+                            <input type="checkbox" id="adm-enabled"> Habilitar integracion
+                        </label>
+                    </div>
+                </div>
+
+                <div class="toolbar-primary">
+                    <button id="adm-sync-btn" class="btn btn-lg" onclick="syncAdministradoSales()">Sincronizar desde Administrado</button>
+                    <div class="form-group compact">
+                        <label for="adm-sync-limit">Ultimos envios con etiqueta</label>
+                        <input type="number" id="adm-sync-limit" min="1" max="50" value="20">
+                    </div>
+                    <label class="inline-check" for="adm-auto-refresh-toggle">
+                        <input type="checkbox" id="adm-auto-refresh-toggle" onchange="toggleAdministradoAutoRefreshSetting()">
+                        Auto-actualizar
+                    </label>
+                    <span id="adm-sync-summary" class="summary-pill is-empty" aria-live="polite">Sin datos</span>
+                </div>
+
+                <div class="seg-tabs" role="tablist" aria-label="Filtrar envios">
+                    <button type="button" role="tab" class="seg-tab" data-adm-filter="pending" onclick="setAdministradoFilter('pending')">
+                        Pendientes <span class="seg-count" id="adm-count-pending">0</span>
+                    </button>
+                    <button type="button" role="tab" class="seg-tab" data-adm-filter="printed" onclick="setAdministradoFilter('printed')">
+                        Impresos <span class="seg-count" id="adm-count-printed">0</span>
+                    </button>
+                    <button type="button" role="tab" class="seg-tab" data-adm-filter="all" onclick="setAdministradoFilter('all')">
+                        Todos <span class="seg-count" id="adm-count-all">0</span>
+                    </button>
+                </div>
+
+                <div class="table-scroll">
+                    <table class="table-clean">
+                        <thead>
+                        <tr>
+                            <th>Envio</th>
+                            <th>Cliente</th>
+                            <th>Stock / entrega</th>
+                            <th>Accion</th>
+                            <th>Estado</th>
+                        </tr>
+                        </thead>
+                        <tbody id="adm-sales-body">
+                            <tr><td colspan="5" class="empty-cell">Sincroniza para ver etiquetas detectadas</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+
+                <div class="card-tools">
+                    <p class="subsection-title">Herramientas</p>
+                    <div class="adm-quick-print">
+                        <div class="form-group compact">
+                            <label for="adm-test-envio-id">Envio ID para prueba</label>
+                            <input type="text" id="adm-test-envio-id" placeholder="46624465730">
                         </div>
-                        <div class="form-group">
-                            <label>Copias por defecto:</label>
-                            <input type="number" id="adm-default-copies" min="1" max="10" value="1">
+                        <button class="btn secondary" onclick="printAdministradoLabel()">Imprimir solo etiqueta (prueba)</button>
+                    </div>
+
+                    <details class="adm-advanced-panel">
+                        <summary>Configuracion y diagnostico avanzado</summary>
+                        <div class="grid" style="margin-top: 12px;">
+                            <div>
+                                <div class="form-group">
+                                    <label>URL ventas:</label>
+                                    <input type="text" id="adm-sales-url" placeholder="https://www.administrado.net/seller/ventas3">
+                                </div>
+                                <div class="form-row">
+                                    <div class="form-group">
+                                        <label>Copias por defecto:</label>
+                                        <input type="number" id="adm-default-copies" min="1" max="10" value="1">
+                                    </div>
+                                    <div class="form-group">
+                                        <label>DPI PDF:</label>
+                                        <input type="number" id="adm-pdf-render-dpi" min="150" max="600" step="50" value="300">
+                                    </div>
+                                </div>
+                                <div class="form-group">
+                                    <label>
+                                        <input type="checkbox" id="adm-auto-crop-pdf" checked> Recortar PDF antes de imprimir
+                                    </label>
+                                </div>
+                                <div class="form-group">
+                                    <label>
+                                        <input type="checkbox" id="adm-raw-zpl-labels" checked> Modo liviano ZPL para etiquetas
+                                    </label>
+                                </div>
+                                <div class="form-group">
+                                    <label>Cookie de sesion:</label>
+                                    <textarea id="adm-cookie-header" rows="5" placeholder="Pega aqui el header Cookie completo del navegador"></textarea>
+                                </div>
+                                <div class="btn-row">
+                                    <button class="btn" onclick="saveAdministradoConfig()">Guardar Administrado</button>
+                                    <button class="btn secondary" onclick="testAdministradoSession()">Probar sesion</button>
+                                </div>
+                                <p class="subsection-title">Obtener sesion</p>
+                                <div class="btn-row">
+                                    <button class="btn secondary" onclick="importAdministradoCookies('chrome')">Importar desde Chrome</button>
+                                    <button class="btn secondary" onclick="importAdministradoCookies('edge')">Importar desde Edge</button>
+                                    <button class="btn secondary" onclick="captureAdministradoPlaywrightSession()">Capturar sesion con navegador</button>
+                                </div>
+                            </div>
+                            <div class="status-block kv-list">
+                                <h3>Diagnostico tecnico</h3>
+                                <p>Sesion Playwright <span id="adm-playwright-session">-</span></p>
+                                <p>Ruta config <span id="adm-config-path">-</span></p>
+                                <p>Ruta sesion <span id="adm-storage-path">-</span></p>
+                                <p>Ultimo error <span id="adm-last-error">-</span></p>
+                            </div>
                         </div>
-                        <div class="form-group">
-                            <label>DPI PDF:</label>
-                            <input type="number" id="adm-pdf-render-dpi" min="150" max="600" step="50" value="300">
-                        </div>
-                        <div class="form-group">
-                            <label>
-                                <input type="checkbox" id="adm-auto-crop-pdf" checked> Recortar PDF antes de imprimir
+                    </details>
+                </div>
+            </div>
+
+            <div class="card admin-hide">
+                <div class="card-head">
+                    <div>
+                        <h2>Ventas listas para imprimir</h2>
+                        <p class="card-sub">Mercado Libre</p>
+                    </div>
+                </div>
+                <div class="toolbar-primary">
+                    <button class="btn" onclick="syncMercadoLibreSales()">Sincronizar ventas</button>
+                    <div class="form-group compact">
+                        <label for="meli-sync-limit">Traer ultimas ventas</label>
+                        <input type="number" id="meli-sync-limit" min="1" max="50" value="20">
+                    </div>
+                    <span id="meli-sync-summary" class="summary-pill is-empty">Sin datos</span>
+                </div>
+                <div class="table-scroll">
+                    <table id="meli-sales-table">
+                        <thead>
+                            <tr>
+                                <th>Order</th>
+                                <th>Shipment</th>
+                                <th>Comprador</th>
+                                <th>Titulo</th>
+                                <th>Estado envio</th>
+                                <th>Lista</th>
+                                <th>Accion</th>
+                            </tr>
+                        </thead>
+                        <tbody id="meli-sales-body">
+                            <tr><td colspan="7">Sincroniza para ver ventas</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </section>
+
+        <!-- ============ 2. Integraciones ============ -->
+        <section class="section-group" id="group-integraciones">
+            <div class="group-head">
+                <span class="group-index">2</span>
+                <div>
+                    <p class="group-title">Integraciones</p>
+                    <p class="group-sub">Conexiones, impresoras y automatizacion</p>
+                </div>
+            </div>
+
+            <div class="card odoo-config-stub" id="odoo-config-stub">
+                <div>
+                    <h2>Configuracion de Odoo e impresoras</h2>
+                    <p class="card-sub" id="odoo-config-stub-summary">Oculta en la vista de envios para evitar cambios accidentales.</p>
+                </div>
+                <button type="button" class="btn secondary" id="odoo-config-toggle-btn" onclick="toggleOdooConfigInOpsView()">Mostrar configuracion</button>
+            </div>
+
+            <div class="card" id="odoo-automation-section">
+                <div class="card-head">
+                    <div>
+                        <h2>Automatizacion Odoo + Administrado</h2>
+                        <p class="card-sub">
+                            Flujo separado: detecta envios en Administrado, busca la cotizacion en Odoo y luego imprime orden + etiqueta.
+                        </p>
+                    </div>
+                    <div class="card-head-meta">
+                        <button type="button" class="dirty-badge" data-dirty-badge="odoo" hidden>Cambios sin guardar</button>
+                    </div>
+                </div>
+                <div class="odoo-grid">
+                    <div class="odoo-panel">
+                        <h3>Conexion</h3>
+                        <div class="odoo-toggles">
+                            <label class="odoo-toggle">
+                                <input type="checkbox" id="odoo-enabled">
+                                <span>Habilitar integracion Odoo</span>
                             </label>
                         </div>
-                        <div class="form-group">
-                            <label>
-                                <input type="checkbox" id="adm-raw-zpl-labels" checked> Modo liviano ZPL para etiquetas
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label>URL Odoo:</label>
+                                <input type="text" id="odoo-url" placeholder="https://tu-odoo.com">
+                            </div>
+                            <div class="form-group">
+                                <label>Base de datos:</label>
+                                <input type="text" id="odoo-db" placeholder="odoo_prod">
+                            </div>
+                        </div>
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label>Usuario:</label>
+                                <input type="text" id="odoo-user" autocomplete="off" placeholder="usuario@empresa.com">
+                            </div>
+                            <div class="form-group">
+                                <label>Clave/API Key:</label>
+                                <input type="password" id="odoo-password" autocomplete="new-password" placeholder="API key o password">
+                            </div>
+                        </div>
+
+                        <h3 class="subsection-gap">Automatizacion</h3>
+                        <div class="odoo-toggles">
+                            <label class="odoo-toggle">
+                                <input type="checkbox" id="odoo-auto-enabled">
+                                <span>Habilitar automatizacion en background</span>
                             </label>
                         </div>
-                        <div class="form-group">
-                            <label>Cookie de sesion:</label>
-                            <textarea id="adm-cookie-header" rows="5" placeholder="Pega aqui el header Cookie completo del navegador"></textarea>
+                        <div class="form-row form-row-3">
+                            <div class="form-group">
+                                <label>Intervalo (seg):</label>
+                                <input type="number" id="odoo-interval" min="15" max="3600" value="60">
+                            </div>
+                            <div class="form-group">
+                                <label>Envios por ciclo:</label>
+                                <input type="number" id="odoo-sync-limit" min="1" max="50" value="20">
+                            </div>
+                            <div class="form-group">
+                                <label>Espera orden → etiqueta (seg):</label>
+                                <input type="number" id="odoo-order-label-delay" min="0" max="30" value="1">
+                            </div>
                         </div>
-                        <div style="display: flex; gap: 10px; flex-wrap: wrap;">
-                            <button class="btn" onclick="saveAdministradoConfig()">Guardar Administrado</button>
-                            <button class="btn success" onclick="testAdministradoSession()">Probar sesion</button>
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label>Reporte cotizacion:</label>
+                                <input type="text" id="odoo-report-name" placeholder="sale.report_saleorder">
+                            </div>
+                            <div class="form-group">
+                                <label>Prefijo de orden (por envio):</label>
+                                <input type="text" id="odoo-order-prefix" placeholder="ML ">
+                            </div>
                         </div>
-                        <div style="display: flex; gap: 10px; flex-wrap: wrap; margin-top: 10px;">
-                            <button class="btn" onclick="importAdministradoCookies('chrome')">Importar desde Chrome</button>
-                            <button class="btn" onclick="importAdministradoCookies('edge')">Importar desde Edge</button>
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label>Campo shipment Odoo (opcional):</label>
+                                <input type="text" id="odoo-shipment-field" placeholder="x_meli_shipment_id">
+                            </div>
+                            <div class="form-group">
+                                <label>Estados permitidos:</label>
+                                <input type="text" id="odoo-order-states" placeholder="draft,sent,sale">
+                            </div>
                         </div>
-                        <div style="display: flex; gap: 10px; flex-wrap: wrap; margin-top: 10px;">
-                            <button class="btn success" onclick="captureAdministradoPlaywrightSession()">Capturar sesion con navegador</button>
+                        <div class="odoo-toggles">
+                            <label class="odoo-toggle">
+                                <input type="checkbox" id="odoo-include-reprint">
+                                <span>Incluir "reimprimir etiqueta"</span>
+                            </label>
+                            <label class="odoo-toggle">
+                                <input type="checkbox" id="odoo-confirm-on-print">
+                                <span>Confirmar cotizacion al imprimir orden + etiqueta</span>
+                            </label>
+                        </div>
+                        <div class="odoo-actions">
+                            <button class="btn" onclick="saveOdooConfig()">Guardar Odoo</button>
+                            <button class="btn secondary" onclick="testOdooConnection()">Probar conexion</button>
+                            <button class="btn secondary" onclick="runOdooAutomationOnce()">Ejecutar ciclo ahora</button>
+                            <span class="actions-spacer"></span>
+                            <button class="btn danger" onclick="resetOdooAutomationProcessed()">Reset procesados</button>
                         </div>
                     </div>
-                    <div class="status-block">
-                        <h3>Diagnostico tecnico</h3>
-                        <p>Sesion Playwright: <span id="adm-playwright-session">-</span></p>
-                        <p>Ruta config: <span id="adm-config-path">-</span></p>
-                        <p>Ruta sesion: <span id="adm-storage-path">-</span></p>
-                        <p>Ultimo error: <span id="adm-last-error">-</span></p>
+                    <div class="odoo-side">
+                        <div class="odoo-panel">
+                            <h3>Estado worker</h3>
+                            <div class="odoo-worker kv-list">
+                                <p>Worker activo <span id="odoo-worker-running">-</span></p>
+                                <p>Envios procesados <span id="odoo-processed-count">0</span></p>
+                                <p>Ultimo ciclo <span id="odoo-last-cycle">-</span></p>
+                                <p>Resultado <span id="odoo-last-result">-</span></p>
+                                <p>Ultimos impresos <span id="odoo-recent-processed">-</span></p>
+                                <p>Ultimo error <span id="odoo-last-error">-</span></p>
+                                <p>Config path <span id="odoo-config-path">-</span></p>
+                            </div>
+                        </div>
+                        <div class="odoo-panel" id="odoo-printers-panel">
+                            <h3>Impresoras para orden y etiqueta</h3>
+                            <p class="subsection-title">Orden Odoo</p>
+                            <div class="form-group">
+                                <label>Principal:</label>
+                                <select id="odoo-order-printer-primary">
+                                    <option value="">Cargando impresoras...</option>
+                                </select>
+                            </div>
+                            <div class="form-row form-row-select-count">
+                                <div class="form-group">
+                                    <label>Respaldo:</label>
+                                    <select id="odoo-order-printer-fallback">
+                                        <option value="">(Sin respaldo)</option>
+                                    </select>
+                                </div>
+                                <div class="form-group">
+                                    <label>Copias:</label>
+                                    <input type="number" id="odoo-order-copies" min="1" max="10" value="1">
+                                </div>
+                            </div>
+                            <div class="odoo-toggles">
+                                <label class="odoo-toggle">
+                                    <input type="checkbox" id="odoo-force-order-grayscale">
+                                    <span>Forzar orden en blanco y negro</span>
+                                </label>
+                            </div>
+                            <p class="subsection-title">Etiqueta Administrado</p>
+                            <div class="form-group">
+                                <label>Principal:</label>
+                                <select id="odoo-label-printer-primary">
+                                    <option value="">Cargando impresoras...</option>
+                                </select>
+                            </div>
+                            <div class="form-row form-row-select-count">
+                                <div class="form-group">
+                                    <label>Respaldo:</label>
+                                    <select id="odoo-label-printer-fallback">
+                                        <option value="">(Sin respaldo)</option>
+                                    </select>
+                                </div>
+                                <div class="form-group">
+                                    <label>Copias:</label>
+                                    <input type="number" id="odoo-label-copies" min="1" max="10" value="1">
+                                </div>
+                            </div>
+                        </div>
                     </div>
                 </div>
-            </details>
 
-            <div class="inline-toolbar">
-                <div class="form-group" style="margin-bottom: 0; min-width: 180px;">
-                    <label>Traer ultimos envios con etiqueta:</label>
-                    <input type="number" id="adm-sync-limit" min="1" max="50" value="20">
-                </div>
-                <div class="form-group" style="margin-bottom: 0; min-width: 220px;">
-                    <label for="adm-auto-refresh-toggle">Auto-actualizar Administrado</label>
-                    <input type="checkbox" id="adm-auto-refresh-toggle" onchange="toggleAdministradoAutoRefreshSetting()">
-                </div>
-                <button id="adm-sync-btn" class="btn" onclick="syncAdministradoSales()">Sincronizar desde Administrado</button>
-                <span id="adm-sync-summary" class="summary-pill is-empty">Sin datos</span>
-            </div>
-            <div class="table-scroll">
-                <table class="table-clean">
-                    <thead>
-                    <tr>
-                        <th>Envio</th>
-                        <th>Cliente</th>
-                        <th>Accion</th>
-                        <th>Estado</th>
-                    </tr>
-                    </thead>
-                    <tbody id="adm-sales-body">
-                        <tr><td colspan="4" class="empty-cell">Sincroniza para ver etiquetas detectadas</td></tr>
-                    </tbody>
-                </table>
-            </div>
-
-        </div>
-
-        <div class="card" id="odoo-automation-section">
-            <h2>Automatizacion Odoo + Administrado</h2>
-            <p class="muted" style="margin-bottom: 12px;">
-                Flujo separado: detecta envios en Administrado, busca la cotizacion en Odoo y luego imprime orden + etiqueta.
-            </p>
-            <div class="odoo-grid">
-                <div class="odoo-panel">
-                    <div class="odoo-toggles">
-                        <label class="odoo-toggle">
-                            <input type="checkbox" id="odoo-enabled">
-                            <span>Habilitar integracion Odoo</span>
-                        </label>
-                        <label class="odoo-toggle">
-                            <input type="checkbox" id="odoo-auto-enabled">
-                            <span>Habilitar automatizacion en background</span>
-                        </label>
-                    </div>
-                    <div class="form-group">
-                        <label>Intervalo (segundos):</label>
-                        <input type="number" id="odoo-interval" min="15" max="3600" value="60">
-                    </div>
-                    <div class="form-group">
-                        <label>URL Odoo:</label>
-                        <input type="text" id="odoo-url" placeholder="https://tu-odoo.com">
-                    </div>
-                    <div class="form-group">
-                        <label>Base de datos:</label>
-                        <input type="text" id="odoo-db" placeholder="odoo_prod">
-                    </div>
-                    <div class="form-group">
-                        <label>Usuario:</label>
-                        <input type="text" id="odoo-user" placeholder="usuario@empresa.com">
-                    </div>
-                    <div class="form-group">
-                        <label>Clave/API Key:</label>
-                        <input type="password" id="odoo-password" placeholder="API key o password">
-                    </div>
-                    <div class="form-group">
-                        <label>Reporte cotizacion:</label>
-                        <input type="text" id="odoo-report-name" placeholder="sale.report_saleorder">
-                    </div>
-                    <div class="form-group">
-                        <label>Prefijo de orden (por envio):</label>
-                        <input type="text" id="odoo-order-prefix" placeholder="ML ">
-                    </div>
-                    <div class="form-group">
-                        <label>Campo shipment en Odoo (opcional):</label>
-                        <input type="text" id="odoo-shipment-field" placeholder="x_meli_shipment_id">
-                    </div>
-                    <div class="form-group">
-                        <label>Estados permitidos:</label>
-                        <input type="text" id="odoo-order-states" placeholder="draft,sent,sale">
-                    </div>
-                    <div class="form-group">
-                        <label>Envios por ciclo:</label>
-                        <input type="number" id="odoo-sync-limit" min="1" max="50" value="20">
-                    </div>
-                    <div class="form-group">
-                        <label>Delay orden -> etiqueta (segundos):</label>
-                        <input type="number" id="odoo-order-label-delay" min="0" max="30" value="1">
-                    </div>
-                    <div class="odoo-toggles">
-                        <label class="odoo-toggle">
-                            <input type="checkbox" id="odoo-include-reprint">
-                            <span>Incluir "reimprimir etiqueta"</span>
-                        </label>
-                        <label class="odoo-toggle">
-                            <input type="checkbox" id="odoo-confirm-on-print">
-                            <span>Confirmar cotizacion al imprimir orden + etiqueta</span>
-                        </label>
-                    </div>
-                    <div class="odoo-actions">
-                        <button class="btn" onclick="saveOdooConfig()">Guardar Odoo</button>
-                        <button class="btn success" onclick="testOdooConnection()">Probar conexion</button>
-                        <button class="btn" onclick="runOdooAutomationOnce()">Ejecutar ciclo ahora</button>
-                        <button class="btn danger" onclick="resetOdooAutomationProcessed()">Reset procesados</button>
-                    </div>
-                    <h3 style="margin-top: 18px;">Usuarios Odoo por operador</h3>
+                <div class="odoo-panel odoo-operators">
+                    <h3>Usuarios Odoo por operador</h3>
                     <p class="odoo-muted">
                         Si esta activada la confirmacion al imprimir, cada operador debe iniciar sesion y tener usuario Odoo mapeado.
                     </p>
-                    <div class="form-group">
-                        <label>Identificador del operador (Administrado/App):</label>
-                        <input type="text" id="odoo-operator-app-username" placeholder="ej: admin">
+                    <div class="form-row form-row-3">
+                        <div class="form-group">
+                            <label>Identificador del operador (Administrado/App):</label>
+                            <input type="text" id="odoo-operator-app-username" placeholder="ej: admin">
+                        </div>
+                        <div class="form-group">
+                            <label>Usuario Odoo:</label>
+                            <input type="text" id="odoo-operator-odoo-username" autocomplete="off" placeholder="ej: ventas@empresa.com">
+                        </div>
+                        <div class="form-group">
+                            <label>Password Odoo:</label>
+                            <input type="password" id="odoo-operator-odoo-password" autocomplete="new-password" placeholder="password usuario Odoo">
+                        </div>
                     </div>
-                    <div class="form-group">
-                        <label>Usuario Odoo:</label>
-                        <input type="text" id="odoo-operator-odoo-username" placeholder="ej: ventas@empresa.com">
-                    </div>
-                    <div class="form-group">
-                        <label>Password Odoo:</label>
-                        <input type="password" id="odoo-operator-odoo-password" placeholder="password usuario Odoo">
-                    </div>
-                    <div class="odoo-actions" style="margin-bottom: 10px;">
+                    <div class="odoo-actions" style="margin-bottom: 12px;">
                         <button class="btn" onclick="saveOdooOperatorUser()">Guardar usuario Odoo</button>
-                        <button class="btn" onclick="loadOdooOperatorUsers()">Actualizar lista</button>
+                        <button class="btn secondary" onclick="loadOdooOperatorUsers()">Actualizar lista</button>
                     </div>
                     <div class="table-scroll">
                         <table class="table-clean">
@@ -1379,59 +2609,111 @@
                         </table>
                     </div>
                 </div>
-                <div class="odoo-panel">
-                    <h3>Impresoras para orden y etiqueta</h3>
-                    <div class="form-group">
-                        <label>Orden Odoo - principal:</label>
-                        <select id="odoo-order-printer-primary">
-                            <option value="">Cargando impresoras...</option>
-                        </select>
+            </div>
+
+            <div class="card admin-hide" id="mercadolibre-section">
+                <div class="card-head">
+                    <div>
+                        <h2>Mercado Libre</h2>
+                        <p class="card-sub">Credenciales OAuth, tokens e impresion de etiquetas</p>
                     </div>
-                    <div class="form-group">
-                        <label>Orden Odoo - respaldo:</label>
-                        <select id="odoo-order-printer-fallback">
-                            <option value="">(Sin respaldo)</option>
-                        </select>
-                    </div>
-                    <div class="form-group">
-                        <label>Copias orden:</label>
-                        <input type="number" id="odoo-order-copies" min="1" max="10" value="1">
-                    </div>
-                    <div class="odoo-toggles">
-                        <label class="odoo-toggle">
-                            <input type="checkbox" id="odoo-force-order-grayscale">
-                            <span>Forzar orden en blanco y negro</span>
+                    <div class="card-head-meta">
+                        <button type="button" class="dirty-badge" data-dirty-badge="meli" hidden>Cambios sin guardar</button>
+                        <label class="inline-check">
+                            <input type="checkbox" id="meli-enabled"> Habilitar integracion
                         </label>
                     </div>
-                    <div class="form-group">
-                        <label>Etiqueta Administrado - principal:</label>
-                        <select id="odoo-label-printer-primary">
-                            <option value="">Cargando impresoras...</option>
-                        </select>
+                </div>
+                <div class="grid">
+                    <div>
+                        <h3>Credenciales</h3>
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label>Client ID:</label>
+                                <input type="text" id="meli-client-id" autocomplete="off" placeholder="APP_USR-...">
+                            </div>
+                            <div class="form-group">
+                                <label>Client Secret:</label>
+                                <input type="password" id="meli-client-secret" autocomplete="new-password" placeholder="Client Secret">
+                            </div>
+                        </div>
+                        <div class="form-group">
+                            <label>Redirect URI:</label>
+                            <input type="text" id="meli-redirect-uri" placeholder="http://localhost:8002/api/mercadolibre/oauth/callback">
+                        </div>
+
+                        <h3 class="subsection-gap">Tokens</h3>
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label>Access Token:</label>
+                                <input type="password" id="meli-access-token" autocomplete="new-password" placeholder="APP_USR-...">
+                            </div>
+                            <div class="form-group">
+                                <label>Refresh Token:</label>
+                                <input type="password" id="meli-refresh-token" autocomplete="new-password" placeholder="TG-...">
+                            </div>
+                        </div>
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label>Vence en segundos (expires_in):</label>
+                                <input type="number" id="meli-expires-in" min="0" placeholder="21600">
+                            </div>
+                            <div class="form-group">
+                                <label>Usuario ID de Mercado Libre (opcional):</label>
+                                <input type="number" id="meli-manual-user-id" min="1" placeholder="123456789">
+                            </div>
+                        </div>
+                        <small class="form-hint">Al guardar el token se reemplaza por el usuario verificado por Mercado Libre.</small>
+
+                        <h3 class="subsection-gap">Impresion</h3>
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label>Impresora por defecto:</label>
+                                <input type="text" id="meli-default-printer" placeholder="Godex GE300 Red">
+                            </div>
+                            <div class="form-group">
+                                <label>Copias por defecto:</label>
+                                <input type="number" id="meli-default-copies" min="1" max="10" value="1">
+                            </div>
+                        </div>
+                        <div class="form-group">
+                            <label>
+                                <input type="checkbox" id="meli-auto-print"> Auto imprimir desde webhook
+                            </label>
+                        </div>
+                        <div class="btn-row">
+                            <button class="btn" onclick="saveMercadoLibreConfig()">Guardar Mercado Libre</button>
+                            <button class="btn secondary" onclick="startMercadoLibreOAuth()">Conectar cuenta</button>
+                            <button class="btn secondary" onclick="refreshMercadoLibreStatus()">Actualizar estado</button>
+                        </div>
                     </div>
-                    <div class="form-group">
-                        <label>Etiqueta Administrado - respaldo:</label>
-                        <select id="odoo-label-printer-fallback">
-                            <option value="">(Sin respaldo)</option>
-                        </select>
-                    </div>
-                    <div class="form-group">
-                        <label>Copias etiqueta:</label>
-                        <input type="number" id="odoo-label-copies" min="1" max="10" value="1">
-                    </div>
-                    <h3>Estado worker</h3>
-                    <div class="odoo-worker">
-                        <p>Worker activo: <span id="odoo-worker-running">-</span></p>
-                        <p>Envios procesados: <span id="odoo-processed-count">0</span></p>
-                        <p>Ultimo ciclo: <span id="odoo-last-cycle">-</span></p>
-                        <p>Resultado: <span id="odoo-last-result">-</span></p>
-                        <p>Ultimos impresos: <span id="odoo-recent-processed">-</span></p>
-                        <p>Ultimo error: <span id="odoo-last-error">-</span></p>
-                        <p>Config path: <span id="odoo-config-path">-</span></p>
+                    <div>
+                        <div class="odoo-panel">
+                            <h3>Estado</h3>
+                            <div class="status-block kv-list">
+                                <p>Configurado <span class="status" id="meli-configured-status">-</span></p>
+                                <p>Autenticado <span class="status" id="meli-auth-status">-</span></p>
+                                <p>Usuario ML <span id="meli-user-id">-</span></p>
+                                <p>Nickname <span id="meli-nickname">-</span></p>
+                                <p>Access token <span id="meli-access-token-status">-</span></p>
+                                <p>Refresh token <span id="meli-refresh-token-status">-</span></p>
+                                <p>Vencimiento token <span id="meli-token-expiry">-</span></p>
+                                <p>Ruta config <span id="meli-config-path">-</span></p>
+                                <p>Ultimo error <span id="meli-last-error">-</span></p>
+                            </div>
+                        </div>
+                        <div class="odoo-panel" style="margin-top: 14px;">
+                            <h3>Prueba de impresion</h3>
+                            <div class="form-group">
+                                <label>Shipment ID para prueba:</label>
+                                <input type="text" id="meli-test-shipment-id" placeholder="12345678901">
+                            </div>
+                            <button class="btn secondary" onclick="testMercadoLibrePrint()">Probar impresion de shipment</button>
+                        </div>
                     </div>
                 </div>
             </div>
-        </div>
+        </section>
 
         <div class="card admin-hide" id="pos-reconciliation-section">
             <h2>Conciliacion de pagos POS (TotalNet)</h2>
@@ -1443,7 +2725,10 @@
                 <summary>Configuracion de TotalNet y diarios contables</summary>
             <div class="odoo-grid">
                 <div class="odoo-panel">
-                    <h3>Credenciales TotalNet</h3>
+                    <div class="card-title-row">
+                        <h3>Credenciales TotalNet</h3>
+                        <button type="button" class="dirty-badge" data-dirty-badge="totalnet" hidden>Cambios sin guardar</button>
+                    </div>
                     <div class="odoo-toggles">
                         <label class="odoo-toggle">
                             <input type="checkbox" id="totalnet-enabled">
@@ -1452,11 +2737,11 @@
                     </div>
                     <div class="form-group">
                         <label>Client ID:</label>
-                        <input type="text" id="totalnet-client-id" placeholder="client_id">
+                        <input type="text" id="totalnet-client-id" autocomplete="off" placeholder="client_id">
                     </div>
                     <div class="form-group">
                         <label>Client Secret:</label>
-                        <input type="password" id="totalnet-client-secret" placeholder="client_secret">
+                        <input type="password" id="totalnet-client-secret" autocomplete="new-password" placeholder="client_secret">
                     </div>
                     <div class="form-group">
                         <label>URL de token OAuth2:</label>
@@ -1515,6 +2800,65 @@
                     <button class="btn" onclick="savePosReconciliationConfig()">Guardar configuracion</button>
                 </div>
             </div>
+            </details>
+
+            <div class="pos-auto-banner" id="pos-auto-banner" data-state="idle" role="status" aria-live="polite">
+                <div class="pos-auto-banner-text">
+                    <strong id="pos-auto-banner-title">Conciliacion automatica</strong>
+                    <span id="pos-auto-banner-detail" class="odoo-muted">Cargando estado...</span>
+                </div>
+                <div class="pos-auto-banner-actions">
+                    <button class="btn" id="pos-auto-load-btn" onclick="loadPosAutoProposal()" disabled>Revisar propuesta</button>
+                    <button class="btn secondary" id="pos-auto-run-btn" onclick="runPosAutoNow()">Sincronizar ahora en segundo plano</button>
+                </div>
+            </div>
+
+            <details class="pos-settings" id="pos-auto-settings">
+                <summary>Conciliacion automatica en segundo plano</summary>
+                <div class="odoo-grid">
+                    <div class="odoo-panel">
+                        <h3>Sincronizacion periodica</h3>
+                        <p class="odoo-muted">Trae cupones y facturas cada cierto tiempo y deja las coincidencias listas para revisar. No registra pagos salvo que actives la opcion de la derecha.</p>
+                        <div class="odoo-toggles">
+                            <label class="odoo-toggle">
+                                <input type="checkbox" id="pos-auto-enabled">
+                                <span>Sincronizar automaticamente</span>
+                            </label>
+                            <label class="odoo-toggle">
+                                <input type="checkbox" id="pos-auto-notify" checked>
+                                <span>Aviso de escritorio cuando haya pagos nuevos para revisar</span>
+                            </label>
+                        </div>
+                        <div class="form-group">
+                            <label for="pos-auto-interval">Cada cuantos minutos:</label>
+                            <input type="number" id="pos-auto-interval" min="15" max="1440" value="60">
+                        </div>
+                        <div class="form-group">
+                            <label for="pos-auto-lookback">Dias hacia atras a revisar:</label>
+                            <input type="number" id="pos-auto-lookback" min="1" max="31" value="7">
+                        </div>
+                    </div>
+                    <div class="odoo-panel">
+                        <h3>Registro automatico (opcional)</h3>
+                        <p class="odoo-muted">Registra en Odoo solamente las coincidencias inequivocas: numero de factura informado por TotalNet, importe exacto sin redondeo, factura sin pagos previos, diario mapeado por sello y ningun otro cupon con el mismo numero. Todo lo demas sigue esperando confirmacion.</p>
+                        <div class="odoo-toggles">
+                            <label class="odoo-toggle">
+                                <input type="checkbox" id="pos-auto-register">
+                                <span>Registrar automaticamente las coincidencias inequivocas</span>
+                            </label>
+                        </div>
+                        <div class="form-group">
+                            <label for="pos-auto-operator">Registrar como:</label>
+                            <select id="pos-auto-operator">
+                                <option value="">Cargando usuarios...</option>
+                            </select>
+                        </div>
+                        <button class="btn" onclick="savePosAutoConfig()">Guardar conciliacion automatica</button>
+                        <span id="pos-auto-config-status" class="pos-inline-message" role="status"></span>
+                    </div>
+                </div>
+                <h4>Actividad reciente</h4>
+                <ul class="pos-auto-events" id="pos-auto-events"><li class="odoo-muted">Sin actividad</li></ul>
             </details>
 
             <h3 style="margin-top:18px;">Sincronizar y conciliar</h3>
@@ -1675,42 +3019,319 @@
             <div id="pos-confirm-summary" class="odoo-muted" style="margin-top:8px;"></div>
         </div>
 
-        <!-- Lista de Backups -->
-        <div class="card admin-hide">
-            <h2>Backups Disponibles</h2>
-            <div id="backup-list">Cargando...</div>
-            <button class="btn" onclick="loadBackups()">Actualizar</button>
-        </div>
+        <!-- ============ 3. Sistema ============ -->
+        <section class="section-group admin-hide" id="group-sistema">
+            <div class="group-head">
+                <span class="group-index">3</span>
+                <div>
+                    <p class="group-title">Sistema y mantenimiento</p>
+                    <p class="group-sub">Notificaciones, backups y estado general</p>
+                </div>
+            </div>
 
-        <!-- Sistema -->
-        <div class="card admin-hide">
-            <h2>Sistema</h2>
             <div class="grid">
-                <div>
-                    <h3>Estado del Sistema</h3>
-                    <p>API: <span class="status enabled">Activa</span></p>
-                    <p>Base de datos: <span class="status enabled">Conectada</span></p>
-                    <p>Notificaciones: <span class="status" id="notification-status">-</span></p>
-                    <p>Backup: <span class="status" id="backup-status">-</span></p>
+                <!-- Notificaciones -->
+                <div class="card">
+                    <div class="card-title-row">
+                        <h2>Notificaciones</h2>
+                        <button type="button" class="dirty-badge" data-dirty-badge="notif" hidden>Cambios sin guardar</button>
+                    </div>
+                    <div class="form-group">
+                        <label>
+                            <input type="checkbox" id="desktop-notifications"> Notificaciones de escritorio
+                        </label>
+                    </div>
+                    <div class="form-group">
+                        <label>
+                            <input type="checkbox" id="error-notifications"> Notificar errores
+                        </label>
+                    </div>
+                    <div class="form-group">
+                        <label>
+                            <input type="checkbox" id="success-notifications"> Notificar exitos
+                        </label>
+                    </div>
+
+                    <h3 class="subsection-gap">Email</h3>
+                    <div class="form-group">
+                        <label>
+                            <input type="checkbox" id="email-enabled"> Habilitar email
+                        </label>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>Servidor SMTP:</label>
+                            <input type="text" id="smtp-server" placeholder="smtp.gmail.com">
+                        </div>
+                        <div class="form-group">
+                            <label>Puerto:</label>
+                            <input type="number" id="smtp-port" value="587">
+                        </div>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>Usuario:</label>
+                            <input type="email" id="smtp-user" autocomplete="off" placeholder="usuario@gmail.com">
+                        </div>
+                        <div class="form-group">
+                            <label>Contrasena:</label>
+                            <input type="password" id="smtp-password" autocomplete="new-password">
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label>Emails destino (separados por coma):</label>
+                        <textarea id="to-emails" placeholder="admin@empresa.com, soporte@empresa.com"></textarea>
+                    </div>
+
+                    <button class="btn" onclick="saveNotificationConfig()">Guardar Notificaciones</button>
                 </div>
-                <div>
-                    <h3>Acciones</h3>
-                    <button class="btn" onclick="testNotification()">Probar Notificacion</button>
-                    <button class="btn danger" onclick="clearDatabase()">Limpiar BD</button>
-                    <button class="btn" onclick="exportLogs()">Exportar Logs</button>
+
+                <!-- Backup -->
+                <div class="card">
+                    <div class="card-title-row">
+                        <h2>Backup</h2>
+                        <button type="button" class="dirty-badge" data-dirty-badge="backup" hidden>Cambios sin guardar</button>
+                    </div>
+                    <div class="form-group">
+                        <label>
+                            <input type="checkbox" id="backup-enabled"> Habilitar backup automatico
+                        </label>
+                    </div>
+                    <div class="form-group">
+                        <label>
+                            <input type="checkbox" id="daily-backup"> Backup diario (2:00 AM)
+                        </label>
+                    </div>
+                    <div class="form-group">
+                        <label>
+                            <input type="checkbox" id="weekly-backup"> Backup semanal (Domingo 3:00 AM)
+                        </label>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>Mantener backups diarios:</label>
+                            <input type="number" id="keep-daily" value="7" min="1" max="30">
+                        </div>
+                        <div class="form-group">
+                            <label>Mantener backups semanales:</label>
+                            <input type="number" id="keep-weekly" value="4" min="1" max="12">
+                        </div>
+                    </div>
+
+                    <div class="btn-row" style="margin-top: 15px;">
+                        <button class="btn" onclick="saveBackupConfig()">Guardar Config</button>
+                        <button class="btn secondary" onclick="createManualBackup()">Backup Manual</button>
+                    </div>
+
+                    <h3 class="subsection-gap">Backups disponibles</h3>
+                    <div id="backup-list">Cargando...</div>
+                    <button class="btn secondary" onclick="loadBackups()">Actualizar</button>
                 </div>
+            </div>
+
+            <!-- Sistema -->
+            <div class="card">
+                <h2>Sistema</h2>
+                <div class="grid">
+                    <div class="kv-list">
+                        <h3>Estado del Sistema</h3>
+                        <p>API <span class="status enabled">Activa</span></p>
+                        <p>Base de datos <span class="status enabled">Conectada</span></p>
+                        <p>Notificaciones <span class="status" id="notification-status">-</span></p>
+                        <p>Backup <span class="status" id="backup-status">-</span></p>
+                    </div>
+                    <div>
+                        <h3>Acciones</h3>
+                        <div class="btn-row">
+                            <button class="btn secondary" onclick="testNotification()">Probar Notificacion</button>
+                            <button class="btn secondary" onclick="exportLogs()">Exportar Logs</button>
+                        </div>
+                        <div class="danger-zone">
+                            <div>
+                                <strong>Zona de riesgo</strong>
+                                <p>Borra todos los registros. No se puede deshacer.</p>
+                            </div>
+                            <button class="btn danger" onclick="clearDatabase()">Limpiar BD</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+    </div>
+
+    <div class="ui-modal-backdrop" id="ui-modal" hidden>
+        <div class="ui-modal" role="dialog" aria-modal="true" aria-labelledby="ui-modal-title">
+            <div class="ui-modal-icon" id="ui-modal-icon" aria-hidden="true"></div>
+            <h2 id="ui-modal-title">Confirmar</h2>
+            <p id="ui-modal-message" class="ui-modal-message"></p>
+            <dl id="ui-modal-details" class="ui-modal-details" hidden></dl>
+            <ul id="ui-modal-warnings" class="ui-modal-warnings" hidden></ul>
+            <div class="ui-modal-actions">
+                <button type="button" class="btn secondary" id="ui-modal-cancel">Cancelar</button>
+                <button type="button" class="btn" id="ui-modal-ok">Confirmar</button>
             </div>
         </div>
     </div>
+    <div class="ui-toasts" id="ui-toasts" aria-live="polite"></div>
 
     <script src="config.js"></script>
     <script>
+        // ---- UI: modal de confirmacion y notificaciones (reemplazan alert/confirm del navegador) ----
+        const UI_ICONS = {
+            print: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9V3h12v6"/><rect x="3" y="9" width="18" height="8" rx="2"/><path d="M6 14h12v7H6z"/></svg>',
+            danger: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3 2 20h20L12 3z"/><path d="M12 10v4M12 17h.01"/></svg>',
+            info: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 8h.01"/></svg>'
+        };
+        let uiModalResolve = null;
+        let uiModalReturnFocus = null;
+
+        function uiEscape(value) {
+            return String(value ?? '')
+                .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+        }
+
+        function closeUiModal(result) {
+            const backdrop = document.getElementById('ui-modal');
+            if (!backdrop || backdrop.hidden) return;
+            backdrop.classList.remove('is-open');
+            setTimeout(() => { backdrop.hidden = true; }, 180);
+            const resolve = uiModalResolve;
+            uiModalResolve = null;
+            if (uiModalReturnFocus && typeof uiModalReturnFocus.focus === 'function') {
+                uiModalReturnFocus.focus();
+            }
+            if (resolve) resolve(result);
+        }
+
+        /**
+         * Modal de confirmacion. Devuelve Promise<boolean>.
+         * opts: { title, message, details: [[label, value]], confirmText, cancelText, tone: 'print'|'danger'|'info' }
+         */
+        function uiConfirm(opts = {}) {
+            const backdrop = document.getElementById('ui-modal');
+            if (!backdrop) {
+                return Promise.resolve(window.confirm(opts.message || opts.title || 'Confirmar?'));
+            }
+            if (uiModalResolve) closeUiModal(false);
+            const tone = opts.tone || 'info';
+            const modal = backdrop.querySelector('.ui-modal');
+            modal.dataset.tone = tone;
+            document.getElementById('ui-modal-icon').innerHTML = UI_ICONS[tone] || UI_ICONS.info;
+            document.getElementById('ui-modal-title').textContent = opts.title || 'Confirmar';
+            const messageEl = document.getElementById('ui-modal-message');
+            messageEl.textContent = opts.message || '';
+            messageEl.hidden = !opts.message;
+            const detailsEl = document.getElementById('ui-modal-details');
+            const details = Array.isArray(opts.details) ? opts.details : [];
+            detailsEl.innerHTML = details
+                .map(([label, value]) => `<dt>${uiEscape(label)}</dt><dd>${uiEscape(value)}</dd>`)
+                .join('');
+            detailsEl.hidden = details.length === 0;
+            const warningsEl = document.getElementById('ui-modal-warnings');
+            const warnings = Array.isArray(opts.warnings) ? opts.warnings.filter(Boolean) : [];
+            if (warningsEl) {
+                warningsEl.innerHTML = warnings.map((text) => `<li>${uiEscape(text)}</li>`).join('');
+                warningsEl.hidden = warnings.length === 0;
+            }
+            const okBtn = document.getElementById('ui-modal-ok');
+            const cancelBtn = document.getElementById('ui-modal-cancel');
+            okBtn.textContent = opts.confirmText || 'Confirmar';
+            cancelBtn.textContent = opts.cancelText || 'Cancelar';
+            okBtn.className = `btn ${tone === 'danger' ? 'danger' : tone === 'print' ? 'success' : ''}`.trim();
+            uiModalReturnFocus = document.activeElement;
+            backdrop.hidden = false;
+            requestAnimationFrame(() => {
+                backdrop.classList.add('is-open');
+                (tone === 'danger' ? cancelBtn : okBtn).focus();
+            });
+            return new Promise((resolve) => { uiModalResolve = resolve; });
+        }
+
+        function uiToast(message, tone = 'info', opts = {}) {
+            const container = document.getElementById('ui-toasts');
+            const text = String(message ?? '');
+            if (!container) {
+                console.log(text);
+                return;
+            }
+            const titles = { success: 'Listo', error: 'Error', info: 'Aviso' };
+            const icons = { success: '✓', error: '!', info: 'i' };
+            const duration = opts.duration || (tone === 'error' ? 12000 : tone === 'success' ? 5000 : 7000);
+            const toast = document.createElement('div');
+            toast.className = `ui-toast ${tone}`;
+            toast.setAttribute('role', tone === 'error' ? 'alert' : 'status');
+            toast.innerHTML = `
+                <span class="ui-toast-icon" aria-hidden="true">${icons[tone] || 'i'}</span>
+                <div class="ui-toast-body"><strong>${uiEscape(opts.title || titles[tone] || 'Aviso')}</strong>${uiEscape(text)}</div>
+                <button type="button" class="ui-toast-close" aria-label="Cerrar">&times;</button>
+                <span class="ui-toast-timer" style="animation-duration:${duration}ms"></span>`;
+            let timer = null;
+            const dismiss = () => {
+                if (toast.classList.contains('is-leaving')) return;
+                clearTimeout(timer);
+                toast.classList.add('is-leaving');
+                setTimeout(() => toast.remove(), 230);
+            };
+            toast.querySelector('.ui-toast-close').addEventListener('click', dismiss);
+            container.appendChild(toast);
+            while (container.children.length > 4) container.firstElementChild.remove();
+            timer = setTimeout(dismiss, duration);
+        }
+
+        // Los mensajes existentes usan alert(); se muestran como notificacion no bloqueante.
+        window.alert = (message) => {
+            const text = String(message ?? '');
+            let tone = 'info';
+            if (/^\s*OK\b/i.test(text)) tone = 'success';
+            else if (/error|fall[oó]|no se pudo/i.test(text)) tone = 'error';
+            uiToast(text.replace(/^\s*OK:\s*/i, ''), tone);
+        };
+
+        document.addEventListener('keydown', (event) => {
+            const backdrop = document.getElementById('ui-modal');
+            if (!backdrop || backdrop.hidden) return;
+            if (event.key === 'Escape') {
+                event.preventDefault();
+                closeUiModal(false);
+            } else if (event.key === 'Tab') {
+                const focusables = [...backdrop.querySelectorAll('button:not([disabled])')];
+                if (!focusables.length) return;
+                const first = focusables[0];
+                const last = focusables[focusables.length - 1];
+                if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last.focus(); }
+                else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first.focus(); }
+            }
+        });
+
+        document.addEventListener('DOMContentLoaded', () => {
+            document.getElementById('ui-modal-ok')?.addEventListener('click', () => closeUiModal(true));
+            document.getElementById('ui-modal-cancel')?.addEventListener('click', () => closeUiModal(false));
+            document.getElementById('ui-modal')?.addEventListener('click', (event) => {
+                if (event.target.id === 'ui-modal') closeUiModal(false);
+            });
+        });
+
+        // Navegacion interna sin tocar el hash (el hash #administrado controla el auto-refresh).
+        function scrollToSection(id) {
+            document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }
+
         let notificationConfig = {};
         let backupConfig = {};
         let mercadoLibreConfig = {};
         let mercadoLibreSales = [];
         let administradoConfig = {};
         let administradoSales = [];
+        const ADMINISTRADO_FILTER_STORAGE_KEY = 'etiquetador_administrado_filter';
+        let administradoFilter = 'all';
+        try {
+            administradoFilter = localStorage.getItem(ADMINISTRADO_FILTER_STORAGE_KEY) || 'all';
+        } catch (e) {
+            administradoFilter = 'all';
+        }
+        const administradoOpenDetails = new Set();
+        let administradoLastSync = null;
         let administradoSyncInProgress = false;
         let administradoAutoSyncDone = false;
         let administradoAutoRefreshTimer = null;
@@ -1731,6 +3352,7 @@
         const ADMINISTRADO_AUTO_REFRESH_STORAGE_KEY = 'etiquetador_administrado_auto_refresh';
         const THEME_STORAGE_KEY = 'etiquetador_ui_theme';
         const POS_ONLY_VIEW = new URLSearchParams(window.location.search).get('view') === 'pos';
+        const ADMIN_OPS_VIEW = new URLSearchParams(window.location.search).get('view') === 'administrado';
         let adminOnlyMode = true;
         let currentTheme = 'dark';
 
@@ -1776,6 +3398,14 @@
             if (toggleBtn) {
                 toggleBtn.textContent = adminOnlyMode ? 'Mostrar panel completo' : 'Mostrar solo Administrado';
             }
+            if (!POS_ONLY_VIEW) {
+                document.getElementById('page-title').textContent = adminOnlyMode
+                    ? 'Envios Administrado'
+                    : 'Configuracion EtiquetadorZPL';
+                document.getElementById('page-subtitle').textContent = adminOnlyMode
+                    ? 'Sincroniza e imprime orden + etiqueta'
+                    : 'Panel de administracion del sistema';
+            }
         }
 
         function initViewMode() {
@@ -1787,6 +3417,17 @@
                 document.getElementById('page-subtitle').textContent = 'TotalNet y facturas pendientes de Odoo en una vista operativa independiente';
                 document.getElementById('nav-config-link')?.classList.remove('active');
                 document.getElementById('nav-pos-link')?.classList.add('active');
+                return;
+            }
+            if (ADMIN_OPS_VIEW) {
+                // Vista de envios por URL: siempre solo Administrado, sin tocar la preferencia guardada.
+                adminOnlyMode = true;
+                applyAdminOnlyMode();
+                document.getElementById('nav-config-link')?.classList.remove('active');
+                document.getElementById('nav-admin-link')?.classList.add('active');
+                if (window.location.hash !== '#administrado') {
+                    window.location.hash = '#administrado';
+                }
                 return;
             }
             let stored = null;
@@ -1804,6 +3445,15 @@
 
         function toggleAdminOnlyMode() {
             if (POS_ONLY_VIEW) return;
+            if (ADMIN_OPS_VIEW) {
+                try {
+                    localStorage.setItem(ADMIN_ONLY_STORAGE_KEY, '0');
+                } catch (e) {
+                    // Ignorar si localStorage no esta disponible.
+                }
+                window.location.href = 'config.html';
+                return;
+            }
             adminOnlyMode = !adminOnlyMode;
             try {
                 localStorage.setItem(ADMIN_ONLY_STORAGE_KEY, adminOnlyMode ? '1' : '0');
@@ -2072,6 +3722,12 @@
             document.getElementById('meli-client-id').value = config.client_id && config.client_id !== '***' ? config.client_id : '';
             document.getElementById('meli-client-secret').value = '';
             document.getElementById('meli-redirect-uri').value = config.redirect_uri || 'http://localhost:8002/api/mercadolibre/oauth/callback';
+            document.getElementById('meli-access-token').value = '';
+            document.getElementById('meli-refresh-token').value = '';
+            document.getElementById('meli-access-token').placeholder = config.has_access_token ? 'Guardado (dejar vacio para conservar)' : 'APP_USR-...';
+            document.getElementById('meli-refresh-token').placeholder = config.has_refresh_token ? 'Guardado (dejar vacio para conservar)' : 'TG-...';
+            document.getElementById('meli-expires-in').value = '';
+            document.getElementById('meli-manual-user-id').value = config.user_id || '';
             document.getElementById('meli-default-printer').value = config.default_printer || '';
             document.getElementById('meli-default-copies').value = config.default_copies || 1;
             document.getElementById('meli-auto-print').checked = config.auto_print === true;
@@ -2089,6 +3745,12 @@
 
             document.getElementById('meli-user-id').textContent = config.user_id || '-';
             document.getElementById('meli-nickname').textContent = config.nickname || '-';
+            document.getElementById('meli-access-token-status').textContent = config.has_access_token ? 'Guardado' : 'Faltante';
+            document.getElementById('meli-refresh-token-status').textContent = config.has_refresh_token ? 'Guardado' : 'Faltante';
+            const expiresAt = Number(config.expires_at || 0);
+            document.getElementById('meli-token-expiry').textContent = expiresAt > 0
+                ? new Date(expiresAt * 1000).toLocaleString()
+                : (config.has_access_token ? 'No informado' : '-');
             document.getElementById('meli-config-path').textContent = config.config_path || '-';
             document.getElementById('meli-last-error').textContent = compactErrorText(config.last_error);
         }
@@ -2471,7 +4133,12 @@
         }
 
         async function resetOdooAutomationProcessed() {
-            if (!confirm('Reiniciar la memoria de envios procesados?')) {
+            if (!(await uiConfirm({
+                tone: 'danger',
+                title: 'Reset procesados',
+                message: 'Reiniciar la memoria de envios procesados?',
+                confirmText: 'Reiniciar'
+            }))) {
                 return;
             }
             try {
@@ -2568,11 +4235,17 @@
         }
 
         async function saveMercadoLibreConfig() {
+            const expiresInText = document.getElementById('meli-expires-in').value.trim();
+            const userIdText = document.getElementById('meli-manual-user-id').value.trim();
             const config = {
                 enabled: document.getElementById('meli-enabled').checked,
                 client_id: document.getElementById('meli-client-id').value.trim(),
                 client_secret: document.getElementById('meli-client-secret').value.trim(),
                 redirect_uri: document.getElementById('meli-redirect-uri').value.trim(),
+                access_token: document.getElementById('meli-access-token').value.trim(),
+                refresh_token: document.getElementById('meli-refresh-token').value.trim(),
+                expires_in: expiresInText ? parseInt(expiresInText, 10) : null,
+                user_id: userIdText ? parseInt(userIdText, 10) : null,
                 default_printer: document.getElementById('meli-default-printer').value.trim(),
                 default_copies: parseInt(document.getElementById('meli-default-copies').value, 10) || 1,
                 auto_print: document.getElementById('meli-auto-print').checked,
@@ -2590,7 +4263,11 @@
                 if (response.ok) {
                     mercadoLibreConfig = await response.json();
                     updateMercadoLibreForm();
-                    alert('OK: Configuracion de Mercado Libre guardada');
+                    if (config.access_token && mercadoLibreConfig.has_access_token !== true) {
+                        alert('La pantalla esta actualizada, pero la API sigue usando la version anterior. Reinicia EtiquetadorZPL y vuelve a guardar los tokens.');
+                    } else {
+                        alert('OK: Configuracion de Mercado Libre guardada');
+                    }
                 } else {
                     const error = await response.text();
                     alert(`Error guardando Mercado Libre: ${response.status}`);
@@ -2625,6 +4302,22 @@
             const shipmentId = document.getElementById('meli-test-shipment-id').value.trim();
             if (!shipmentId) {
                 alert('Ingresa un shipment ID');
+                return;
+            }
+            const meliPrinter = document.getElementById('meli-default-printer').value.trim();
+            const meliCopies = parseInt(document.getElementById('meli-default-copies').value, 10) || 1;
+            const confirmed = await uiConfirm({
+                tone: 'print',
+                title: 'Confirmar impresion',
+                message: 'Vas a enviar a imprimir la etiqueta de Mercado Libre:',
+                details: [
+                    ['Shipment', shipmentId],
+                    ['Impresora', meliPrinter || '(default configurada)'],
+                    ['Copias', String(meliCopies)]
+                ],
+                confirmText: 'Imprimir'
+            });
+            if (!confirmed) {
                 return;
             }
 
@@ -2675,7 +4368,10 @@
                     <td>${sale.title || '-'}</td>
                     <td>${sale.shipment_status || '-'} ${sale.shipment_substatus ? `(${sale.shipment_substatus})` : ''}</td>
                     <td><span class="status ${sale.ready_to_print ? 'ready' : 'not-ready'}">${sale.ready_to_print ? 'Si' : 'No'}</span></td>
-                    <td>${sale.ready_to_print ? `<button class="btn success" onclick="printSyncedShipment('${sale.shipment_id}')">Imprimir</button>` : (sale.error || '-')}</td>
+                    <td>
+                        ${sale.ready_to_print ? `<button class="btn success" onclick="printSyncedShipment('${sale.shipment_id}')">Imprimir</button>` : (sale.error || '-')}
+                        ${sale.shipment_id ? `<br><button type="button" class="btn-link-odoo" onclick="openOdooOrderForEnvio('${sale.shipment_id}', this)">Abrir orden en Odoo ↗</button>` : ''}
+                    </td>
                 </tr>
             `).join('');
         }
@@ -2804,24 +4500,172 @@
             }
         }
 
+        function isAdministradoSalePrinted(sale) {
+            return sale?.print_mode === 'reimprimir';
+        }
+
+        function setAdministradoFilter(filter) {
+            administradoFilter = ['pending', 'printed', 'all'].includes(filter) ? filter : 'all';
+            try {
+                localStorage.setItem(ADMINISTRADO_FILTER_STORAGE_KEY, administradoFilter);
+            } catch (e) {
+                // Ignorar si localStorage no esta disponible.
+            }
+            renderAdministradoSales();
+        }
+
+        function toggleAdministradoRowDetails(envioId, open) {
+            if (open) administradoOpenDetails.add(String(envioId));
+            else administradoOpenDetails.delete(String(envioId));
+        }
+
+        function updateAdministradoFilterTabs() {
+            const pending = administradoSales.filter((sale) => !isAdministradoSalePrinted(sale)).length;
+            const counts = { pending, printed: administradoSales.length - pending, all: administradoSales.length };
+            Object.entries(counts).forEach(([key, value]) => {
+                const el = document.getElementById(`adm-count-${key}`);
+                if (el) {
+                    el.textContent = value;
+                    el.classList.toggle('has-items', value > 0);
+                }
+            });
+            document.querySelectorAll('[data-adm-filter]').forEach((tab) => {
+                const active = tab.dataset.admFilter === administradoFilter;
+                tab.classList.toggle('is-active', active);
+                tab.setAttribute('aria-selected', active ? 'true' : 'false');
+            });
+        }
+
+        function renderAdministradoStockStatus(sale) {
+            const stock = sale && sale.odoo_stock ? sale.odoo_stock : {};
+            const code = String(stock.code || 'unknown').toLowerCase();
+            const statusClass = {
+                ready: 'ready',
+                done: 'completed',
+                partial: 'pending',
+                waiting: 'pending',
+                waiting_operation: 'processing',
+                draft: 'not-ready',
+                quotation: 'not-ready',
+                no_picking: 'not-ready',
+                order_missing: 'not-ready',
+                cancelled: 'failed',
+                error: 'failed',
+                unavailable: '',
+                unknown: ''
+            }[code] || '';
+            const label = escapeHtml(stock.label || 'Stock sin datos');
+            const detail = escapeHtml(stock.detail || 'Sin informacion adicional.');
+            const pickings = Array.isArray(stock.pickings) ? stock.pickings : [];
+            const pickingNames = pickings
+                .map((picking) => String(picking && picking.name || '').trim())
+                .filter(Boolean)
+                .slice(0, 2)
+                .map(escapeHtml)
+                .join(' · ');
+            const shortages = (Array.isArray(stock.shortages) ? stock.shortages : [])
+                .slice(0, 2)
+                .map((item) => {
+                    const product = escapeHtml(item && item.product || 'Producto');
+                    const missing = Number(item && item.missing_qty || 0).toLocaleString();
+                    const uom = escapeHtml(item && item.uom || '');
+                    return `${product}: faltan ${missing}${uom ? ` ${uom}` : ''}`;
+                })
+                .join(' · ');
+            return `<div class="stock-cell">
+                <span class="status ${statusClass}">${label}</span>
+                ${pickingNames ? `<span class="stock-picking">${pickingNames}</span>` : ''}
+                <span class="stock-detail">${detail}</span>
+                ${shortages ? `<span class="stock-shortage">${shortages}</span>` : ''}
+            </div>`;
+        }
+
+        function renderAdministradoSaleStatus(sale) {
+            if (sale._printing) {
+                return `<span class="status processing is-printing">${sale._printing_label || 'Procesando...'}</span><br><small>No cierres esta ventana</small>`;
+            }
+            // La etiqueta pudo imprimirse directo en Administrado (sin pasar por la app):
+            // en ese caso manda Administrado, no el historial local.
+            const printedOutsideApp = isAdministradoSalePrinted(sale)
+                && (!sale._last_print_result || sale._last_success === false);
+            if (printedOutsideApp) {
+                const lastAppAttempt = sale._last_print_result
+                    ? `<small>Ultimo intento desde la app: ${sale._last_print_result} (${formatTime(sale._last_print_at)})</small>`
+                    : '';
+                return `<span class="status completed">Impresa en Administrado</span>
+                    <span class="status-time">Sin registro de impresion en esta app</span>
+                    <details class="row-details" ${administradoOpenDetails.has(String(sale.envio_id)) ? 'open' : ''} ontoggle="toggleAdministradoRowDetails('${sale.envio_id}', this.open)">
+                        <summary>Detalle</summary>
+                        <div>
+                            <small>La etiqueta se imprimio fuera de la app, asi que la orden de Odoo no se imprimio ni se confirmo desde aca. Si hace falta, usa "Solo orden Odoo".</small>
+                            ${lastAppAttempt ? `<br>${lastAppAttempt}` : ''}
+                            ${sale._last_error ? `<br><small class="error-text">${compactErrorText(sale._last_error, 180)}</small>` : ''}
+                        </div>
+                    </details>`;
+            }
+            if (!sale._last_print_result) {
+                return '<span class="status pending">Pendiente</span>';
+            }
+            const detailLines = [
+                sale._last_print_actor ? `Usuario: ${sale._last_print_actor}` : '',
+                sale._last_order_printer ? `Orden: ${sale._last_order_printer}` : '',
+                sale._last_label_printer ? `Etiqueta: ${sale._last_label_printer}` : '',
+                sale._last_confirm_state_before || sale._last_confirm_state_after
+                    ? `Estado Odoo: ${sale._last_confirm_state_before || '-'} -> ${sale._last_confirm_state_after || '-'}`
+                    : ''
+            ].filter(Boolean);
+            const detailOpen = administradoOpenDetails.has(String(sale.envio_id)) ? 'open' : '';
+            return `<span class="status ${sale._last_success === false ? 'disabled' : 'enabled'}">${sale._last_print_result}</span>
+                <span class="status-time">${formatTime(sale._last_print_at)}</span>
+                ${sale._last_error ? `<small class="error-text">${compactErrorText(sale._last_error, 180)}</small>` : ''}
+                ${detailLines.length
+                    ? `<details class="row-details" ${detailOpen} ontoggle="toggleAdministradoRowDetails('${sale.envio_id}', this.open)">
+                           <summary>Detalle</summary>
+                           <div>${detailLines.map((line) => `<small>${line}</small>`).join('<br>')}</div>
+                       </details>`
+                    : ''}`;
+        }
+
         function renderAdministradoSales() {
             const tbody = document.getElementById('adm-sales-body');
             const summary = document.getElementById('adm-sync-summary');
+            updateAdministradoFilterTabs();
             if (!administradoSales.length) {
-                tbody.innerHTML = '<tr><td colspan="4" class="empty-cell">Sincroniza para ver etiquetas detectadas</td></tr>';
+                tbody.innerHTML = '<tr><td colspan="5" class="empty-cell">Sincroniza para ver etiquetas detectadas</td></tr>';
                 summary.textContent = 'Sin datos';
                 summary.classList.add('is-empty');
                 return;
             }
             summary.textContent = `${administradoSales.length} etiquetas detectadas`;
             summary.classList.remove('is-empty');
-            tbody.innerHTML = administradoSales.map(sale => `
-                <tr>
+            // Pendientes primero, respetando el orden original dentro de cada grupo.
+            const visibleSales = administradoSales
+                .map((sale, index) => ({ sale, index }))
+                .filter(({ sale }) => {
+                    if (administradoFilter === 'pending') return !isAdministradoSalePrinted(sale) || sale._printing;
+                    if (administradoFilter === 'printed') return isAdministradoSalePrinted(sale) || sale._printing;
+                    return true;
+                })
+                .sort((a, b) => (
+                    Number(isAdministradoSalePrinted(a.sale)) - Number(isAdministradoSalePrinted(b.sale))
+                    || a.index - b.index
+                ))
+                .map(({ sale }) => sale);
+            if (!visibleSales.length) {
+                const emptyText = administradoFilter === 'pending'
+                    ? 'No hay envios pendientes de imprimir.'
+                    : 'Todavia no hay envios impresos en esta lista.';
+                tbody.innerHTML = `<tr><td colspan="5" class="empty-cell">${emptyText}</td></tr>`;
+                return;
+            }
+            tbody.innerHTML = visibleSales.map(sale => `
+                <tr class="${isAdministradoSalePrinted(sale) ? 'is-printed' : 'is-pending'}">
                     <td><span class="mono-id">${sale.envio_id}</span></td>
                     <td>
                         <span class="customer-name">${sale.customer_name || '-'}</span>
                         <span class="customer-user">${sale.customer_username ? '@' + sale.customer_username : '-'}</span>
                     </td>
+                    <td>${renderAdministradoStockStatus(sale)}</td>
                     <td>
                         <div class="action-stack">
                         <button class="btn success sm" ${sale._printing ? 'disabled' : ''} onclick="printAdministradoShipment('${sale.envio_id}', 'both')">
@@ -2834,24 +4678,11 @@
                               `
                             : ''
                         }
+                        <button type="button" class="btn-link-odoo" onclick="openOdooOrderForEnvio('${sale.envio_id}', this)">Abrir orden en Odoo ↗</button>
                         </div>
                     </td>
                     <td class="status-cell">
-                        ${sale._printing
-                            ? `<span class="status">${sale._printing_label || 'Procesando...'}</span><br><small>No cierres esta ventana</small>`
-                            : sale._last_print_result
-                            ? `<span class="status ${sale._last_success === false ? 'disabled' : 'enabled'}">${sale._last_print_result}</span><br>
-                               <small>${formatTime(sale._last_print_at)}</small>
-                               ${sale._last_print_actor ? `<br><small>Usuario: ${sale._last_print_actor}</small>` : ''}
-                               ${sale._last_order_printer ? `<br><small>Orden: ${sale._last_order_printer}</small>` : ''}
-                               ${sale._last_label_printer ? `<br><small>Etiqueta: ${sale._last_label_printer}</small>` : ''}
-                               ${sale._last_confirm_state_before || sale._last_confirm_state_after
-                                   ? `<br><small>Estado Odoo: ${sale._last_confirm_state_before || '-'} -> ${sale._last_confirm_state_after || '-'}</small>`
-                                   : ''
-                               }
-                               ${sale._last_error ? `<br><small style="color:#ffb3b3;">${compactErrorText(sale._last_error, 180)}</small>` : ''}`
-                            : '<span class="status">Pendiente</span>'
-                        }
+                        ${renderAdministradoSaleStatus(sale)}
                     </td>
                 </tr>
             `).join('');
@@ -3204,7 +5035,11 @@
         async function retryDispatchTask(taskId) {
             const safeTaskId = String(taskId || '').trim();
             if (!safeTaskId) return;
-            if (!confirm(`Reencolar tarea ${safeTaskId}?`)) {
+            if (!(await uiConfirm({
+                title: 'Reencolar tarea',
+                message: `Reencolar tarea ${safeTaskId}?`,
+                confirmText: 'Reencolar'
+            }))) {
                 return;
             }
             try {
@@ -3238,7 +5073,11 @@
                 alert('No hay tareas fallidas visibles para reintentar.');
                 return;
             }
-            if (!confirm(`Se reintentaran ${taskIds.length} tareas fallidas visibles. Continuar?`)) {
+            if (!(await uiConfirm({
+                title: 'Reintentar tareas',
+                message: `Se reintentaran ${taskIds.length} tareas fallidas visibles. Continuar?`,
+                confirmText: 'Reintentar'
+            }))) {
                 return;
             }
             dispatchBulkRetryInProgress = true;
@@ -3302,9 +5141,11 @@
                 const result = await response.json();
                 if (response.ok) {
                     administradoSales = result.sales || [];
+                    administradoLastSync = { ok: true, at: new Date(), error: '' };
                     renderAdministradoSales();
                 } else {
                     administradoSales = [];
+                    administradoLastSync = { ok: false, at: new Date(), error: String(result.detail || response.status) };
                     renderAdministradoSales();
                     if (!silent) {
                         alert(`Error sincronizando Administrado: ${result.detail || response.status}`);
@@ -3312,6 +5153,7 @@
                 }
             } catch (error) {
                 administradoSales = [];
+                administradoLastSync = { ok: false, at: new Date(), error: String(error.message || 'Error de conexion') };
                 renderAdministradoSales();
                 if (!silent) {
                     alert(`Error de conexion: ${error.message}`);
@@ -3321,6 +5163,7 @@
                 if (syncBtn) {
                     syncBtn.disabled = false;
                 }
+                renderHealthBar();
             }
         }
 
@@ -3348,6 +5191,10 @@
                 label_only: 'Solo etiqueta',
                 order_only: 'Solo orden Odoo'
             };
+            const targetSale = administradoSales.find((sale) => String(sale.envio_id) === safeEnvioId);
+            const printOperationId = (window.crypto && typeof window.crypto.randomUUID === 'function')
+                ? window.crypto.randomUUID()
+                : `print-${Date.now()}-${Math.random().toString(16).slice(2)}`;
 
             try {
                 const apiBase = await ensureApiPort();
@@ -3362,22 +5209,59 @@
                 const appUsername = (localStorage.getItem('username') || '').trim();
                 const modeText = modeTextMap[mode] || mode;
 
-                const confirmText = [
-                    `Vas a enviar a imprimir:`,
-                    `- Envio: ${safeEnvioId}`,
-                    `- Accion: ${modeText}`,
-                    `- Impresora orden: ${selectedOrderPrinter || '(default configurada)'}`,
-                    `- Impresora etiqueta: ${selectedLabelPrinter || '(default configurada)'}`,
-                    `- Usuario app: ${appUsername || '-'}`,
-                    '',
-                    'Confirmar impresion?'
-                ].join('\n');
-                if (!confirm(confirmText)) {
+                const printDetails = [
+                    ['Envio', safeEnvioId],
+                    ['Accion', modeText]
+                ];
+                if (mode !== 'label_only') {
+                    printDetails.push(['Impresora orden', selectedOrderPrinter || '(default configurada)']);
+                }
+                if (mode !== 'order_only') {
+                    printDetails.push(['Impresora etiqueta', selectedLabelPrinter || '(default configurada)']);
+                }
+                printDetails.push(['Usuario app', appUsername || '-']);
+                const printWarnings = [];
+                if (mode !== 'label_only') {
+                    const odooActor = resolveOdooActorForPrint(appUsername);
+                    printDetails.push(['Usuario Odoo', odooActor.username || '(sin usuario)']);
+                    const stock = targetSale && targetSale.odoo_stock ? targetSale.odoo_stock : {};
+                    const stockCode = String(stock.code || 'unknown').toLowerCase();
+                    printDetails.push(['Stock / entrega', stock.label || 'Sin datos']);
+                    if (!['ready', 'done'].includes(stockCode)) {
+                        printWarnings.push(
+                            `Odoo informa: ${stock.label || 'stock sin datos'}. ${stock.detail || ''}`.trim()
+                        );
+                    }
+                    if (odooConfig.confirm_order_on_print === true && odooActor.source !== 'mapped') {
+                        printWarnings.push(
+                            odooActor.source === 'single'
+                                ? `El operador no tiene usuario Odoo propio: la cotizacion se confirmara como ${odooActor.username}.`
+                                : `El operador no tiene usuario Odoo mapeado: la cotizacion se confirmara con el usuario general (${odooActor.username || 'sin definir'}).`
+                        );
+                    }
+                    if (!selectedOrderPrinter) {
+                        printWarnings.push('No hay impresora de orden seleccionada: se usara la configurada en el servidor.');
+                    }
+                }
+                if (mode !== 'order_only' && !selectedLabelPrinter) {
+                    printWarnings.push('No hay impresora de etiqueta seleccionada: se usara la configurada en el servidor.');
+                }
+                if (!appUsername) {
+                    printWarnings.push('No hay operador identificado en esta PC (Usuario app vacio).');
+                }
+                const confirmed = await uiConfirm({
+                    tone: 'print',
+                    title: 'Confirmar impresion',
+                    message: 'Vas a enviar a imprimir:',
+                    details: printDetails,
+                    warnings: printWarnings,
+                    confirmText: printWarnings.length ? 'Imprimir igual' : 'Imprimir'
+                });
+                if (!confirmed) {
                     return;
                 }
 
                 administradoPrintInFlight.add(safeEnvioId);
-                const targetSale = administradoSales.find((sale) => String(sale.envio_id) === safeEnvioId);
                 if (targetSale) {
                     targetSale._printing = true;
                     targetSale._printing_label = `Procesando solicitud… (puede tardar) • ${modeText}`;
@@ -3399,6 +5283,7 @@
                     body: JSON.stringify({
                         envio_id: safeEnvioId,
                         mode,
+                        operation_id: printOperationId,
                         app_username: appUsername,
                         order_printer: selectedOrderPrinter,
                         label_printer: selectedLabelPrinter
@@ -3434,11 +5319,23 @@
                     const confirmInfo = result.confirm_result
                         ? ` | Odoo: ${result.confirm_result.state_before || '-'} -> ${result.confirm_result.state_after || '-'}`
                         : '';
-                    alert(
-                        `OK: ${modeText} enviado para ${safeEnvioId}. ` +
-                        `Orden=${orderPrinter} Etiqueta=${labelPrinter} ` +
-                        `Actor=${result.odoo_actor || appUsername || '-'}${confirmInfo}`
+                    const noteResult = result.odoo_note_result || null;
+                    uiToast(
+                        [
+                            `${modeText} enviado para ${safeEnvioId}`,
+                            `Orden: ${orderPrinter} · Etiqueta: ${labelPrinter}`,
+                            `Actor: ${result.odoo_actor || appUsername || '-'}${confirmInfo}`
+                        ].join('\n'),
+                        'success',
+                        { title: 'Impresion enviada', duration: 7000 }
                     );
+                    if (noteResult && noteResult.success === false) {
+                        uiToast(
+                            `La impresion fue correcta, pero no se pudo registrar la nota en Odoo: ${noteResult.error || 'sin detalle'}`,
+                            'info',
+                            { title: 'Registro Odoo pendiente', duration: 8000 }
+                        );
+                    }
                 } else {
                     if (targetSale) {
                         targetSale._printing = false;
@@ -3508,7 +5405,12 @@
         }
 
         async function restoreBackup(backupName) {
-            if (!confirm(`Restaurar backup "${backupName}"? Esto sobrescribira la configuracion actual.`)) {
+            if (!(await uiConfirm({
+                tone: 'danger',
+                title: 'Restaurar backup',
+                message: `Restaurar backup "${backupName}"? Esto sobrescribira la configuracion actual.`,
+                confirmText: 'Restaurar'
+            }))) {
                 return;
             }
 
@@ -3543,7 +5445,12 @@
         }
 
         async function clearDatabase() {
-            if (!confirm('Limpiar toda la base de datos? Esta accion no se puede deshacer.')) {
+            if (!(await uiConfirm({
+                tone: 'danger',
+                title: 'Limpiar base de datos',
+                message: 'Limpiar toda la base de datos? Esta accion no se puede deshacer.',
+                confirmText: 'Limpiar BD'
+            }))) {
                 return;
             }
 
@@ -3808,6 +5715,7 @@
                 posPaymentOperatorFeatureReady = false;
             }
             renderPosPaymentOperators();
+            renderPosAutoOperators();
         }
 
         function addJournalMapping() {
@@ -3833,7 +5741,176 @@
             posJournalMap = config.journal_map || {};
             document.getElementById('pos-amount-tolerance').value = config.amount_tolerance ?? 0.01;
             document.getElementById('pos-date-window').value = config.date_window_days ?? 2;
+            document.getElementById('pos-auto-enabled').checked = !!config.auto_sync_enabled;
+            document.getElementById('pos-auto-notify').checked = config.auto_sync_notify_desktop !== false;
+            document.getElementById('pos-auto-interval').value = config.auto_sync_interval_minutes ?? 60;
+            document.getElementById('pos-auto-lookback').value = config.auto_sync_lookback_days ?? 7;
+            document.getElementById('pos-auto-register').checked = !!config.auto_register_deterministic;
+            posAutoOperator = String(config.auto_register_operator || '');
             renderJournalMapTable();
+            renderPosAutoOperators();
+        }
+
+        // ---- Conciliacion POS automatica (worker en segundo plano) ----
+        let posAutoOperator = '';
+        let posAutoStatusTimer = null;
+
+        function renderPosAutoOperators() {
+            const select = document.getElementById('pos-auto-operator');
+            if (!select) return;
+            const current = select.value || posAutoOperator;
+            select.replaceChildren();
+            select.add(new Option('Sin operador (no registra pagos)', ''));
+            posPaymentOperators
+                .filter(item => item && item.app_username && item.odoo_username && item.has_password === true)
+                .forEach(item => select.add(new Option(`${item.app_username} - ${item.odoo_username}`, item.app_username)));
+            if ([...select.options].some(option => option.value === current)) {
+                select.value = current;
+            }
+        }
+
+        function formatPosAutoTime(value) {
+            if (!value) return '';
+            const parsed = new Date(value);
+            return Number.isNaN(parsed.getTime()) ? String(value) : parsed.toLocaleString();
+        }
+
+        function renderPosAutoStatus(status) {
+            const banner = document.getElementById('pos-auto-banner');
+            const title = document.getElementById('pos-auto-banner-title');
+            const detail = document.getElementById('pos-auto-banner-detail');
+            const loadBtn = document.getElementById('pos-auto-load-btn');
+            const runBtn = document.getElementById('pos-auto-run-btn');
+            if (!banner) return;
+            if (!status) {
+                banner.dataset.state = 'error';
+                title.textContent = 'Conciliacion automatica no disponible';
+                detail.textContent = 'Reinicia la API para habilitarla.';
+                loadBtn.disabled = true;
+                return;
+            }
+            const summary = status.last_summary || {};
+            const ready = Number(summary.listos_para_revisar || 0);
+            const ambiguous = Number(summary.ambiguos || 0);
+            const registered = Number(summary.registrados_automaticamente || 0);
+            runBtn.disabled = !!status.cycle_in_progress;
+            loadBtn.disabled = !status.has_proposal;
+            if (status.cycle_in_progress) {
+                banner.dataset.state = 'idle';
+                title.textContent = 'Sincronizando en segundo plano...';
+            } else if (status.last_error) {
+                banner.dataset.state = 'error';
+                title.textContent = `Ultima sincronizacion automatica fallo: ${status.last_error}`;
+            } else if (ready + ambiguous > 0) {
+                banner.dataset.state = 'ready';
+                title.textContent = `${ready} pagos listos para revisar` + (ambiguous ? ` · ${ambiguous} ambiguos` : '');
+            } else if (status.has_proposal) {
+                banner.dataset.state = 'idle';
+                title.textContent = 'No hay pagos pendientes de revisar';
+            } else {
+                banner.dataset.state = 'idle';
+                title.textContent = status.enabled ? 'Conciliacion automatica activa' : 'Conciliacion automatica apagada';
+            }
+            const parts = [];
+            if (summary.date_from) parts.push(`Ventas ${summary.date_from} a ${summary.date_to}`);
+            if (status.last_cycle_finished_at) parts.push(`actualizado ${formatPosAutoTime(status.last_cycle_finished_at)}`);
+            if (registered) parts.push(`${registered} registrados automaticamente`);
+            if (Number(summary.sin_match || 0)) parts.push(`${summary.sin_match} sin match`);
+            if (Number(summary.con_diferencia || 0)) parts.push(`${summary.con_diferencia} con diferencia de importe`);
+            parts.push(status.enabled ? `cada ${status.interval_minutes} min` : 'solo manual');
+            detail.textContent = parts.join(' · ');
+
+            const events = document.getElementById('pos-auto-events');
+            const items = (status.recent_events || []).slice().reverse();
+            events.innerHTML = items.length
+                ? items.map(event => `<li><time>${escapePosHtml(formatPosAutoTime(event.at))}</time>${escapePosHtml(event.message)}</li>`).join('')
+                : '<li class="odoo-muted">Sin actividad</li>';
+        }
+
+        async function loadPosAutoStatus() {
+            renderPosAutoStatus(await fetchAPI('/api/pos-reconciliation/auto/status'));
+        }
+
+        async function runPosAutoNow() {
+            const runBtn = document.getElementById('pos-auto-run-btn');
+            runBtn.disabled = true;
+            document.getElementById('pos-auto-banner-title').textContent = 'Sincronizando en segundo plano...';
+            try {
+                const apiBase = await ensureApiPort();
+                const response = await fetch(`${apiBase}/api/pos-reconciliation/auto/run-once`, { method: 'POST' });
+                const result = await response.json().catch(() => ({}));
+                if (!response.ok) {
+                    alert(`Error en la sincronizacion: ${result.detail || response.status}`);
+                }
+            } catch (error) {
+                alert(`Error de conexion: ${error.message}`);
+            }
+            await loadPosAutoStatus();
+        }
+
+        async function loadPosAutoProposal() {
+            const proposal = await fetchAPI('/api/pos-reconciliation/auto/proposal');
+            if (!proposal) {
+                alert('No hay una propuesta automatica disponible todavia');
+                return;
+            }
+            document.getElementById('pos-sync-date-from').value = proposal.date_from;
+            document.getElementById('pos-sync-date-to').value = proposal.date_to;
+            document.getElementById('pos-confirm-summary').textContent = '';
+            await loadPosPendingInvoices(proposal.date_from, proposal.date_to);
+            posSyncResult = proposal;
+            suggestPaymentJournalForResult(proposal);
+            const matches = proposal.matches_unicos || [];
+            const summary = document.getElementById('pos-sync-summary');
+            summary.textContent = `Propuesta automatica: ${matches.filter(m => m.can_confirm === true).length} confirmables, ` +
+                `${(proposal.ambiguos || []).length} ambiguos, ${(proposal.sin_match || []).length} sin match. ` +
+                'Revisa y confirma abajo.';
+            summary.classList.remove('is-empty');
+            renderPosResults();
+            document.getElementById('pos-matches-body')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }
+
+        async function savePosAutoConfig() {
+            const status = document.getElementById('pos-auto-config-status');
+            const config = {
+                auto_sync_enabled: document.getElementById('pos-auto-enabled').checked,
+                auto_sync_notify_desktop: document.getElementById('pos-auto-notify').checked,
+                auto_sync_interval_minutes: parseInt(document.getElementById('pos-auto-interval').value, 10) || 60,
+                auto_sync_lookback_days: parseInt(document.getElementById('pos-auto-lookback').value, 10) || 7,
+                auto_register_deterministic: document.getElementById('pos-auto-register').checked,
+                auto_register_operator: document.getElementById('pos-auto-operator').value
+            };
+            if (config.auto_register_deterministic && !(await uiConfirm({
+                tone: 'danger',
+                title: 'Registro automatico de pagos',
+                message: 'Se registraran pagos en Odoo sin confirmacion solo cuando la coincidencia sea inequivoca. Los casos ambiguos o con diferencia siguen esperando revision.',
+                confirmText: 'Activar'
+            }))) {
+                return;
+            }
+            status.className = 'pos-inline-message';
+            status.textContent = 'Guardando...';
+            try {
+                const apiBase = await ensureApiPort();
+                const response = await fetch(`${apiBase}/api/pos-reconciliation/config`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(config)
+                });
+                const result = await response.json().catch(() => ({}));
+                if (!response.ok) {
+                    status.className = 'pos-inline-message error';
+                    status.textContent = result.detail || `Error ${response.status}`;
+                    return;
+                }
+                posAutoOperator = String(result.auto_register_operator || '');
+                status.className = 'pos-inline-message success';
+                status.textContent = 'Guardado';
+                await loadPosAutoStatus();
+            } catch (error) {
+                status.className = 'pos-inline-message error';
+                status.textContent = `Error de conexion: ${error.message}`;
+            }
         }
 
         async function savePosReconciliationConfig() {
@@ -4082,13 +6159,13 @@
                 const roundingLabel = match.rounding_matches === true
                     ? 'Confirmable usando la cuenta de redondeo'
                     : 'No confirmable';
-                return `<span style="color:#ffb454; font-weight:600;">${criterion}<br>` +
+                return `<span class="pos-warn-text">${criterion}<br>` +
                     `${roundingLabel}: Odoo ${formatPosAmountWithCurrency(invoice.amount_total, invoice.currency)}, ` +
                     `TotalNet ${formatPosAmountWithCurrency(coupon.importe, coupon.moneda)}, ` +
                     `diferencia ${differenceText} ${formatPosCurrency(coupon.moneda)}</span>`;
             }
             if (match.currency_matches === false) {
-                return `<span style="color:#ffb454; font-weight:600;">${criterion}<br>No confirmable: las monedas no coinciden</span>`;
+                return `<span class="pos-warn-text">${criterion}<br>No confirmable: las monedas no coinciden</span>`;
             }
             return criterion;
         }
@@ -4421,9 +6498,12 @@
             }
 
             const selectedOperatorLabel = operatorSelect.options[operatorSelect.selectedIndex]?.text || operatorAppUsername;
-            if (!window.confirm(
-                `Se registraran ${items.length} pago(s) reales en Odoo como ${selectedOperatorLabel}. ¿Continuar?`
-            )) {
+            if (!(await uiConfirm({
+                tone: 'danger',
+                title: 'Registrar pagos en Odoo',
+                message: `Se registraran ${items.length} pago(s) reales en Odoo como ${selectedOperatorLabel}. ¿Continuar?`,
+                confirmText: 'Registrar pagos'
+            }))) {
                 return;
             }
 
@@ -4491,6 +6571,309 @@
             manualDate?.setAttribute('max', todayPosDate);
             if (manualDate && !manualDate.value) manualDate.value = maxPosDate;
         })();
+        // ---- Usuario Odoo que usara el backend al imprimir (espejo de resolve_operator_auth) ----
+        function resolveOdooActorForPrint(appUsername) {
+            const items = Array.isArray(odooOperatorUsers) ? odooOperatorUsers : [];
+            const isValid = (item) => Boolean(String(item?.odoo_username || '').trim() && item?.has_password);
+            const general = { username: String(odooConfig.username || '').trim(), source: 'general' };
+            const key = String(appUsername || '').trim().toLowerCase();
+            if (key) {
+                const keyed = items.find((item) => String(item?.app_username || '').trim().toLowerCase() === key);
+                if (keyed) {
+                    return isValid(keyed)
+                        ? { username: String(keyed.odoo_username).trim(), source: 'mapped' }
+                        : general;
+                }
+            }
+            const valid = items.filter(isValid);
+            if (valid.length === 1) {
+                return { username: String(valid[0].odoo_username).trim(), source: 'single' };
+            }
+            return general;
+        }
+
+        // ---- Abrir la orden de venta de Odoo que corresponde al envio ----
+        const odooOrderUrlCache = new Map();
+
+        async function openOdooOrderForEnvio(envioId, button) {
+            const id = String(envioId || '').trim();
+            if (!id) return;
+            // La pestaña se abre ya, dentro del clic: si se abre despues del fetch el navegador la bloquea.
+            const tab = window.open('', '_blank');
+            if (tab) {
+                tab.opener = null;
+                tab.document.title = 'Buscando orden en Odoo...';
+                tab.document.body.innerHTML = '<p style="font-family:sans-serif;padding:24px;color:#444">Buscando la orden de venta en Odoo...</p>';
+            }
+            const navigate = (url) => {
+                if (tab && !tab.closed) tab.location.replace(url);
+                else window.open(url, '_blank', 'noopener');
+            };
+            const cached = odooOrderUrlCache.get(id);
+            if (cached) {
+                navigate(cached);
+                return;
+            }
+            const originalText = button ? button.textContent : '';
+            if (button) {
+                button.disabled = true;
+                button.textContent = 'Buscando en Odoo...';
+            }
+            try {
+                const apiBase = await ensureApiPort();
+                const response = await fetch(`${apiBase}/api/odoo/orders/find`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ envio_id: id, include_all_states: true })
+                });
+                const result = await response.json().catch(() => ({}));
+                if (!response.ok) {
+                    throw new Error(result.detail || `HTTP ${response.status}`);
+                }
+                const order = result.order || null;
+                // Si la API todavia no devuelve "url" (backend sin reiniciar), se arma con la URL configurada.
+                const baseUrl = String(odooConfig.base_url || '').trim().replace(/\/+$/, '');
+                const url = result.url
+                    || (order && baseUrl ? `${baseUrl}/web#id=${order.id}&model=sale.order&view_type=form` : '');
+                if (!result.found || !url) {
+                    if (tab && !tab.closed) tab.close();
+                    uiToast(
+                        `No se encontro una orden de venta en Odoo para el envio ${id}.\n`
+                        + 'Revisa el prefijo de orden o el campo shipment en la configuracion de Odoo.',
+                        'info',
+                        { title: 'Orden no encontrada' }
+                    );
+                    return;
+                }
+                odooOrderUrlCache.set(id, url);
+                navigate(url);
+                if (order?.name) {
+                    uiToast(`Abriendo ${order.name} en Odoo.`, 'success', { duration: 3000 });
+                }
+            } catch (error) {
+                if (tab && !tab.closed) tab.close();
+                uiToast(`No se pudo buscar la orden en Odoo: ${error.message}`, 'error');
+            } finally {
+                if (button) {
+                    button.disabled = false;
+                    button.textContent = originalText;
+                }
+            }
+        }
+
+        // ---- Barra de salud ----
+        function setHealthItem(id, state, value, title = '') {
+            const item = document.getElementById(id);
+            if (!item) return;
+            item.dataset.state = state;
+            const valueEl = item.querySelector('.health-value');
+            if (valueEl) valueEl.textContent = value;
+            item.title = title || value;
+        }
+
+        function readSelectValue(id) {
+            const select = document.getElementById(id);
+            return select ? String(select.value || '').trim() : '';
+        }
+
+        function printersStillLoading() {
+            const select = document.getElementById('odoo-order-printer-primary');
+            return !select || /Cargando/i.test(select.options[0]?.textContent || '') && select.options.length <= 1;
+        }
+
+        function renderHealthBar() {
+            if (!document.getElementById('health-bar')) return;
+
+            const adm = administradoConfig || {};
+            const admLoaded = Object.keys(adm).length > 0;
+            if (administradoLastSync && !administradoLastSync.ok) {
+                setHealthItem('health-adm', 'error', 'Error al sincronizar', administradoLastSync.error);
+            } else if (administradoLastSync?.ok) {
+                const time = administradoLastSync.at.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+                setHealthItem('health-adm', 'ok', `Sincronizado ${time}`, 'Ultima sincronizacion correcta');
+            } else if (!admLoaded) {
+                setHealthItem('health-adm', 'idle', 'Cargando...');
+            } else if (adm.configured === false) {
+                setHealthItem('health-adm', 'warn', 'Sin sesion guardada');
+            } else if (adm.enabled === false) {
+                setHealthItem('health-adm', 'warn', 'Integracion deshabilitada');
+            } else {
+                setHealthItem('health-adm', 'idle', 'Sin sincronizar');
+            }
+
+            const odoo = odooConfig || {};
+            if (!Object.keys(odoo).length) {
+                setHealthItem('health-odoo', 'idle', 'Cargando...');
+            } else if (odoo.enabled !== true) {
+                setHealthItem('health-odoo', 'warn', 'Deshabilitado');
+            } else if (odoo.configured === false) {
+                setHealthItem('health-odoo', 'warn', 'Datos incompletos');
+            } else {
+                setHealthItem('health-odoo', 'ok', 'Configurado', odoo.base_url || 'Configurado');
+            }
+
+            const status = odooAutomationStatus || {};
+            if (!Object.keys(odoo).length || !Object.keys(status).length) {
+                setHealthItem('health-worker', 'idle', 'Cargando...');
+            } else if (odoo.automation_enabled !== true) {
+                setHealthItem('health-worker', 'idle', 'Automatizacion apagada', 'La automatizacion en background esta deshabilitada; la impresion manual funciona igual');
+            } else if (status.running === true) {
+                if (status.last_error) {
+                    setHealthItem('health-worker', 'warn', 'Activo con errores', compactErrorText(status.last_error));
+                } else {
+                    setHealthItem('health-worker', 'ok', 'Activo');
+                }
+            } else {
+                setHealthItem('health-worker', 'error', 'Detenido', 'La automatizacion esta habilitada pero el worker no corre');
+            }
+
+            const orderPrinter = readSelectValue('odoo-order-printer-primary') || readSelectValue('odoo-order-printer-fallback');
+            const labelPrinter = readSelectValue('odoo-label-printer-primary')
+                || readSelectValue('odoo-label-printer-fallback')
+                || String(adm.default_printer || '').trim();
+            const printersTitle = `Orden: ${orderPrinter || '-'} | Etiqueta: ${labelPrinter || '-'}`;
+            if (printersStillLoading()) {
+                setHealthItem('health-printers', 'idle', 'Cargando...');
+            } else if (!orderPrinter && !labelPrinter) {
+                setHealthItem('health-printers', 'warn', 'Sin impresoras asignadas', printersTitle);
+            } else if (!orderPrinter) {
+                setHealthItem('health-printers', 'warn', 'Falta impresora de orden', printersTitle);
+            } else if (!labelPrinter) {
+                setHealthItem('health-printers', 'warn', 'Falta impresora de etiqueta', printersTitle);
+            } else {
+                setHealthItem('health-printers', 'ok', 'Orden y etiqueta asignadas', printersTitle);
+            }
+
+            const stubSummary = document.getElementById('odoo-config-stub-summary');
+            if (stubSummary) {
+                stubSummary.textContent = `Orden: ${orderPrinter || 'sin asignar'} · Etiqueta: ${labelPrinter || 'sin asignar'}. `
+                    + 'Oculta en esta vista para evitar cambios accidentales.';
+            }
+        }
+
+        function focusHealthTarget(id) {
+            const target = document.getElementById(id);
+            if (!target) return;
+            if (target.closest('#odoo-automation-section') && adminOnlyMode) {
+                setOdooConfigVisibleInOpsView(true);
+            }
+            target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            target.classList.remove('flash-target');
+            void target.offsetWidth;
+            target.classList.add('flash-target');
+        }
+
+        // ---- Vista de envios: configuracion de Odoo plegada ----
+        function setOdooConfigVisibleInOpsView(visible) {
+            document.body.classList.toggle('show-odoo-config', visible);
+            const btn = document.getElementById('odoo-config-toggle-btn');
+            if (btn) btn.textContent = visible ? 'Ocultar configuracion' : 'Mostrar configuracion';
+        }
+
+        function toggleOdooConfigInOpsView() {
+            const visible = !document.body.classList.contains('show-odoo-config');
+            setOdooConfigVisibleInOpsView(visible);
+            if (visible) {
+                document.getElementById('odoo-automation-section')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            }
+        }
+
+        // ---- Cambios sin guardar ----
+        const DIRTY_SCOPES = {
+            notif: { save: 'saveNotificationConfig', ids: ['desktop-notifications', 'error-notifications', 'success-notifications', 'email-enabled', 'smtp-server', 'smtp-port', 'smtp-user', 'smtp-password', 'to-emails'] },
+            backup: { save: 'saveBackupConfig', ids: ['backup-enabled', 'daily-backup', 'weekly-backup', 'keep-daily', 'keep-weekly'] },
+            meli: { save: 'saveMercadoLibreConfig', ids: ['meli-enabled', 'meli-client-id', 'meli-client-secret', 'meli-redirect-uri', 'meli-access-token', 'meli-refresh-token', 'meli-expires-in', 'meli-manual-user-id', 'meli-default-printer', 'meli-default-copies', 'meli-auto-print'] },
+            adm: { save: 'saveAdministradoConfig', ids: ['adm-enabled', 'adm-sales-url', 'adm-default-copies', 'adm-pdf-render-dpi', 'adm-auto-crop-pdf', 'adm-raw-zpl-labels', 'adm-cookie-header'] },
+            odoo: { save: 'saveOdooConfig', ids: ['odoo-enabled', 'odoo-auto-enabled', 'odoo-interval', 'odoo-url', 'odoo-db', 'odoo-user', 'odoo-password', 'odoo-report-name', 'odoo-order-prefix', 'odoo-shipment-field', 'odoo-order-states', 'odoo-sync-limit', 'odoo-order-label-delay', 'odoo-include-reprint', 'odoo-confirm-on-print', 'odoo-order-printer-primary', 'odoo-order-printer-fallback', 'odoo-order-copies', 'odoo-force-order-grayscale', 'odoo-label-printer-primary', 'odoo-label-printer-fallback', 'odoo-label-copies'] },
+            totalnet: { save: 'saveTotalNetConfig', ids: ['totalnet-enabled', 'totalnet-client-id', 'totalnet-client-secret', 'totalnet-token-url', 'totalnet-api-base-url', 'totalnet-comercio', 'totalnet-sucursal'] }
+        };
+        const dirtySnapshots = {};
+        const dirtyState = {};
+
+        function readDirtyField(id) {
+            const el = document.getElementById(id);
+            if (!el) return null;
+            return el.type === 'checkbox' ? el.checked : el.value;
+        }
+
+        // onlyIds: al cargar las impresoras solo se toma la foto de esos selects,
+        // asi no se pisan cambios que el usuario ya este haciendo en otros campos.
+        function snapshotDirtyScope(key, onlyIds = null) {
+            DIRTY_SCOPES[key].ids
+                .filter((id) => !onlyIds || onlyIds.includes(id))
+                .forEach((id) => { dirtySnapshots[id] = readDirtyField(id); });
+            refreshDirtyScope(key);
+        }
+
+        function refreshDirtyScope(key) {
+            const dirty = DIRTY_SCOPES[key].ids.some(
+                (id) => id in dirtySnapshots && readDirtyField(id) !== dirtySnapshots[id]
+            );
+            dirtyState[key] = dirty;
+            const badge = document.querySelector(`[data-dirty-badge="${key}"]`);
+            if (badge) {
+                badge.hidden = !dirty;
+                (badge.closest('.odoo-panel') || badge.closest('.card'))?.classList.toggle('is-dirty', dirty);
+            }
+            document.querySelector(`button[onclick^="${DIRTY_SCOPES[key].save}("]`)?.classList.toggle('needs-save', dirty);
+        }
+
+        function hasUnsavedChanges() {
+            return Object.values(dirtyState).some(Boolean);
+        }
+
+        function goToDirtySave(key) {
+            const btn = document.querySelector(`button[onclick^="${DIRTY_SCOPES[key].save}("]`);
+            if (!btn) return;
+            const details = btn.closest('details');
+            if (details) details.open = true;
+            btn.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            btn.focus({ preventScroll: true });
+        }
+
+        function wrapWithSnapshot(fn, keys, onlyIds = null) {
+            return function (...args) {
+                const result = fn.apply(this, args);
+                const after = () => {
+                    keys.forEach((key) => snapshotDirtyScope(key, onlyIds));
+                    renderHealthBar();
+                };
+                if (result && typeof result.then === 'function') {
+                    return result.then((value) => { after(); return value; });
+                }
+                after();
+                return result;
+            };
+        }
+
+        // Tomar la foto "guardada" cada vez que el formulario se llena desde el servidor.
+        updateNotificationForm = wrapWithSnapshot(updateNotificationForm, ['notif']);
+        updateBackupForm = wrapWithSnapshot(updateBackupForm, ['backup']);
+        updateMercadoLibreForm = wrapWithSnapshot(updateMercadoLibreForm, ['meli']);
+        updateAdministradoForm = wrapWithSnapshot(updateAdministradoForm, ['adm']);
+        const ODOO_PRINTER_FIELD_IDS = DIRTY_SCOPES.odoo.ids.filter((id) => /^odoo-(order|label)-printer-/.test(id));
+        updateOdooForm = wrapWithSnapshot(updateOdooForm, ['odoo'], DIRTY_SCOPES.odoo.ids.filter((id) => !ODOO_PRINTER_FIELD_IDS.includes(id)));
+        loadOdooPrinters = wrapWithSnapshot(loadOdooPrinters, ['odoo'], ODOO_PRINTER_FIELD_IDS);
+        loadTotalNetConfig = wrapWithSnapshot(loadTotalNetConfig, ['totalnet']);
+        updateOdooAutomationStatusForm = wrapWithSnapshot(updateOdooAutomationStatusForm, []);
+
+        ['input', 'change'].forEach((type) => {
+            document.addEventListener(type, (event) => {
+                const id = event.target?.id;
+                if (!id) return;
+                Object.keys(DIRTY_SCOPES).forEach((key) => {
+                    if (DIRTY_SCOPES[key].ids.includes(id)) refreshDirtyScope(key);
+                });
+                if (/^odoo-(order|label)-printer-/.test(id)) renderHealthBar();
+            });
+        });
+
+        document.querySelectorAll('[data-dirty-badge]').forEach((badge) => {
+            badge.title = 'Ir al boton Guardar';
+            badge.addEventListener('click', () => goToDirtySave(badge.dataset.dirtyBadge));
+        });
+        updateAdministradoFilterTabs();
+
         initTheme();
         initViewMode();
         if (POS_ONLY_VIEW) {
@@ -4500,6 +6883,8 @@
             loadPosRoundingAccounts();
             loadPosPaymentOperators();
             loadPosPendingInvoicesFromRange();
+            loadPosAutoStatus();
+            posAutoStatusTimer = setInterval(loadPosAutoStatus, 60000);
         } else {
             initAdministradoAutoRefreshSetting();
             focusSectionFromHash();
@@ -4522,7 +6907,13 @@
                 autoRefreshAdministradoSales();
             }
         });
-        window.addEventListener('beforeunload', () => {
+        window.addEventListener('beforeunload', (event) => {
+            if (hasUnsavedChanges()) {
+                // Si el usuario decide quedarse, los timers siguen corriendo.
+                event.preventDefault();
+                event.returnValue = '';
+                return;
+            }
             if (odooStatusTimer) {
                 clearInterval(odooStatusTimer);
                 odooStatusTimer = null;

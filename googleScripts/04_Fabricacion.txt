@@ -54,6 +54,110 @@ function getManufacturingIdColumn_() {
   return CFG.MFG_ID_COL || 18;
 }
 
+function getManufacturingResponsibleFilterSheetName_() {
+  return MFG_CFG.RESPONSIBLE_FILTER_SHEET_NAME || "CONFIG FABRICACION";
+}
+
+function normalizeResponsibleFilterText_(value) {
+  return cleanString_(value).toLowerCase();
+}
+
+function openManufacturingResponsibleSyncFilter() {
+  const spreadsheet = SpreadsheetApp.getActiveSpreadsheet();
+  if (!spreadsheet) {
+    throw new Error("No hay una planilla activa.");
+  }
+
+  const sheet = ensureManufacturingResponsibleFilterSheet_(spreadsheet);
+  spreadsheet.setActiveSheet(sheet);
+  showSpreadsheetToast_(
+    "Filtro de responsables de fabricacion listo para editar."
+  );
+}
+
+function ensureManufacturingResponsibleFilterSheet_(spreadsheet) {
+  const sheetName = getManufacturingResponsibleFilterSheetName_();
+  let sheet = spreadsheet.getSheetByName(sheetName);
+
+  if (!sheet) {
+    sheet = spreadsheet.insertSheet(sheetName);
+  }
+
+  if (cleanString_(sheet.getRange(1, 1).getDisplayValue())) {
+    return sheet;
+  }
+
+  const headers = [["Sincronizar", "Responsable Odoo", "Notas"]];
+  const defaultRows = VALID_RESPONSIBLES.map((responsible) => [
+    true,
+    responsible,
+    "Coincide si el user_id de Odoo contiene este texto.",
+  ]);
+
+  sheet.getRange(1, 1, 1, headers[0].length).setValues(headers);
+  sheet
+    .getRange(2, 1, defaultRows.length, headers[0].length)
+    .setValues(defaultRows);
+  sheet.getRange(2, 1, Math.max(1, defaultRows.length), 1).insertCheckboxes();
+  sheet.setFrozenRows(1);
+  sheet.autoResizeColumns(1, headers[0].length);
+
+  return sheet;
+}
+
+function getManufacturingResponsibleSyncFilter_() {
+  const spreadsheet = SpreadsheetApp.getActiveSpreadsheet();
+  if (!spreadsheet) {
+    return { enabled: false, allowedValues: [] };
+  }
+
+  const sheet = spreadsheet.getSheetByName(
+    getManufacturingResponsibleFilterSheetName_()
+  );
+  if (!sheet) {
+    return { enabled: false, allowedValues: [] };
+  }
+
+  const lastRow = sheet.getLastRow();
+  if (lastRow < 2) {
+    return { enabled: false, allowedValues: [] };
+  }
+
+  const values = sheet.getRange(2, 1, lastRow - 1, 2).getValues();
+  const allowedValues = [];
+  let hasConfiguredRows = false;
+
+  for (const row of values) {
+    const enabled = row[0] === true;
+    const responsible = normalizeResponsibleFilterText_(row[1]);
+
+    if (!responsible) continue;
+    hasConfiguredRows = true;
+
+    if (enabled) {
+      allowedValues.push(responsible);
+    }
+  }
+
+  return {
+    enabled: hasConfiguredRows,
+    allowedValues,
+  };
+}
+
+function isManufacturingResponsibleAllowed_(responsibleName, filter) {
+  if (!filter || !filter.enabled) return true;
+
+  const normalizedResponsible = normalizeResponsibleFilterText_(responsibleName);
+  if (!normalizedResponsible) return false;
+
+  return (filter.allowedValues || []).some(
+    (allowedValue) =>
+      normalizedResponsible.indexOf(allowedValue) !== -1 ||
+      allowedValue.indexOf(normalizedResponsible) !== -1
+  );
+}
+
 function buildArchivedManufacturingRowKeys_(odooId, orderKeys) {
   const keys = [];
 
@@ -662,6 +766,7 @@ function syncOdooManufacturingOrdersUnlocked_() {
     activeSheetSnapshot,
     activeArchivedManufacturingIndex
   );
+  const responsibleSyncFilter = getManufacturingResponsibleSyncFilter_();
 
   for (const deletedId of reconciliation.deletedIds) {
     importedIds.delete(deletedId);
@@ -744,6 +849,8 @@ function syncOdooManufacturingOrdersUnlocked_() {
       displayOrder
     );
     const currentState = cleanString_(record.state).toLowerCase();
+    const responsibleName = getMany2oneName_(record.user_id);
+    const matchedResponsible = findResponsible_(responsibleName);
 
     if (!odooId) {
       continue;
@@ -817,6 +924,25 @@ function syncOdooManufacturingOrdersUnlocked_() {
       continue;
     }
 
+    if (
+      !isManufacturingResponsibleAllowed_(
+        responsibleName,
+        responsibleSyncFilter
+      )
+    ) {
+      appendSyncLog_({
+        module: "FABRICACION",
+        action: "skip_responsible_filter",
+        order: displayOrder,
+        odooId,
+        origin: "FABRICACION",
+        details:
+          `Responsable Odoo "${responsibleName || "(sin responsable)"}" ` +
+          "no esta habilitado para sincronizar fabricacion.",
+      });
+      continue;
+    }
+
     const productName = getMany2oneName_(record.product_id);
     const quantity = resolveManufacturingPendingQuantity_(record);
 
@@ -879,9 +1005,7 @@ function syncOdooManufacturingOrdersUnlocked_() {
       odooId,
       displayOrder,
       rawOrderName,
-      matchedResponsible: findResponsible_(
-        getMany2oneName_(record.user_id)
-      ),
+      matchedResponsible,
       productName,
       quantity,
       startDateFormatted:
@@ -951,6 +1075,10 @@ function syncOdooManufacturingOrdersUnlocked_() {
     );
   }
   properties.setProperty(MFG_CFG.LAST_SYNC_PROPERTY, nowUtcString_());
+
+  if (consumePendingAutoSort_()) {
+    needsAutoSort = true;
+  }
 
   if (needsAutoSort) {
     SpreadsheetApp.flush();

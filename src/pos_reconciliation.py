@@ -22,6 +22,8 @@ DEFAULT_AMOUNT_TOLERANCE = 0.01
 DEFAULT_DATE_WINDOW_DAYS = 2
 DEFAULT_SETTLEMENT_LOOKAHEAD_DAYS = 15
 MAX_GROUP_SIZE = 4  # Solo lo usa el comparador historico privado.
+DEFAULT_AUTO_SYNC_INTERVAL_MINUTES = 60
+DEFAULT_AUTO_SYNC_LOOKBACK_DAYS = 7
 
 
 def _resolve_state_path(filename: str) -> Path:
@@ -289,6 +291,15 @@ def _default_recon_config() -> Dict[str, Any]:
         "settlement_lookahead_days": DEFAULT_SETTLEMENT_LOOKAHEAD_DAYS,
         # Mapeo "sello" de TotalNet (ej. "MasterCard") -> id de diario contable en Odoo.
         "journal_map": {},
+        # Conciliacion en segundo plano: sincroniza y deja la propuesta lista para revisar.
+        "auto_sync_enabled": False,
+        "auto_sync_interval_minutes": DEFAULT_AUTO_SYNC_INTERVAL_MINUTES,
+        "auto_sync_lookback_days": DEFAULT_AUTO_SYNC_LOOKBACK_DAYS,
+        "auto_sync_notify_desktop": True,
+        # Registro automatico SOLO de coincidencias deterministicas (ver
+        # find_deterministic_matches). Apagado por defecto.
+        "auto_register_deterministic": False,
+        "auto_register_operator": "",
     }
 
 
@@ -753,3 +764,66 @@ def match_cupones_to_invoices(
         )
 
     return {"matches_unicos": matches_unicos, "ambiguos": ambiguos, "sin_match": sin_match}
+
+
+def _same_amount(left: Any, right: Any) -> bool:
+    try:
+        return round(float(left) - float(right), 2) == 0
+    except (TypeError, ValueError):
+        return False
+
+
+def deterministic_rejection_reason(match: Dict[str, Any], invoice_number_counts: Dict[str, int]) -> str:
+    """Devuelve "" si la coincidencia puede registrarse sin intervencion humana.
+
+    Es deliberadamente mas estricta que `can_confirm`: exige numero de factura
+    informado por TotalNet, importe exacto sin redondeo ni diferencia, factura
+    sin pagos previos, diario resuelto por el mapeo y que ningun otro cupon del
+    lote reclame el mismo numero de factura.
+    """
+    cupon = match.get("cupon") or {}
+    invoice = match.get("invoice") or {}
+    if match.get("matched_by") != "numero_factura_totalnet":
+        return "no_coincide_por_numero_de_factura"
+    if cupon.get("manual_entry"):
+        return "ticket_manual"
+    if cupon.get("cupon_id") is None:
+        return "cupon_sin_id"
+    if not match.get("can_confirm"):
+        return "no_confirmable"
+    if not match.get("amount_matches") or match.get("requires_rounding_writeoff"):
+        return "importe_no_exacto"
+    if not match.get("currency_matches"):
+        return "moneda_distinta"
+    try:
+        if float(cupon.get("importe")) <= 0:
+            return "importe_no_positivo"
+    except (TypeError, ValueError):
+        return "importe_invalido"
+    if invoice.get("payment_state") != "not_paid":
+        return "factura_con_pagos_previos"
+    if not _same_amount(invoice.get("amount_residual"), invoice.get("amount_total")):
+        return "factura_con_saldo_parcial"
+    if not _same_amount(invoice.get("amount_residual"), cupon.get("importe")):
+        return "importe_distinto_al_saldo"
+    if not match.get("suggested_journal_id"):
+        return "sin_diario_mapeado"
+    number = _invoice_number(cupon.get("numero_factura"))
+    if invoice_number_counts.get(number, 0) != 1:
+        return "numero_de_factura_repetido_en_cupones"
+    return ""
+
+
+def find_deterministic_matches(proposal: Dict[str, Any]) -> List[Dict[str, Any]]:
+    """Filtra de una propuesta de conciliacion las coincidencias inequivocas."""
+    invoice_number_counts: Dict[str, int] = {}
+    for bucket in ("matches_unicos", "ambiguos", "sin_match"):
+        for row in proposal.get(bucket, []) or []:
+            number = _invoice_number((row.get("cupon") or {}).get("numero_factura"))
+            if number:
+                invoice_number_counts[number] = invoice_number_counts.get(number, 0) + 1
+    return [
+        match
+        for match in proposal.get("matches_unicos", []) or []
+        if not deterministic_rejection_reason(match, invoice_number_counts)
+    ]

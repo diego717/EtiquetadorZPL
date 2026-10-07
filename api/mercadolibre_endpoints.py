@@ -29,6 +29,10 @@ class MercadoLibreConfigRequest(BaseModel):
     client_id: str = ""
     client_secret: str = ""
     redirect_uri: str = "http://localhost:8002/api/mercadolibre/oauth/callback"
+    access_token: str = ""
+    refresh_token: str = ""
+    expires_in: Optional[int] = Field(default=None, ge=0)
+    user_id: Optional[int] = None
     default_printer: str = ""
     default_copies: int = Field(default=1, ge=1, le=10)
     auto_print: bool = False
@@ -200,10 +204,40 @@ async def get_config() -> Dict[str, Any]:
 async def save_config(config: MercadoLibreConfigRequest) -> Dict[str, Any]:
     if config.response_type != "zpl2":
         raise HTTPException(status_code=400, detail="Por ahora solo se soporta response_type=zpl2")
-    payload = config.dict()
+    payload = config.model_dump()
+    access_token = str(payload.pop("access_token", "") or "").strip()
+    refresh_token = str(payload.pop("refresh_token", "") or "").strip()
+    expires_in = payload.pop("expires_in", None)
+    user_id = payload.pop("user_id", None)
+
     if not payload.get("client_secret"):
         payload.pop("client_secret", None)
-    return mercadolibre_integration.save_config(payload)
+
+    mercadolibre_integration.save_config(payload)
+    if access_token:
+        mercadolibre_integration.save_manual_tokens(
+            access_token=access_token,
+            refresh_token=refresh_token,
+            expires_in=expires_in,
+            user_id=user_id,
+        )
+        try:
+            profile = await asyncio.to_thread(mercadolibre_integration.get_me)
+            verified_user_id = profile.get("id")
+            if not verified_user_id:
+                raise ValueError("Mercado Libre no devolvio el ID del usuario")
+            return mercadolibre_integration.save_config({
+                "user_id": verified_user_id,
+                "nickname": profile.get("nickname", ""),
+                "last_error": "",
+            })
+        except Exception as exc:
+            message = f"Tokens guardados, pero no se pudieron validar con Mercado Libre: {exc}"
+            mercadolibre_integration.save_config({"last_error": message})
+            raise HTTPException(status_code=400, detail=message)
+
+    # Dejar los campos de token vacios significa conservar los ya guardados.
+    return mercadolibre_integration.get_public_config()
 
 
 @router.get("/auth-url")

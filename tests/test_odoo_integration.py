@@ -192,6 +192,189 @@ class _ProductModels:
         raise AssertionError(f"Llamada Odoo inesperada: {model}.{method}")
 
 
+class _StockAndChatterModels:
+    def __init__(self):
+        self.calls = []
+        self.note_kwargs = None
+        self.note_bodies = []
+
+    def execute_kw(self, _db, _uid, _password, model, method, args, kwargs=None):
+        self.calls.append((model, method))
+        if model == "sale.order" and method == "fields_get":
+            return {
+                "id": {},
+                "name": {},
+                "state": {},
+                "client_order_ref": {},
+                "origin": {},
+                "picking_ids": {},
+                "x_shipment_id": {},
+            }
+        if model == "sale.order" and method == "search_read":
+            return [
+                {
+                    "id": 10,
+                    "name": "ML 100",
+                    "state": "sale",
+                    "client_order_ref": "100",
+                    "origin": "",
+                    "picking_ids": [50],
+                    "x_shipment_id": "100",
+                },
+                {
+                    "id": 11,
+                    "name": "ML 200",
+                    "state": "sale",
+                    "client_order_ref": "200",
+                    "origin": "",
+                    "picking_ids": [51],
+                    "x_shipment_id": "200",
+                },
+                {
+                    "id": 12,
+                    "name": "ML 400",
+                    "state": "sale",
+                    "client_order_ref": "400",
+                    "origin": "",
+                    "picking_ids": [52],
+                    "x_shipment_id": "400",
+                },
+            ]
+        if model == "stock.picking" and method == "fields_get":
+            return {
+                "id": {},
+                "name": {},
+                "state": {},
+                "sale_id": {},
+                "picking_type_code": {},
+                "products_availability": {},
+                "products_availability_state": {},
+                "scheduled_date": {},
+            }
+        if model == "stock.picking" and method == "search_read":
+            return [
+                {
+                    "id": 50,
+                    "name": "WH/OUT/00050",
+                    "state": "assigned",
+                    "sale_id": [10, "ML 100"],
+                    "picking_type_code": "outgoing",
+                    "products_availability": "Disponible",
+                    "products_availability_state": "available",
+                },
+                {
+                    "id": 51,
+                    "name": "WH/OUT/00051",
+                    "state": "confirmed",
+                    "sale_id": [11, "ML 200"],
+                    "picking_type_code": "outgoing",
+                    "products_availability": "Faltan productos",
+                    "products_availability_state": "late",
+                },
+                {
+                    "id": 52,
+                    "name": "WH/OUT/00052",
+                    "state": "assigned",
+                    "sale_id": [12, "ML 400"],
+                    "picking_type_code": "outgoing",
+                    "products_availability": "Parcialmente disponible",
+                    "products_availability_state": "expected",
+                },
+            ]
+        if model == "stock.move" and method == "fields_get":
+            return {
+                "id": {},
+                "picking_id": {},
+                "product_id": {},
+                "product_uom_qty": {},
+                "product_uom": {},
+                "state": {},
+                "reserved_availability": {},
+            }
+        if model == "stock.move" and method == "search_read":
+            return [
+                {
+                    "id": 500,
+                    "picking_id": [50, "WH/OUT/00050"],
+                    "product_id": [70, "Producto listo"],
+                    "product_uom_qty": 2,
+                    "product_uom": [1, "Unidades"],
+                    "state": "assigned",
+                    "reserved_availability": 2,
+                },
+                {
+                    "id": 501,
+                    "picking_id": [51, "WH/OUT/00051"],
+                    "product_id": [71, "Producto faltante"],
+                    "product_uom_qty": 3,
+                    "product_uom": [1, "Unidades"],
+                    "state": "confirmed",
+                    "reserved_availability": 0,
+                },
+                {
+                    "id": 502,
+                    "picking_id": [52, "WH/OUT/00052"],
+                    "product_id": [72, "Producto reservado"],
+                    "product_uom_qty": 1,
+                    "product_uom": [1, "Unidades"],
+                    "state": "assigned",
+                    "reserved_availability": 1,
+                },
+                {
+                    "id": 503,
+                    "picking_id": [52, "WH/OUT/00052"],
+                    "product_id": [73, "Producto sin reserva"],
+                    "product_uom_qty": 2,
+                    "product_uom": [2, "kg"],
+                    "state": "assigned",
+                    "reserved_availability": 0,
+                },
+            ]
+        if model == "mail.message" and method == "search":
+            marker = next(
+                (str(term[2]) for term in args[0] if isinstance(term, tuple) and term[0] == "body"),
+                "",
+            )
+            for index, body in enumerate(self.note_bodies, start=1):
+                if marker and marker in body:
+                    return [900 + index]
+            return []
+        if model == "sale.order" and method == "message_post":
+            self.note_kwargs = kwargs or {}
+            self.note_bodies.append(str(self.note_kwargs.get("body") or ""))
+            return 901
+        raise AssertionError(f"Llamada Odoo inesperada: {model}.{method}")
+
+
+class _StockOdoo17Models(_StockAndChatterModels):
+    def execute_kw(self, db, uid, password, model, method, args, kwargs=None):
+        if model == "stock.move" and method == "fields_get":
+            self.calls.append((model, method))
+            return {
+                "id": {},
+                "picking_id": {},
+                "product_id": {},
+                "product_uom_qty": {},
+                "product_uom": {},
+                "state": {},
+                "quantity": {},
+                "picked": {},
+            }
+        if model == "stock.move" and method == "search_read":
+            self.calls.append((model, method))
+            return [{
+                "id": 600,
+                "picking_id": [50, "WH/OUT/00050"],
+                "product_id": [80, "Producto Odoo 17"],
+                "product_uom_qty": 3,
+                "product_uom": [1, "Unidades"],
+                "state": "assigned",
+                "quantity": 3,
+                "picked": False,
+            }]
+        return super().execute_kw(db, uid, password, model, method, args, kwargs)
+
+
 class TestOdooIntegration(unittest.TestCase):
     def test_download_sale_order_report_pdf_reuses_authenticated_session_without_context_manager(self):
         integration = OdooIntegration()
@@ -208,6 +391,14 @@ class TestOdooIntegration(unittest.TestCase):
         self.assertEqual(session.last_url, "http://odoo.test/report/pdf/sale.report_saleorder/123")
         self.assertEqual(session.last_timeout, 60)
         self.assertTrue(session.closed)
+
+    def test_sale_order_url_points_to_the_order_form(self):
+        integration = OdooIntegration()
+        integration.config["base_url"] = "https://aramid.odoo.com/"
+
+        url = integration.sale_order_url(4521)
+
+        self.assertEqual(url, "https://aramid.odoo.com/web#id=4521&model=sale.order&view_type=form")
 
     def test_find_invoices_can_filter_pending_cash_sales_without_fixed_term_id(self):
         integration = OdooIntegration()
@@ -405,6 +596,99 @@ class TestOdooIntegration(unittest.TestCase):
         self.assertEqual(result["items"][0]["category"], "Etiquetas")
         self.assertEqual(result["items"][0]["list_price"], 120.5)
         self.assertEqual(result["items"][0]["qty_available"], 9)
+
+    def test_stock_statuses_are_loaded_in_batch_and_remain_informative(self):
+        integration = OdooIntegration()
+        models = _StockAndChatterModels()
+        integration.config["shipment_field"] = "x_shipment_id"
+        integration._build_runtime_config = lambda auth_override=None: {
+            "database": "test",
+            "password": "test",
+            "order_prefix": "ML ",
+            "shipment_field": "x_shipment_id",
+        }
+        integration._authenticate = lambda auth_override=None: 7
+        integration._xmlrpc_models = lambda runtime=None: models
+
+        statuses = integration.get_sale_order_stock_statuses(["100", "200", "300", "400", "100"])
+
+        self.assertEqual(statuses["100"]["code"], "ready")
+        self.assertEqual(statuses["100"]["pickings"][0]["name"], "WH/OUT/00050")
+        self.assertEqual(statuses["200"]["code"], "waiting")
+        self.assertIn("Faltan productos", statuses["200"]["detail"])
+        self.assertEqual(statuses["300"]["code"], "order_missing")
+        self.assertEqual(statuses["400"]["code"], "partial")
+        self.assertIsNone(statuses["400"]["missing_qty"])
+        self.assertEqual(statuses["400"]["shortages"][0]["product"], "Producto sin reserva")
+        self.assertEqual(statuses["400"]["shortages"][0]["missing_qty"], 2)
+        self.assertEqual(models.calls.count(("sale.order", "search_read")), 1)
+        self.assertEqual(models.calls.count(("stock.picking", "search_read")), 1)
+        self.assertEqual(models.calls.count(("stock.move", "search_read")), 1)
+
+    def test_stock_status_supports_odoo_17_quantity_field(self):
+        integration = OdooIntegration()
+        models = _StockOdoo17Models()
+        integration.config["shipment_field"] = "x_shipment_id"
+        integration._build_runtime_config = lambda auth_override=None: {
+            "database": "test",
+            "password": "test",
+            "shipment_field": "x_shipment_id",
+        }
+        integration._authenticate = lambda auth_override=None: 7
+        integration._xmlrpc_models = lambda runtime=None: models
+
+        status = integration.get_sale_order_stock_statuses(["100"])["100"]
+
+        self.assertEqual(status["code"], "ready")
+        self.assertEqual(status["reserved_qty"], 3)
+        self.assertEqual(status["complete_lines"], 1)
+
+    def test_print_note_uses_internal_chatter_without_assigning_responsible(self):
+        integration = OdooIntegration()
+        models = _StockAndChatterModels()
+        integration._build_runtime_config = lambda auth_override=None: {
+            "database": "test",
+            "password": "test",
+        }
+        integration._authenticate = lambda auth_override=None: 7
+        integration._xmlrpc_models = lambda runtime=None: models
+
+        result = integration.post_sale_order_print_note(
+            order_id=10,
+            envio_id="100<script>",
+            mode="both",
+            order_printer="Epson & Deposito",
+            label_printer="Godex <GE300>",
+        )
+
+        self.assertTrue(result["success"])
+        self.assertEqual(result["message_id"], 901)
+        self.assertEqual(models.note_kwargs["subtype_xmlid"], "mail.mt_note")
+        self.assertNotIn("<script>", models.note_kwargs["body"])
+        self.assertIn("100&lt;script&gt;", models.note_kwargs["body"])
+        self.assertIn("Epson &amp; Deposito", models.note_kwargs["body"])
+        self.assertNotIn("partner_ids", models.note_kwargs)
+        self.assertNotIn("user_id", models.note_kwargs)
+        self.assertNotIn("responsable", models.note_kwargs["body"].lower())
+
+    def test_print_note_is_idempotent_for_the_same_operation(self):
+        integration = OdooIntegration()
+        models = _StockAndChatterModels()
+        integration._build_runtime_config = lambda auth_override=None: {
+            "database": "test",
+            "password": "test",
+        }
+        integration._authenticate = lambda auth_override=None: 7
+        integration._xmlrpc_models = lambda runtime=None: models
+
+        first = integration.post_sale_order_print_note(10, "100", "order_only", event_key="print-abc")
+        second = integration.post_sale_order_print_note(10, "100", "order_only", event_key="print-abc")
+        third = integration.post_sale_order_print_note(10, "100", "order_only", event_key="print-def")
+
+        self.assertTrue(first["posted"])
+        self.assertTrue(second["duplicate"])
+        self.assertTrue(third["posted"])
+        self.assertEqual(models.calls.count(("sale.order", "message_post")), 2)
 
 
 if __name__ == "__main__":

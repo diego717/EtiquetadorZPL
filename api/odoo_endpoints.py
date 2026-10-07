@@ -51,6 +51,9 @@ class OdooConfigRequest(BaseModel):
 
 class OdooSearchOrderRequest(BaseModel):
     envio_id: str
+    # Para abrir la orden desde la UI interesa encontrarla en cualquier estado
+    # (confirmada, bloqueada, cancelada), no solo en los estados que se imprimen.
+    include_all_states: bool = False
 
 
 class OdooPrintOrderRequest(BaseModel):
@@ -115,11 +118,17 @@ async def test_connection() -> Dict[str, Any]:
 @router.post("/orders/find")
 async def find_order(request: OdooSearchOrderRequest) -> Dict[str, Any]:
     try:
-        order = await asyncio.to_thread(odoo_integration.find_sale_order_by_envio, request.envio_id)
+        order = await asyncio.to_thread(
+            odoo_integration.find_sale_order_by_envio,
+            request.envio_id,
+            None,
+            request.include_all_states,
+        )
         return {
             "envio_id": request.envio_id,
             "found": bool(order),
             "order": order,
+            "url": odoo_integration.sale_order_url(order["id"]) if order else "",
         }
     except Exception as exc:
         message = _friendly_error(exc)

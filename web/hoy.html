@@ -1,0 +1,278 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>EtiquetadorZPL - Hoy</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Manrope:wght@400;500;600;700&display=swap">
+    <link rel="stylesheet" href="panel.css">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <div>
+                <h1 id="today-title">Hoy</h1>
+                <p class="sub" id="today-sub">Lo pendiente de cada area en una sola pantalla.</p>
+            </div>
+            <div class="toolbar">
+                <button class="btn" id="refresh-btn" onclick="loadSummary(true)">Actualizar</button>
+            </div>
+        </header>
+
+        <nav aria-label="Paginas">
+            <a href="hoy.html" class="active" aria-current="page">Hoy</a>
+            <a href="config.html?view=administrado#administrado">Envios Administrado</a>
+            <a href="config.html">Configuracion</a>
+            <a href="config.html?view=pos#pos-reconciliation-section">Conciliacion POS</a>
+            <a href="reposicion.html">Reposicion</a>
+            <a href="cobranzas.html">Cobranzas</a>
+        </nav>
+
+        <div class="cards" id="cards">
+            <div class="card"><p class="muted">Cargando...</p></div>
+        </div>
+        <p class="meta" id="today-meta" role="status" aria-live="polite"></p>
+    </div>
+
+    <script src="config.js"></script>
+    <script src="panel.js"></script>
+    <script>
+        let pendingShipments = null;
+
+        function card({ title, tone = '', big = '', bigLabel = '', facts = [], list = '', foot = '', link = '', linkLabel = 'Abrir', error = '', extra = '' }) {
+            const factsHtml = facts.filter(Boolean).map(f => `<span>${f}</span>`).join('');
+            return `<section class="card" data-tone="${tone}">
+                <h2><span>${esc(title)}</span>${link ? `<a class="link" href="${esc(link)}">${esc(linkLabel)} &rsaquo;</a>` : ''}</h2>
+                ${error ? `<p class="error">${esc(error)}</p>` : ''}
+                ${big !== '' ? `<div><div class="big">${big}</div><div class="muted">${esc(bigLabel)}</div></div>` : ''}
+                ${factsHtml ? `<div class="facts">${factsHtml}</div>` : ''}
+                ${list}
+                ${extra}
+                ${foot ? `<div class="foot">${foot}</div>` : ''}
+            </section>`;
+        }
+
+        function itemList(items, render) {
+            if (!items || !items.length) return '';
+            return `<ul>${items.map(render).join('')}</ul>`;
+        }
+
+        function odooLink(item, label) {
+            return item.url ? `<a class="link" href="${esc(item.url)}" target="_blank" rel="noopener">${esc(label)}</a>` : `<span>${esc(label)}</span>`;
+        }
+
+        function m2oName(value) {
+            return Array.isArray(value) ? value[1] : '';
+        }
+
+        function daysLate(value) {
+            const due = new Date(String(value).replace(' ', 'T'));
+            const days = Math.floor((Date.now() - due.getTime()) / 86400000);
+            return days > 0 ? `${days} d` : 'hoy';
+        }
+
+        function freshness(value) {
+            return value ? `Actualizado ${timeAgo(value)}` : 'Sin datos todavia';
+        }
+
+        function shipmentsCard(s) {
+            if (!s.ok) return card({ title: 'Envios', tone: 'alert', error: s.error, link: 'config.html?view=administrado#administrado', linkLabel: 'Ir a envios' });
+            const pendingFact = pendingShipments === null
+                ? ''
+                : pendingShipments.error
+                    ? `<span class="error">${esc(pendingShipments.error)}</span>`
+                    : `<b>${pendingShipments.count}</b> pendientes de imprimir en Administrado`;
+            const tone = (pendingShipments && pendingShipments.count) || s.failed_today ? 'warn' : s.printed_today ? 'good' : '';
+            return card({
+                title: 'Envios',
+                tone,
+                big: panelNumber.format(s.printed_today),
+                bigLabel: 'impresos hoy',
+                facts: [
+                    s.failed_today ? `<b>${s.failed_today}</b> intentos fallidos` : '',
+                    s.last_print_at ? `ultimo ${new Date(s.last_print_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}` : '',
+                    pendingFact,
+                ],
+                list: itemList(s.recent_failures, f => `<li><span title="${esc(f.error)}">${esc(f.envio_id)}: ${esc(f.error)}</span><span></span></li>`),
+                foot: `<span>Pendientes: requiere consultar Administrado</span><button class="btn small secondary" id="pending-btn" onclick="checkPendingShipments()">Consultar pendientes</button>`,
+                link: 'config.html?view=administrado#administrado',
+                linkLabel: 'Ir a envios',
+            });
+        }
+
+        function posCard(p) {
+            if (!p.ok) return card({ title: 'Pagos POS', tone: 'alert', error: p.error, link: 'config.html?view=pos#pos-reconciliation-section' });
+            const s = p.last_summary || {};
+            const ready = Number(s.listos_para_revisar || 0);
+            const ambiguous = Number(s.ambiguos || 0);
+            return card({
+                title: 'Pagos POS',
+                tone: p.last_error ? 'alert' : ready + ambiguous ? 'warn' : p.has_proposal ? 'good' : '',
+                error: p.last_error ? `Ultima sincronizacion fallo: ${p.last_error}` : '',
+                big: p.has_proposal ? panelNumber.format(ready) : '-',
+                bigLabel: p.has_proposal ? 'listos para revisar' : 'sin sincronizacion automatica todavia',
+                facts: [
+                    ambiguous ? `<b>${ambiguous}</b> ambiguos` : '',
+                    s.con_diferencia ? `<b>${s.con_diferencia}</b> con diferencia` : '',
+                    s.sin_match ? `<b>${s.sin_match}</b> sin match` : '',
+                    s.registrados_automaticamente ? `<b>${s.registrados_automaticamente}</b> registrados solos` : '',
+                ],
+                foot: `<span>${p.enabled ? `Automatico cada ${p.interval_minutes} min` : 'Automatico apagado'}</span><span>${freshness(p.last_cycle_finished_at)}</span>`,
+                link: 'config.html?view=pos#pos-reconciliation-section',
+                linkLabel: 'Revisar',
+            });
+        }
+
+        function stockCard(st) {
+            if (!st.ok) return card({ title: 'Stock', tone: 'alert', error: st.error, link: 'reposicion.html' });
+            const s = st.summary || {};
+            return card({
+                title: 'Stock',
+                tone: st.last_error ? 'alert' : s.quiebre ? 'alert' : (s.bajo_minimo || s.cobertura_baja) ? 'warn' : st.generated_at ? 'good' : '',
+                error: st.last_error ? `Ultima actualizacion fallo: ${st.last_error}` : '',
+                big: st.generated_at ? panelNumber.format(s.quiebre || 0) : '-',
+                bigLabel: st.generated_at ? 'productos en quiebre' : 'el tablero no se genero todavia',
+                facts: [
+                    s.bajo_minimo ? `<b>${s.bajo_minimo}</b> bajo minimo` : '',
+                    s.cobertura_baja ? `<b>${s.cobertura_baja}</b> con cobertura baja` : '',
+                ],
+                foot: `<span>${freshness(st.generated_at)}</span>`,
+                link: 'reposicion.html',
+                linkLabel: 'Ver reposicion',
+            });
+        }
+
+        function receivablesCard(r) {
+            if (!r.ok) return card({ title: 'Cobranzas', tone: 'alert', error: r.error, link: 'cobranzas.html' });
+            const s = r.summary || {};
+            const list = itemList(r.top_clients, c => `<li>${c.whatsapp_url
+                ? `<a class="link" href="${esc(c.whatsapp_url)}" target="_blank" rel="noopener" title="Abrir WhatsApp">${esc(c.name)}</a>`
+                : `<span>${esc(c.name)}</span>`}<span>${money(c.overdue)}</span></li>`);
+            return card({
+                title: 'Cobranzas',
+                tone: r.last_error ? 'alert' : s.newly_overdue_count ? 'warn' : r.generated_at ? 'good' : '',
+                error: r.last_error ? `Ultima actualizacion fallo: ${r.last_error}` : '',
+                big: r.generated_at ? money(s.newly_overdue_amount) : '-',
+                bigLabel: r.generated_at ? `vencio esta semana (${s.newly_overdue_count || 0} facturas)` : 'el tablero no se genero todavia',
+                facts: r.generated_at ? [
+                    `Vence en 7 dias: <b>${money(s.due_this_week_amount)}</b>`,
+                    `Total vencido: <b>${money(s.total_overdue)}</b>`,
+                ] : [],
+                list: list ? `<div class="muted" style="font-size:.82rem;">Mayores saldos vencidos</div>${list}` : '',
+                foot: `<span>${freshness(r.generated_at)}</span>`,
+                link: 'cobranzas.html',
+                linkLabel: 'Ver cobranzas',
+            });
+        }
+
+        function uninvoicedCard(r) {
+            if (!r.ok || !r.generated_at) return '';
+            const s = r.summary || {};
+            return card({
+                title: 'Sin facturar',
+                tone: s.uninvoiced_recent_count ? 'warn' : 'good',
+                big: panelNumber.format(s.uninvoiced_recent_count || 0),
+                bigLabel: 'ordenes confirmadas recientes sin facturar',
+                facts: [
+                    `<b>${money(s.uninvoiced_recent_amount)}</b> en pesos`,
+                    s.uninvoiced_stale_count ? `<b>${s.uninvoiced_stale_count}</b> antiguas para limpiar` : '',
+                ],
+                foot: `<span>${freshness(r.generated_at)}</span>`,
+                link: 'cobranzas.html#sin-facturar',
+                linkLabel: 'Ver ordenes',
+            });
+        }
+
+        function pickingCard(title, block, tone, emptyText) {
+            if (!block) return '';
+            if (block.count === null) return card({ title, tone: 'alert', error: block.error });
+            return card({
+                title,
+                tone: block.count ? tone : 'good',
+                big: panelNumber.format(block.count),
+                bigLabel: block.count ? 'con la fecha programada vencida' : emptyText,
+                list: itemList(block.items, p => `<li>${odooLink(p, [p.name, m2oName(p.partner_id) || p.origin].filter(Boolean).join(' · '))}<span>${daysLate(p.scheduled_date)}</span></li>`),
+                foot: block.count > block.items.length ? `<span>Mostrando las ${block.items.length} atrasadas mas recientes de ${block.count}</span>` : '',
+            });
+        }
+
+        function activitiesCard(o) {
+            const mine = o.my_activities || { count: 0, items: [] };
+            const all = o.overdue_activities || { count: 0 };
+            if (mine.count === null) return card({ title: 'Actividades Odoo', tone: 'alert', error: mine.error });
+            return card({
+                title: 'Actividades Odoo',
+                tone: mine.count ? 'warn' : 'good',
+                big: panelNumber.format(mine.count),
+                bigLabel: 'tuyas para hoy o vencidas',
+                facts: [all.count ? `<b>${all.count}</b> vencidas en todo el equipo` : ''],
+                list: itemList(mine.items, a => `<li>${odooLink(a, [a.summary || m2oName(a.activity_type_id) || 'Actividad', a.res_name].filter(Boolean).join(' · '))}<span>${shortDate(a.date_deadline)}</span></li>`),
+            });
+        }
+
+        function render(data) {
+            const odoo = data.odoo || {};
+            const cards = [
+                shipmentsCard(data.shipments || {}),
+                posCard(data.pos || {}),
+                stockCard(data.stock || {}),
+                receivablesCard(data.receivables || {}),
+                uninvoicedCard(data.receivables || {}),
+            ];
+            if (odoo.ok) {
+                cards.push(
+                    pickingCard('Entregas atrasadas', odoo.late_deliveries, 'alert', 'ninguna atrasada'),
+                    pickingCard('Recepciones atrasadas', odoo.late_receipts, 'warn', 'ninguna atrasada'),
+                    activitiesCard(odoo),
+                );
+            } else {
+                cards.push(card({ title: 'Odoo', tone: 'alert', error: odoo.error || 'No disponible' }));
+            }
+            document.getElementById('cards').innerHTML = cards.filter(Boolean).join('');
+        }
+
+        let lastData = null;
+
+        async function loadSummary(force = false) {
+            const btn = document.getElementById('refresh-btn');
+            const meta = document.getElementById('today-meta');
+            btn.disabled = true;
+            try {
+                lastData = await panelApi(`/api/today/summary${force ? '?refresh=true' : ''}`);
+                render(lastData);
+                const today = new Date(`${lastData.date}T12:00:00`);
+                document.getElementById('today-title').textContent =
+                    `Hoy, ${today.toLocaleDateString('es-UY', { weekday: 'long', day: 'numeric', month: 'long' })}`;
+                meta.className = 'meta';
+                meta.textContent = `Actualizado ${new Date(lastData.generated_at).toLocaleTimeString()}. Entregas, recepciones y actividades se consultan en vivo en Odoo; el resto usa el ultimo tablero de cada seccion.`;
+            } catch (error) {
+                meta.className = 'meta error';
+                meta.textContent = `No se pudo cargar el resumen: ${error.message}`;
+            } finally {
+                btn.disabled = false;
+            }
+        }
+
+        async function checkPendingShipments() {
+            const btn = document.getElementById('pending-btn');
+            if (btn) { btn.disabled = true; btn.textContent = 'Consultando...'; }
+            try {
+                const data = await panelApi('/api/administrado/sales/sync', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ limit: 50 }),
+                });
+                const sales = data.sales || [];
+                pendingShipments = { count: sales.filter(sale => sale.print_mode !== 'reimprimir').length };
+            } catch (error) {
+                pendingShipments = { error: `No se pudo consultar Administrado: ${error.message}` };
+            }
+            if (lastData) render(lastData);
+        }
+
+        loadSummary();
+        setInterval(() => { if (!document.hidden) loadSummary(); }, 5 * 60 * 1000);
+    </script>
+</body>
+</html>

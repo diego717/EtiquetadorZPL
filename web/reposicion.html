@@ -1,0 +1,312 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>EtiquetadorZPL - Reposicion</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Manrope:wght@400;500;600;700&display=swap">
+    <link rel="stylesheet" href="panel.css">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <div>
+                <h1>Monitor de reposicion</h1>
+                <p class="sub">Informativo: lee stock y movimientos de Odoo. No crea compras ni modifica reglas de reabastecimiento.</p>
+            </div>
+            <div class="toolbar">
+                <button class="btn" id="refresh-btn" onclick="refreshReport()">Actualizar desde Odoo</button>
+                <a class="btn secondary" id="export-link" href="#" onclick="exportReport(event)">Exportar CSV</a>
+            </div>
+        </header>
+
+        <nav aria-label="Paginas">
+            <a href="hoy.html">Hoy</a>
+            <a href="config.html?view=administrado#administrado">Envios Administrado</a>
+            <a href="config.html">Configuracion</a>
+            <a href="config.html?view=pos#pos-reconciliation-section">Conciliacion POS</a>
+            <a href="reposicion.html" class="active" aria-current="page">Reposicion</a>
+            <a href="cobranzas.html">Cobranzas</a>
+        </nav>
+
+        <div id="notices"></div>
+
+        <div class="tiles" id="tiles" role="group" aria-label="Resumen por estado"></div>
+
+        <div class="panel">
+            <div class="toolbar">
+                <label class="field">Buscar
+                    <input type="text" id="filter-search" placeholder="Referencia, nombre o categoria" oninput="scheduleLoad()">
+                </label>
+                <label class="field">Estado
+                    <select id="filter-status" onchange="loadReport()">
+                        <option value="">Todos</option>
+                        <option value="quiebre">Quiebre</option>
+                        <option value="bajo_minimo">Bajo minimo</option>
+                        <option value="cobertura_baja">Cobertura baja</option>
+                        <option value="ok">OK</option>
+                        <option value="sin_movimiento">Sin movimiento</option>
+                    </select>
+                </label>
+                <label class="check"><input type="checkbox" id="filter-alerts" onchange="loadReport()" checked> Solo alertas</label>
+            </div>
+            <p class="meta" id="report-meta" role="status" aria-live="polite">Cargando...</p>
+        </div>
+
+        <div class="table-scroll">
+            <table>
+                <thead>
+                    <tr>
+                        <th>Estado</th>
+                        <th>Producto</th>
+                        <th class="num" title="Cantidad a mano (qty_available)">Stock actual</th>
+                        <th class="num" title="Salidas pendientes (outgoing_qty)">Comprometido</th>
+                        <th class="num" title="Entradas pendientes (incoming_qty)">Entradas</th>
+                        <th class="num" title="Actual - comprometido + entradas (virtual_available)">Proyectado</th>
+                        <th class="num">Minimo</th>
+                        <th class="num" title="Entregas netas a clientes / dias de historia">Consumo/dia</th>
+                        <th class="num" title="Proyectado / consumo diario">Cobertura</th>
+                        <th class="num" title="Orientativo, no genera compras">Sugerido</th>
+                    </tr>
+                </thead>
+                <tbody id="report-body">
+                    <tr><td colspan="10" class="empty">Cargando...</td></tr>
+                </tbody>
+            </table>
+        </div>
+
+        <details class="panel" style="margin-top:16px;">
+            <summary>Configuracion del monitor</summary>
+            <div class="config-grid">
+                <label class="check"><input type="checkbox" id="cfg-auto"> Actualizar automaticamente</label>
+                <label class="field">Cada cuantos minutos
+                    <input type="number" id="cfg-interval" min="15" max="1440">
+                </label>
+                <label class="field">Dias de historia para el consumo
+                    <input type="number" id="cfg-history" min="7" max="365">
+                </label>
+                <label class="field">Alerta si la cobertura es menor a (dias)
+                    <input type="number" id="cfg-low-coverage" min="1" max="365">
+                </label>
+                <label class="field">Cobertura objetivo para el sugerido (dias)
+                    <input type="number" id="cfg-target-coverage" min="1" max="365">
+                    <span class="hint">Se usa cuando el producto no tiene regla con maximo.</span>
+                </label>
+                <label class="field">Minimo por defecto
+                    <input type="number" id="cfg-default-min" min="0" step="1">
+                    <span class="hint">Para productos sin regla de reabastecimiento. 0 = sin minimo.</span>
+                </label>
+            </div>
+            <button class="btn" onclick="saveConfig()">Guardar configuracion</button>
+            <span class="meta" id="config-status" role="status"></span>
+        </details>
+    </div>
+
+    <script src="config.js"></script>
+    <script>
+        const THEME_STORAGE_KEY = 'etiquetador_ui_theme';
+        const STATUS_TILES = [
+            ['quiebre', 'Quiebre'],
+            ['bajo_minimo', 'Bajo minimo'],
+            ['cobertura_baja', 'Cobertura baja'],
+            ['ok', 'OK'],
+            ['sin_movimiento', 'Sin movimiento'],
+        ];
+        let apiBase = '';
+        let loadTimer = null;
+
+        try {
+            if (localStorage.getItem(THEME_STORAGE_KEY) === 'light') {
+                document.documentElement.setAttribute('data-theme', 'light');
+            }
+        } catch (e) { /* sin localStorage: tema oscuro */ }
+
+        function esc(value) {
+            return String(value ?? '').replace(/[&<>"']/g, ch => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[ch]));
+        }
+
+        const numberFormat = new Intl.NumberFormat('es-UY', { maximumFractionDigits: 2 });
+        function fmt(value) {
+            const n = Number(value || 0);
+            return `<span class="${n < 0 ? 'neg' : ''}">${numberFormat.format(n)}</span>`;
+        }
+
+        async function api(path, options) {
+            if (!apiBase) {
+                const port = await getApiPort();
+                apiBase = `${window.location.protocol}//${window.location.hostname}:${port}`;
+            }
+            const response = await fetch(`${apiBase}${path}`, options);
+            const data = await response.json().catch(() => ({}));
+            if (!response.ok) throw new Error(data.detail || `HTTP ${response.status}`);
+            return data;
+        }
+
+        function queryString() {
+            const params = new URLSearchParams();
+            const search = document.getElementById('filter-search').value.trim();
+            const status = document.getElementById('filter-status').value;
+            if (search) params.set('search', search);
+            if (status) params.set('status', status);
+            if (document.getElementById('filter-alerts').checked && !status) params.set('only_alerts', 'true');
+            return params.toString();
+        }
+
+        function renderTiles(summary) {
+            const current = document.getElementById('filter-status').value;
+            document.getElementById('tiles').innerHTML = STATUS_TILES.map(([status, label]) => `
+                <button type="button" class="tile" data-status="${status}" aria-pressed="${current === status}" onclick="filterByStatus('${status}')">
+                    <div class="value">${numberFormat.format(Number((summary || {})[status] || 0))}</div>
+                    <div class="label">${label}</div>
+                </button>`).join('');
+        }
+
+        function filterByStatus(status) {
+            const select = document.getElementById('filter-status');
+            select.value = select.value === status ? '' : status;
+            loadReport();
+        }
+
+        function renderNotices(report) {
+            const notices = [];
+            if (report.generated_at && report.reorder_rules_available === false) {
+                notices.push('Tu usuario de Odoo no puede leer las reglas de reabastecimiento: se usa el minimo por defecto de la configuracion.');
+            }
+            if (report.truncated) {
+                notices.push('El tablero alcanzo el maximo de productos configurado; puede haber productos sin analizar.');
+            }
+            document.getElementById('notices').innerHTML = notices.map(text => `<div class="notice">${esc(text)}</div>`).join('');
+        }
+
+        function renderRows(items) {
+            const body = document.getElementById('report-body');
+            if (!items.length) {
+                body.innerHTML = '<tr><td colspan="10" class="empty">No hay productos con este filtro</td></tr>';
+                return;
+            }
+            body.innerHTML = items.map(row => {
+                const coverage = row.coverage_days === null || row.coverage_days === undefined
+                    ? '<span class="code">sin consumo</span>'
+                    : `${numberFormat.format(row.coverage_days)} d`;
+                const min = row.min_qty
+                    ? `${fmt(row.min_qty)}${row.min_source === 'default' ? ' <span class="code">(def.)</span>' : ''}`
+                    : '<span class="code">-</span>';
+                return `<tr>
+                    <td><span class="badge" data-status="${esc(row.status)}">${esc(row.status_label)}</span></td>
+                    <td class="name">${esc(row.name)}${row.default_code ? `<div class="code">${esc(row.default_code)}${row.category ? ' · ' + esc(row.category) : ''}</div>` : ''}</td>
+                    <td class="num">${fmt(row.qty_available)}</td>
+                    <td class="num">${fmt(row.outgoing_qty)}</td>
+                    <td class="num">${fmt(row.incoming_qty)}</td>
+                    <td class="num"><strong>${fmt(row.virtual_available)}</strong></td>
+                    <td class="num">${min}</td>
+                    <td class="num">${numberFormat.format(Number(row.daily_demand || 0))}</td>
+                    <td class="num">${coverage}</td>
+                    <td class="num">${row.suggested_qty ? fmt(row.suggested_qty) : '<span class="code">-</span>'}</td>
+                </tr>`;
+            }).join('');
+        }
+
+        async function loadReport() {
+            const meta = document.getElementById('report-meta');
+            try {
+                const report = await api(`/api/replenishment/report?${queryString()}`);
+                renderTiles(report.summary);
+                renderNotices(report);
+                renderRows(report.items || []);
+                meta.className = report.last_error ? 'meta error' : 'meta';
+                if (!report.generated_at) {
+                    meta.textContent = 'Todavia no se genero el tablero. Presiona "Actualizar desde Odoo".';
+                    return;
+                }
+                const parts = [
+                    `${report.total} productos mostrados`,
+                    `actualizado ${new Date(report.generated_at).toLocaleString()}`,
+                    `consumo calculado desde ${report.history_since}`,
+                ];
+                if (report.items.length < report.total) parts.unshift(`mostrando ${report.items.length} de ${report.total}`);
+                if (report.last_error) parts.push(`ultimo intento fallo: ${report.last_error}`);
+                meta.textContent = parts.join(' · ');
+            } catch (error) {
+                meta.className = 'meta error';
+                meta.textContent = `No se pudo cargar el tablero: ${error.message}`;
+            }
+        }
+
+        function scheduleLoad() {
+            clearTimeout(loadTimer);
+            loadTimer = setTimeout(loadReport, 300);
+        }
+
+        async function refreshReport() {
+            const btn = document.getElementById('refresh-btn');
+            const meta = document.getElementById('report-meta');
+            btn.disabled = true;
+            btn.textContent = 'Actualizando...';
+            meta.className = 'meta';
+            meta.textContent = 'Consultando Odoo, puede tardar unos segundos...';
+            try {
+                await api('/api/replenishment/refresh', { method: 'POST' });
+            } catch (error) {
+                meta.className = 'meta error';
+                meta.textContent = `No se pudo actualizar: ${error.message}`;
+            } finally {
+                btn.disabled = false;
+                btn.textContent = 'Actualizar desde Odoo';
+            }
+            if (!meta.classList.contains('error')) await loadReport();
+        }
+
+        async function exportReport(event) {
+            event.preventDefault();
+            if (!apiBase) await api('/api/replenishment/status');
+            window.location.href = `${apiBase}/api/replenishment/export?${queryString()}`;
+        }
+
+        async function loadConfig() {
+            try {
+                const cfg = await api('/api/replenishment/config');
+                document.getElementById('cfg-auto').checked = !!cfg.auto_refresh_enabled;
+                document.getElementById('cfg-interval').value = cfg.refresh_interval_minutes;
+                document.getElementById('cfg-history').value = cfg.history_days;
+                document.getElementById('cfg-low-coverage').value = cfg.low_coverage_days;
+                document.getElementById('cfg-target-coverage').value = cfg.target_coverage_days;
+                document.getElementById('cfg-default-min').value = cfg.default_min_qty;
+            } catch (error) {
+                document.getElementById('config-status').textContent = `No se pudo cargar la configuracion: ${error.message}`;
+            }
+        }
+
+        async function saveConfig() {
+            const status = document.getElementById('config-status');
+            const body = {
+                auto_refresh_enabled: document.getElementById('cfg-auto').checked,
+                refresh_interval_minutes: parseInt(document.getElementById('cfg-interval').value, 10),
+                history_days: parseInt(document.getElementById('cfg-history').value, 10),
+                low_coverage_days: parseInt(document.getElementById('cfg-low-coverage').value, 10),
+                target_coverage_days: parseInt(document.getElementById('cfg-target-coverage').value, 10),
+                default_min_qty: parseFloat(document.getElementById('cfg-default-min').value),
+            };
+            Object.keys(body).forEach(key => Number.isNaN(body[key]) && delete body[key]);
+            try {
+                await api('/api/replenishment/config', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(body),
+                });
+                status.className = 'meta';
+                status.textContent = 'Guardado. Los cambios de calculo se aplican en la proxima actualizacion.';
+                await loadConfig();
+            } catch (error) {
+                status.className = 'meta error';
+                status.textContent = `Error guardando: ${error.message}`;
+            }
+        }
+
+        renderTiles({});
+        loadConfig();
+        loadReport();
+        setInterval(() => { if (!document.hidden) loadReport(); }, 5 * 60 * 1000);
+    </script>
+</body>
+</html>

@@ -105,6 +105,27 @@ try:
 except ImportError as e:
     print(f"ADVERTENCIA: Endpoints de Conciliacion POS no disponibles: {e}")
 
+# Incluir endpoints del monitor de reposicion (solo lectura sobre Odoo)
+try:
+    from replenishment_endpoints import router as replenishment_router
+    app.include_router(replenishment_router)
+except ImportError as e:
+    print(f"ADVERTENCIA: Endpoints de Reposicion no disponibles: {e}")
+
+# Incluir endpoints de cobranzas y ventas sin facturar (solo lectura sobre Odoo)
+try:
+    from receivables_endpoints import router as receivables_router
+    app.include_router(receivables_router)
+except ImportError as e:
+    print(f"ADVERTENCIA: Endpoints de Cobranzas no disponibles: {e}")
+
+# Incluir resumen "Hoy" (agrega el estado de los demas modulos)
+try:
+    from today_endpoints import router as today_router
+    app.include_router(today_router)
+except ImportError as e:
+    print(f"ADVERTENCIA: Endpoints de Hoy no disponibles: {e}")
+
 # Incluir endpoints de activos locales de clientes
 try:
     from client_assets_endpoints import router as client_assets_router
@@ -208,6 +229,27 @@ async def startup_events():
         print(f"ADVERTENCIA: No se pudo iniciar worker Odoo: {e}")
 
     try:
+        from pos_reconciliation_worker import pos_reconciliation_worker
+
+        pos_reconciliation_worker.start()
+    except Exception as e:
+        print(f"ADVERTENCIA: No se pudo iniciar worker de conciliacion POS: {e}")
+
+    try:
+        from replenishment_monitor import replenishment_monitor
+
+        replenishment_monitor.start()
+    except Exception as e:
+        print(f"ADVERTENCIA: No se pudo iniciar monitor de reposicion: {e}")
+
+    try:
+        from receivables_monitor import receivables_monitor
+
+        receivables_monitor.start()
+    except Exception as e:
+        print(f"ADVERTENCIA: No se pudo iniciar monitor de cobranzas: {e}")
+
+    try:
         from administrado_integration import administrado_integration
 
         if (
@@ -234,6 +276,27 @@ async def shutdown_events():
         odoo_automation_worker.stop()
     except Exception as e:
         print(f"ADVERTENCIA: No se pudo detener worker Odoo: {e}")
+
+    try:
+        from pos_reconciliation_worker import pos_reconciliation_worker
+
+        pos_reconciliation_worker.stop()
+    except Exception as e:
+        print(f"ADVERTENCIA: No se pudo detener worker de conciliacion POS: {e}")
+
+    try:
+        from replenishment_monitor import replenishment_monitor
+
+        replenishment_monitor.stop()
+    except Exception as e:
+        print(f"ADVERTENCIA: No se pudo detener monitor de reposicion: {e}")
+
+    try:
+        from receivables_monitor import receivables_monitor
+
+        receivables_monitor.stop()
+    except Exception as e:
+        print(f"ADVERTENCIA: No se pudo detener monitor de cobranzas: {e}")
 
     try:
         ADMINISTRADO_REFRESH_STOP_EVENT.set()

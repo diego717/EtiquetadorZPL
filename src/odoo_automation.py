@@ -249,6 +249,7 @@ class OdooAutomationWorker:
         skipped_already = 0
         missing_order = 0
         errors = 0
+        note_errors = 0
         printed_envios: List[str] = []
 
         for sale in sales_to_process:
@@ -296,6 +297,26 @@ class OdooAutomationWorker:
                     )
                     continue
 
+                try:
+                    odoo_integration.post_sale_order_print_note(
+                        order_id=int(order["id"]),
+                        envio_id=envio_id,
+                        mode="both",
+                        order_printer=str(order_result.get("printer") or ""),
+                        label_printer=str(label_result.get("printer") or ""),
+                    )
+                except Exception as exc:
+                    note_errors += 1
+                    note_error = odoo_integration.humanize_exception(exc)
+                    logger.warning(
+                        "Impresion automatica correcta, pero fallo nota Odoo para envio %s: %s",
+                        envio_id,
+                        note_error,
+                    )
+                    self._push_event(
+                        f"Envio {envio_id}: impresion OK; no se pudo registrar nota Odoo ({note_error})"
+                    )
+
                 self._mark_processed(envio_id)
                 printed += 1
                 printed_envios.append(envio_id)
@@ -318,6 +339,7 @@ class OdooAutomationWorker:
             "skipped_reprint": skipped_reprint,
             "missing_order": missing_order,
             "errors": errors,
+            "note_errors": note_errors,
             "sales_count": len(sales),
             "selected_count": len(sales_to_process),
             "fetch_limit": fetch_limit,
