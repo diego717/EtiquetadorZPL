@@ -3,493 +3,376 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>EtiquetadorZPL - Dashboard</title>
+    <title>EtiquetadorZPL - Impresion</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Manrope:wght@400;500;600;700&display=swap">
+    <link rel="stylesheet" href="panel.css">
     <style>
-        * { margin: 0; padding: 0; box-sizing: border-box; }
-        body {
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            background: #f5f5f5;
-            color: #1f2937;
-            line-height: 1.35;
-        }
-        .container { max-width: 1200px; margin: 0 auto; padding: 20px; }
-        .header { background: #2c3e50; color: white; padding: 20px; border-radius: 8px; margin-bottom: 20px; }
-        .header h1 { font-size: 2.5rem; line-height: 1.1; margin-bottom: 4px; }
-        .header p { color: #e2e8f0; font-size: 1.05rem; }
-        .card { background: white; border-radius: 8px; padding: 20px; margin-bottom: 20px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
-        .card h2 { margin-bottom: 12px; font-size: 1.7rem; line-height: 1.15; color: #111827; }
-        .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 20px; margin-bottom: 20px; }
-        .grid > * { min-width: 0; }
-        .btn {
-            background: #3498db;
-            color: white;
-            border: none;
-            padding: 9px 14px;
-            border-radius: 6px;
-            cursor: pointer;
-            text-decoration: none;
-            display: inline-flex;
-            align-items: center;
-            justify-content: center;
-            min-height: 36px;
-            line-height: 1.2;
-            font-size: 14px;
-            font-weight: 600;
-        }
-        .btn:hover { background: #2980b9; }
-        .btn:focus-visible {
-            outline: none;
-            box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.22);
-        }
-        .btn.secondary { background: #64748b; }
-        .btn.secondary:hover { background: #475569; }
-        .btn-row { margin-top: 14px; display: flex; gap: 10px; flex-wrap: wrap; }
-        .header-actions { margin-top: 12px; display: flex; gap: 10px; flex-wrap: wrap; }
-        #theme-toggle-btn { min-width: 132px; }
-        .muted { color: #666; font-size: 14px; }
-        .status { padding: 4px 8px; border-radius: 6px; font-size: 12px; font-weight: 600; }
-        .status.completed { background: #d4edda; color: #155724; }
-        .status.processing { background: #fff3cd; color: #856404; }
-        .status.failed { background: #f8d7da; color: #721c24; }
-        .status.queued { background: #eef2ff; color: #3730a3; }
-        table { width: 100%; border-collapse: collapse; }
-        th, td { padding: 11px 12px; text-align: left; border-bottom: 1px solid #e5e7eb; font-size: 14px; }
-        th { background: #f8f9fa; color: #4b5563; font-size: 12px; text-transform: uppercase; letter-spacing: .02em; }
-        td { overflow-wrap: anywhere; word-break: break-word; }
-        .table-scroll { overflow-x: auto; border: 1px solid #e5e7eb; border-radius: 8px; }
-        .table-scroll table { min-width: 860px; }
-        .stats { display: flex; justify-content: space-around; text-align: center; gap: 20px; }
-        .stat-item h3 { color: #3498db; font-size: 2em; margin-bottom: 5px; }
-        .stat-item p { color: #475569; }
-        .printer-item {
-            padding: 6px 8px;
-            border-left: 3px solid #3498db;
-            margin: 5px 0;
-            background: #f8f9fa;
-            border-radius: 0 4px 4px 0;
-            overflow-wrap: anywhere;
-            word-break: break-word;
-        }
-        .network-box {
-            margin-bottom: 15px;
-            padding: 10px;
-            background: #e8f4f8;
-            border-radius: 6px;
-            border: 1px solid #cfe6ef;
-        }
-
-        html[data-theme="dark"] body {
-            background: #0b1220;
-            color: #e5edf8;
-        }
-        html[data-theme="dark"] .header {
-            background: #0f1c33;
-            border: 1px solid #2e435f;
-        }
-        html[data-theme="dark"] .header p,
-        html[data-theme="dark"] .muted {
-            color: #9fb2ce;
-        }
-        html[data-theme="dark"] .card {
-            background: #111c31;
-            border: 1px solid #2a3f5b;
-            box-shadow: 0 10px 24px rgba(0,0,0,0.35);
-        }
-        html[data-theme="dark"] .card h2 {
-            color: #eef4ff;
-        }
-        html[data-theme="dark"] .btn {
-            background: linear-gradient(135deg, #2d83d6, #1f6ab8);
-            color: #f7fbff;
-            border: 1px solid #4e93d6;
-            box-shadow: 0 6px 14px rgba(12, 36, 66, 0.42);
-        }
-        html[data-theme="dark"] .btn:hover {
-            background: linear-gradient(135deg, #3a93eb, #2b78c8);
-            border-color: #79afe3;
-        }
-        html[data-theme="dark"] .btn:focus-visible {
-            box-shadow: 0 0 0 3px rgba(103, 175, 240, 0.28), 0 6px 14px rgba(12, 36, 66, 0.42);
-        }
-        html[data-theme="dark"] .btn.secondary {
-            background: #202f46;
-            color: #e4edfa;
-            border-color: #526784;
-        }
-        html[data-theme="dark"] .btn.secondary:hover {
-            background: #2a3c57;
-            border-color: #6a83a7;
-        }
-        html[data-theme="dark"] .table-scroll {
-            border-color: #31445f;
-            background: #0f182b;
-        }
-        html[data-theme="dark"] th,
-        html[data-theme="dark"] td {
-            border-bottom-color: #2c3f5a;
-        }
-        html[data-theme="dark"] th {
-            background: #1a2942;
-            color: #a6bbd8;
-        }
-        html[data-theme="dark"] td {
-            color: #d9e5f7;
-        }
-        html[data-theme="dark"] .stat-item p {
-            color: #a9bdd8;
-        }
-        html[data-theme="dark"] .printer-item {
-            background: #16233a;
-            border-left-color: #49a6e8;
-        }
-        html[data-theme="dark"] .network-box {
-            background: #162742;
-            border-color: #365071;
-        }
-        html[data-theme="dark"] .status.completed { background: #1f4630; color: #9ce0bc; }
-        html[data-theme="dark"] .status.failed { background: #4b212a; color: #f4b9c0; }
-        html[data-theme="dark"] .status.processing { background: #4a3a1a; color: #f3d79d; }
-        html[data-theme="dark"] .status.queued { background: #222f58; color: #bfcaf8; }
-        @media (max-width: 900px) {
-            .container { padding: 14px; }
-            .header { padding: 16px; }
-            .header h1 { font-size: 2.1rem; }
-            .card { padding: 16px; }
-            .stats { flex-direction: column; align-items: stretch; }
-        }
+        .printer-row td.name strong { display: block; }
+        .state { display: inline-flex; align-items: center; gap: 6px; font-weight: 700; font-size: 0.85rem; }
+        .state::before { content: ""; width: 9px; height: 9px; border-radius: 50%; background: var(--line-strong); }
+        .state[data-state="ok"]::before { background: var(--success); }
+        .state[data-state="busy"]::before { background: var(--warn); }
+        .state[data-state="error"]::before { background: var(--danger); }
+        .state[data-state="error"] { color: var(--danger); }
+        .chip { display: inline-block; padding: 1px 8px; border-radius: 999px; font-size: 0.78rem; font-weight: 700; border: 1px solid var(--line-strong); }
+        .chip.ok { color: var(--success); border-color: var(--success); }
+        .chip.fail { color: var(--danger); border-color: var(--danger); }
+        .chip.wait { color: var(--warn); border-color: var(--warn); }
+        .section-title { font-family: 'Space Grotesk', sans-serif; font-size: 1.1rem; margin: 22px 0 10px; display: flex; justify-content: space-between; align-items: baseline; gap: 10px; flex-wrap: wrap; }
+        .two-col { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 12px; }
+        .kv { display: grid; grid-template-columns: max-content 1fr; gap: 6px 14px; font-size: 0.9rem; margin-bottom: 12px; }
+        .kv dt { color: var(--text-1); }
+        .all-printers { columns: 2 220px; font-size: 0.88rem; margin-top: 10px; }
+        .all-printers li { break-inside: avoid; padding: 2px 0; list-style: none; }
+        table.compact { min-width: 760px; }
+        td.err { white-space: normal; min-width: 220px; color: var(--danger); font-size: 0.85rem; }
     </style>
 </head>
 <body>
     <div class="container">
-        <div class="header">
-            <h1>EtiquetadorZPL Dashboard</h1>
-            <p>Sistema de gestion de etiquetas ZPL</p>
-            <div class="header-actions">
-                <button id="theme-toggle-btn" class="btn secondary" onclick="toggleTheme()">Tema oscuro</button>
-                <a href="config.html" class="btn">Configuracion</a>
-                <a href="config.html?view=pos#pos-reconciliation-section" class="btn">Conciliacion POS</a>
-                <a href="cloud.html" class="btn">Cloud</a>
+        <header>
+            <div>
+                <h1>Impresion</h1>
+                <p class="sub">Estado de las impresoras del despacho, lo impreso hoy y los trabajos del sistema.</p>
             </div>
+            <div class="toolbar">
+                <button class="btn secondary" id="theme-btn" onclick="panelToggleTheme(this)">Tema claro</button>
+                <a class="btn secondary" href="cloud.html">Cloud</a>
+                <button class="btn" id="refresh-btn" onclick="loadAll()">Actualizar</button>
+            </div>
+        </header>
+
+        <nav aria-label="Paginas">
+            <a href="hoy.html">Hoy</a>
+            <a href="config.html?view=administrado#administrado">Envios Administrado</a>
+            <a href="config.html">Configuracion</a>
+            <a href="config.html?view=pos#pos-reconciliation-section">Conciliacion POS</a>
+            <a href="reposicion.html">Reposicion</a>
+            <a href="cobranzas.html">Cobranzas</a>
+            <a href="index.html" class="active" aria-current="page">Impresion</a>
+        </nav>
+
+        <div id="notices"></div>
+        <div class="tiles" id="tiles"></div>
+
+        <!-- Impresoras del flujo -->
+        <h2 class="section-title"><span>Impresoras del despacho</span><span class="meta" id="printers-meta" style="margin:0;"></span></h2>
+        <div class="table-scroll">
+            <table class="compact">
+                <thead>
+                    <tr><th>Impresora</th><th>Estado</th><th class="num">En cola</th><th>Red</th><th></th></tr>
+                </thead>
+                <tbody id="printers-body"><tr><td colspan="5" class="empty">Cargando...</td></tr></tbody>
+            </table>
+        </div>
+        <details class="panel" style="margin-top:10px;">
+            <summary id="all-printers-summary">Todas las impresoras instaladas</summary>
+            <ul class="all-printers" id="all-printers"></ul>
+        </details>
+
+        <!-- Envios impresos -->
+        <h2 class="section-title"><span>Ultimas impresiones de envios</span><a class="link" href="config.html?view=administrado#administrado">Ir a envios &rsaquo;</a></h2>
+        <div class="table-scroll">
+            <table class="compact">
+                <thead>
+                    <tr><th>Hora</th><th>Envio</th><th>Documentos</th><th>Impresoras</th><th>Resultado</th></tr>
+                </thead>
+                <tbody id="prints-body"><tr><td colspan="5" class="empty">Cargando...</td></tr></tbody>
+            </table>
         </div>
 
-        <div class="grid">
-            <div class="card">
-                <h2>Estadisticas</h2>
-                <div class="stats" id="stats">
-                    <div class="stat-item">
-                        <h3 id="total-jobs">-</h3>
-                        <p>Total Trabajos</p>
-                    </div>
-                    <div class="stat-item">
-                        <h3 id="completed-jobs">-</h3>
-                        <p>Completados</p>
-                    </div>
-                    <div class="stat-item">
-                        <h3 id="failed-jobs">-</h3>
-                        <p>Fallidos</p>
-                    </div>
+        <!-- Trabajos del sistema -->
+        <h2 class="section-title"><span>Trabajos del sistema</span><span class="meta" style="margin:0;">Archivos enviados a imprimir por la app (ordenes, etiquetas, PDFs)</span></h2>
+        <div class="table-scroll">
+            <table class="compact">
+                <thead>
+                    <tr><th>#</th><th>Archivo</th><th>Impresora</th><th>Estado</th><th>Creado</th><th class="num">Duracion</th></tr>
+                </thead>
+                <tbody id="jobs-body"><tr><td colspan="6" class="empty">Cargando...</td></tr></tbody>
+            </table>
+        </div>
+
+        <div class="two-col" style="margin-top:22px;">
+            <section class="card" id="meli-card">
+                <h2><span>Mercado Libre</span><a class="link" href="config.html#mercadolibre">Configurar &rsaquo;</a></h2>
+                <dl class="kv" id="meli-kv"><dt>Estado</dt><dd>Cargando...</dd></dl>
+            </section>
+
+            <section class="card">
+                <h2><span>Exportar facturas Odoo</span></h2>
+                <p class="muted" style="font-size:.88rem;">Listado de ventas facturadas en un rango, en CSV para abrir con Excel.</p>
+                <div class="toolbar">
+                    <label class="field">Desde <input id="invoice-from" type="date"></label>
+                    <label class="field">Hasta <input id="invoice-to" type="date"></label>
+                    <button class="btn" onclick="exportInvoicedSales()">Descargar CSV</button>
                 </div>
-            </div>
-
-            <div class="card">
-                <h2>Impresoras</h2>
-                <div id="printers">Cargando...</div>
-                <button class="btn" onclick="refreshPrinters()">Actualizar</button>
-            </div>
-
-            <div class="card">
-                <h2>Mercado Libre</h2>
-                <p class="muted" style="margin-bottom: 10px;">Estado de la integracion directa de etiquetas</p>
-                <p>Configurado: <span id="meli-configured">-</span></p>
-                <p>Autenticado: <span id="meli-authenticated">-</span></p>
-                <p>Usuario: <span id="meli-user">-</span></p>
-                <div class="btn-row">
-                    <a href="config.html#mercadolibre" class="btn">Configurar</a>
-                    <button class="btn" onclick="loadMercadoLibreStatus()">Actualizar</button>
-                </div>
-            </div>
-        </div>
-
-        <div class="card">
-            <h2>Impresoras de Red</h2>
-            <p class="muted" style="margin-bottom: 10px;">Impresoras de red detectadas en el sistema</p>
-            <div id="network-printers" class="network-box">
-                <strong>Impresoras de red detectadas:</strong>
-                <span id="network-printers-list">Cargando...</span>
-            </div>
-            <button class="btn" onclick="loadNetworkPrinters()">Actualizar Impresoras de Red</button>
-        </div>
-
-        <div class="card">
-            <h2>Exportar facturas Odoo</h2>
-            <p class="muted" style="margin-bottom: 10px;">Selecciona un rango de fechas y descarga un listado de ventas facturadas desde Odoo.</p>
-            <div class="grid" style="grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 14px; align-items: end;">
-                <label style="display:block;">
-                    Desde
-                    <input id="invoice-from" type="date" style="width:100%; margin-top:6px; padding:8px; border-radius:6px; border:1px solid #d1d5db;" />
-                </label>
-                <label style="display:block;">
-                    Hasta
-                    <input id="invoice-to" type="date" style="width:100%; margin-top:6px; padding:8px; border-radius:6px; border:1px solid #d1d5db;" />
-                </label>
-                <div>
-                    <button class="btn" onclick="exportInvoicedSales()">Descargar Excel</button>
-                </div>
-            </div>
-            <p class="muted" id="invoice-export-status" style="margin-top: 12px;">Selecciona fechas y presiona Descargar Excel.</p>
-        </div>
-
-        <div class="card">
-            <h2>Trabajos Recientes</h2>
-            <div class="table-scroll">
-                <table id="jobs-table">
-                    <thead>
-                        <tr>
-                            <th>ID</th>
-                            <th>Archivo</th>
-                            <th>Usuario</th>
-                            <th>Equipo</th>
-                            <th>Impresora</th>
-                            <th>Estado</th>
-                            <th>Creado</th>
-                        </tr>
-                    </thead>
-                    <tbody id="jobs-body">
-                        <tr><td colspan="7">Cargando...</td></tr>
-                    </tbody>
-                </table>
-            </div>
-            <div class="btn-row">
-                <button class="btn" onclick="refreshJobs()">Actualizar</button>
-            </div>
-        </div>
-
-        <div class="card">
-            <h2>Registro de Usuarios</h2>
-            <p class="muted" style="margin-bottom: 10px;">Historial de documentos enviados por usuario y equipo</p>
-            <div class="table-scroll">
-                <table id="users-table">
-                    <thead>
-                        <tr>
-                            <th>Usuario</th>
-                            <th>Equipo</th>
-                            <th>Total</th>
-                            <th>Exitosos</th>
-                            <th>Fallidos</th>
-                        </tr>
-                    </thead>
-                    <tbody id="users-body">
-                        <tr><td colspan="5">Cargando...</td></tr>
-                    </tbody>
-                </table>
-            </div>
-            <div class="btn-row">
-                <button class="btn" onclick="loadUserStats()">Actualizar Registro</button>
-            </div>
+                <p class="meta" id="invoice-export-status" role="status"></p>
+            </section>
         </div>
     </div>
 
     <script src="config.js"></script>
+    <script src="theme-fx.js"></script>
+    <script src="panel.js"></script>
     <script>
-        const THEME_STORAGE_KEY = 'etiquetador_ui_theme';
-        let currentTheme = 'light';
+        const MODE_LABELS = { both: 'Orden + etiqueta', order_only: 'Solo orden', label_only: 'Solo etiqueta' };
+        const JOB_STATUS = {
+            completed: ['ok', 'Completado'], failed: ['fail', 'Fallido'], processing: ['wait', 'Procesando'],
+            pending: ['wait', 'En espera'], queued: ['wait', 'En cola'], cancelled: ['', 'Cancelado'],
+        };
+        let printerSummary = { queued: 0, problems: 0 };
+        let staleJobs = [];
+        let todayPrints = { ok: 0, failed: 0 };
 
-        function updateThemeToggleButton() {
-            const btn = document.getElementById('theme-toggle-btn');
-            if (!btn) return;
-            btn.textContent = currentTheme === 'dark' ? 'Tema claro' : 'Tema oscuro';
-            btn.setAttribute('aria-label', currentTheme === 'dark' ? 'Cambiar a tema claro' : 'Cambiar a tema oscuro');
+        document.getElementById('theme-btn').textContent = panelCurrentTheme() === 'light' ? 'Tema oscuro' : 'Tema claro';
+
+        function renderTiles() {
+            document.getElementById('tiles').innerHTML = [
+                `<div class="tile static ${todayPrints.ok ? 'good' : ''}"><div class="value">${panelNumber.format(todayPrints.ok)}</div><div class="label">Envios impresos hoy</div></div>`,
+                `<div class="tile static ${todayPrints.failed ? 'warn' : ''}"><div class="value">${panelNumber.format(todayPrints.failed)}</div><div class="label">Envios con falla sin resolver hoy</div></div>`,
+                `<div class="tile static ${printerSummary.problems ? 'alert' : 'good'}"><div class="value">${panelNumber.format(printerSummary.problems)}</div><div class="label">Impresoras con problemas</div></div>`,
+                `<div class="tile static ${printerSummary.queued ? 'warn' : ''}"><div class="value">${panelNumber.format(printerSummary.queued)}</div><div class="label">Trabajos en cola de Windows</div></div>`,
+            ].join('');
         }
 
-        function applyTheme(theme, persist = true) {
-            currentTheme = theme === 'dark' ? 'dark' : 'light';
-            document.documentElement.setAttribute('data-theme', currentTheme);
-            updateThemeToggleButton();
-            if (!persist) return;
-            try {
-                localStorage.setItem(THEME_STORAGE_KEY, currentTheme);
-            } catch (e) {
-                // Ignorar si localStorage no esta disponible.
-            }
-        }
-
-        function initTheme() {
-            let stored = null;
-            try {
-                stored = localStorage.getItem(THEME_STORAGE_KEY);
-            } catch (e) {
-                stored = null;
-            }
-            applyTheme(stored === 'dark' ? 'dark' : 'light', false);
-        }
-
-        function toggleTheme() {
-            applyTheme(currentTheme === 'dark' ? 'light' : 'dark', true);
-        }
-
-        async function fetchAPI(endpoint) {
-            try {
-                if (!API_BASE || API_BASE.includes('8003')) {
-                    const port = await getApiPort();
-                    API_BASE = `http://localhost:${port}`;
-                }
-
-                const response = await fetch(`${API_BASE}${endpoint}`);
-                if (!response.ok) {
-                    throw new Error(`HTTP ${response.status}`);
-                }
-                return await response.json();
-            } catch (error) {
-                console.error('Error:', error);
-                return null;
-            }
-        }
-
-        async function loadStatistics() {
-            const stats = await fetchAPI('/api/statistics');
-            if (stats) {
-                document.getElementById('total-jobs').textContent = stats.total_jobs || 0;
-                document.getElementById('completed-jobs').textContent = stats.completed || 0;
-                document.getElementById('failed-jobs').textContent = stats.failed || 0;
-            }
+        function stateLabel(p) {
+            if (!p.installed) return p.error || 'No instalada';
+            if (p.problems.length) return p.problems.join(', ');
+            if (p.network_reachable === false) return 'No responde en la red';
+            if (p.jobs) return 'Imprimiendo / con cola';
+            return 'Lista';
         }
 
         async function loadPrinters() {
-            const data = await fetchAPI('/api/printers');
-            const printersDiv = document.getElementById('printers');
+            const body = document.getElementById('printers-body');
+            try {
+                const data = await panelApi('/api/printing/printers');
+                printerSummary = {
+                    queued: data.items.reduce((acc, p) => acc + (p.jobs || 0), 0),
+                    problems: data.items.filter(p => p.state === 'error').length,
+                };
+                body.innerHTML = data.items.length ? data.items.map((p, index) => `
+                    <tr class="printer-row">
+                        <td class="name"><strong>${esc(p.name)}</strong><span class="code">${esc(p.roles.join(' · '))}</span></td>
+                        <td><span class="state" data-state="${esc(p.state)}">${esc(stateLabel(p))}</span></td>
+                        <td class="num">${p.jobs ?? '-'}</td>
+                        <td>${p.host
+                            ? `${esc(p.host)} ${p.network_reachable ? '<span class="chip ok">responde</span>' : '<span class="chip fail">no responde</span>'}`
+                            : '<span class="code">sin IP directa</span>'}</td>
+                        <td>${p.installed ? `<button class="btn small secondary" onclick="toggleQueue(${index}, ${JSON.stringify(p.name).replace(/"/g, '&quot;')})">Ver cola</button>` : ''}</td>
+                    </tr>
+                    <tr class="detail" id="queue-${index}" hidden><td colspan="5"></td></tr>`).join('')
+                    : '<tr><td colspan="5" class="empty">No hay impresoras configuradas en Odoo / Mercado Libre</td></tr>';
+                document.getElementById('printers-meta').textContent = `Revisado ${new Date(data.checked_at).toLocaleTimeString()}`;
+            } catch (error) {
+                body.innerHTML = `<tr><td colspan="5" class="empty">No se pudo leer el estado: ${esc(error.message)}</td></tr>`;
+            }
+            renderTiles();
+        }
 
-            if (data && data.printers) {
-                printersDiv.innerHTML = data.printers.map(printer =>
-                    `<div class="printer-item">${printer}</div>`
-                ).join('');
-            } else {
-                printersDiv.innerHTML = '<p>No se pudieron cargar las impresoras</p>';
+        // PowerShell serializa las fechas como "/Date(1759849200000)/".
+        function spoolerDate(value) {
+            const match = String(value || '').match(/\/Date\((\d+)\)\//);
+            return match ? new Date(Number(match[1])).toLocaleString() : String(value || '');
+        }
+
+        async function toggleQueue(index, name) {
+            const row = document.getElementById(`queue-${index}`);
+            row.hidden = !row.hidden;
+            if (row.hidden) return;
+            const cell = row.firstElementChild;
+            cell.textContent = 'Consultando cola de Windows...';
+            try {
+                const data = await panelApi(`/api/printing/printers/${encodeURIComponent(name)}/queue`);
+                cell.innerHTML = data.jobs.length
+                    ? `<table><thead><tr><th>Documento</th><th>Estado</th><th>Enviado</th><th>Usuario</th></tr></thead><tbody>${data.jobs.map(j => `<tr>
+                        <td>${esc(j.document || j.document_name || j.name || '-')}</td><td>${esc(j.status)}</td>
+                        <td>${esc(spoolerDate(j.submitted_time))}</td><td>${esc(j.owner || '')}</td></tr>`).join('')}</tbody></table>`
+                    : 'La cola esta vacia.';
+            } catch (error) {
+                cell.textContent = `No se pudo leer la cola: ${error.message}`;
             }
         }
 
-        async function loadNetworkPrinters() {
-            const networkData = await fetchAPI('/api/printers/network');
-            const printersList = document.getElementById('network-printers-list');
-
-            if (networkData && networkData.printers) {
-                printersList.textContent = networkData.printers.length > 0
-                    ? networkData.printers.join(', ')
-                    : 'No hay impresoras de red detectadas';
+        async function loadAllPrinters() {
+            try {
+                const [all, network] = await Promise.all([panelApi('/api/printers'), panelApi('/api/printers/network')]);
+                const net = new Set(network.printers || []);
+                document.getElementById('all-printers-summary').textContent = `Todas las impresoras instaladas (${all.count})`;
+                document.getElementById('all-printers').innerHTML = (all.printers || [])
+                    .map(name => `<li>${esc(name)}${net.has(name) ? ' <span class="code">· red</span>' : ''}</li>`).join('');
+            } catch (error) {
+                document.getElementById('all-printers').innerHTML = `<li class="muted">${esc(error.message)}</li>`;
             }
+        }
+
+        async function loadPrints() {
+            const body = document.getElementById('prints-body');
+            try {
+                const data = await panelApi('/api/administrado/prints/history?limit=200');
+                const items = (data.items || []).slice().sort((a, b) => String(b.timestamp).localeCompare(String(a.timestamp)));
+                const today = new Date().toDateString();
+                const todays = items.filter(i => new Date(i.timestamp).toDateString() === today);
+                // Una falla queda resuelta si el mismo envio se imprimio bien despues.
+                const lastSuccessAt = {};
+                items.forEach(i => {
+                    if (i.success && !(lastSuccessAt[i.envio_id] > i.timestamp)) lastSuccessAt[i.envio_id] = i.timestamp;
+                });
+                const resolved = i => !i.success && lastSuccessAt[i.envio_id] > i.timestamp;
+                todayPrints = {
+                    ok: new Set(todays.filter(i => i.success).map(i => i.envio_id)).size,
+                    failed: new Set(todays.filter(i => !i.success && !resolved(i)).map(i => i.envio_id)).size,
+                };
+                body.innerHTML = items.length ? items.slice(0, 15).map(i => {
+                    const when = new Date(i.timestamp);
+                    const sameDay = when.toDateString() === today;
+                    const printers = [i.order_printer, i.label_printer].filter(Boolean).map(esc).join(' · ');
+                    return `<tr>
+                        <td>${sameDay ? when.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : when.toLocaleString([], { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}</td>
+                        <td>${esc(i.envio_id)}</td>
+                        <td>${esc(MODE_LABELS[i.mode] || i.state_label || i.mode)}</td>
+                        <td>${printers || '<span class="code">-</span>'}</td>
+                        ${i.success
+                            ? '<td><span class="chip ok">Impreso</span></td>'
+                            : resolved(i)
+                                ? `<td class="name"><span class="chip">Fallo, reimpreso despues</span><div class="code">${esc(i.error || '')}</div></td>`
+                                : `<td class="err">${esc(i.error || 'Fallo')}</td>`}
+                    </tr>`;
+                }).join('') : '<tr><td colspan="5" class="empty">Todavia no hay impresiones registradas</td></tr>';
+            } catch (error) {
+                body.innerHTML = `<tr><td colspan="5" class="empty">No se pudo cargar el historial: ${esc(error.message)}</td></tr>`;
+            }
+            renderTiles();
         }
 
         async function loadJobs() {
-            const data = await fetchAPI('/api/jobs');
-            const tbody = document.getElementById('jobs-body');
-
-            if (data && data.jobs) {
-                tbody.innerHTML = data.jobs.map(job => `
-                    <tr>
+            const body = document.getElementById('jobs-body');
+            try {
+                const [data, stale] = await Promise.all([panelApi('/api/jobs'), panelApi('/api/printing/stale-jobs')]);
+                staleJobs = stale.items || [];
+                body.innerHTML = (data.jobs || []).length ? data.jobs.map(job => {
+                    const [tone, label] = JOB_STATUS[job.status] || ['', job.status];
+                    return `<tr>
                         <td>${job.id}</td>
-                        <td>${job.filename}</td>
-                        <td>${job.username || '-'}</td>
-                        <td>${job.hostname || '-'}</td>
-                        <td>${job.printer}</td>
-                        <td><span class="status ${job.status}">${job.status}</span></td>
-                        <td>${new Date(job.created_at).toLocaleString()}</td>
-                    </tr>
-                `).join('');
-            } else {
-                tbody.innerHTML = '<tr><td colspan="7">No se pudieron cargar los trabajos</td></tr>';
+                        <td class="name">${esc(job.filename)}${job.error_message ? `<div class="code">${esc(job.error_message)}</div>` : ''}</td>
+                        <td>${esc(job.printer)}</td>
+                        <td><span class="chip ${tone}">${esc(label)}</span></td>
+                        <td>${esc(sqliteUtcToLocal(job.created_at))}</td>
+                        <td class="num">${job.processing_time ? `${Number(job.processing_time).toFixed(1)} s` : '-'}</td>
+                    </tr>`;
+                }).join('') : '<tr><td colspan="6" class="empty">No hay trabajos registrados</td></tr>';
+            } catch (error) {
+                body.innerHTML = `<tr><td colspan="6" class="empty">No se pudieron cargar los trabajos: ${esc(error.message)}</td></tr>`;
+            }
+            renderNotices();
+        }
+
+        function renderNotices() {
+            const notices = document.getElementById('notices');
+            if (!staleJobs.length) {
+                notices.innerHTML = '';
+                return;
+            }
+            const oldest = sqliteUtcToLocal(staleJobs[0].created_at);
+            notices.innerHTML = `<div class="notice" style="display:flex;flex-wrap:wrap;gap:10px;align-items:center;justify-content:space-between;">
+                <span>${staleJobs.length} trabajo(s) quedaron colgados en "procesando" o "en espera" (el mas viejo del ${esc(oldest)}). No afectan la impresion, pero distorsionan las estadisticas.</span>
+                <button class="btn small secondary" onclick="closeStaleJobs()">Marcarlos como fallidos</button>
+            </div>`;
+        }
+
+        async function closeStaleJobs() {
+            try {
+                const result = await panelApi('/api/printing/stale-jobs/close', { method: 'POST' });
+                staleJobs = [];
+                renderNotices();
+                await loadJobs();
+                document.getElementById('printers-meta').textContent = `${result.closed} trabajo(s) cerrados`;
+            } catch (error) {
+                alert(`No se pudieron cerrar: ${error.message}`);
             }
         }
 
-        async function loadUserStats() {
-            const data = await fetchAPI('/api/statistics/users');
-            const tbody = document.getElementById('users-body');
-
-            if (data && data.users) {
-                if (data.users.length === 0) {
-                    tbody.innerHTML = '<tr><td colspan="5">No hay datos de usuarios</td></tr>';
-                } else {
-                    tbody.innerHTML = data.users.map(user => `
-                        <tr>
-                            <td><strong>${user.username}</strong></td>
-                            <td>${user.hostname}</td>
-                            <td>${user.total}</td>
-                            <td><span class="status completed">${user.completed}</span></td>
-                            <td><span class="status failed">${user.failed}</span></td>
-                        </tr>
-                    `).join('');
-                }
-            } else {
-                tbody.innerHTML = '<tr><td colspan="5">No se pudieron cargar las estadisticas</td></tr>';
+        async function loadMercadoLibre() {
+            const kv = document.getElementById('meli-kv');
+            const card = document.getElementById('meli-card');
+            try {
+                const data = await panelApi('/api/mercadolibre/status');
+                const expires = data.expires_at ? new Date(data.expires_at * 1000) : null;
+                const expired = expires && expires.getTime() < Date.now();
+                card.dataset.tone = !data.configured || !data.authenticated || data.last_error ? 'alert' : 'good';
+                const rows = [
+                    ['Estado', data.authenticated ? 'Conectado' : data.configured ? 'Configurado, sin sesion' : 'Sin configurar'],
+                    ['Cuenta', data.nickname || data.user_id || '-'],
+                    ['Token', !expires ? '-' : expired
+                        ? `vencio ${expires.toLocaleString()}; se renueva solo al proximo uso`
+                        : `vigente hasta ${expires.toLocaleString()}`],
+                    ['Ultimo login', data.last_oauth_at || '-'],
+                ];
+                if (data.last_error) rows.push(['Ultimo error', data.last_error]);
+                kv.innerHTML = rows.map(([k, v]) => `<dt>${esc(k)}</dt><dd>${esc(v)}</dd>`).join('');
+            } catch (error) {
+                card.dataset.tone = 'alert';
+                kv.innerHTML = `<dt>Estado</dt><dd>${esc(error.message)}</dd>`;
             }
-        }
-
-        async function loadMercadoLibreStatus() {
-            const data = await fetchAPI('/api/mercadolibre/status');
-            document.getElementById('meli-configured').textContent = data?.configured ? 'Si' : 'No';
-            document.getElementById('meli-authenticated').textContent = data?.authenticated ? 'Si' : 'No';
-            document.getElementById('meli-user').textContent = data?.nickname || data?.user_id || '-';
         }
 
         async function exportInvoicedSales() {
-            const statusElement = document.getElementById('invoice-export-status');
+            const status = document.getElementById('invoice-export-status');
             const dateFrom = document.getElementById('invoice-from').value;
             const dateTo = document.getElementById('invoice-to').value;
-            const payload = {
-                date_from: dateFrom,
-                date_to: dateTo,
-            };
-
-            statusElement.textContent = 'Generando archivo...';
-
+            status.className = 'meta';
+            status.textContent = 'Generando archivo...';
             try {
-                await ensureApiPort();
-                const response = await fetch(`${API_BASE}/api/odoo/invoices/export`, {
+                const base = await panelApiBaseUrl();
+                const response = await fetch(`${base}/api/odoo/invoices/export`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(payload),
+                    body: JSON.stringify({ date_from: dateFrom, date_to: dateTo }),
                 });
-
                 if (!response.ok) {
-                    const errorText = await response.text();
-                    throw new Error(errorText || `HTTP ${response.status}`);
+                    const detail = await response.json().then(d => d.detail).catch(() => '');
+                    throw new Error(detail || `HTTP ${response.status}`);
                 }
-
                 const blob = await response.blob();
-                const disposition = response.headers.get('content-disposition') || '';
-                const filenameMatch = disposition.match(/filename=(.+)/);
-                const filename = filenameMatch ? filenameMatch[1].replace(/"/g, '') : `facturas_${dateFrom || 'desde'}_${dateTo || 'hasta'}.csv`;
-                const downloadUrl = URL.createObjectURL(blob);
-                const link = document.createElement('a');
-                link.href = downloadUrl;
-                link.download = filename;
+                const match = (response.headers.get('content-disposition') || '').match(/filename=(.+)/);
+                const filename = match ? match[1].replace(/"/g, '') : `facturas_${dateFrom || 'desde'}_${dateTo || 'hasta'}.csv`;
+                const url = URL.createObjectURL(blob);
+                const link = Object.assign(document.createElement('a'), { href: url, download: filename });
                 document.body.appendChild(link);
                 link.click();
                 link.remove();
-                URL.revokeObjectURL(downloadUrl);
-                statusElement.textContent = `Archivo generado: ${filename}`;
+                URL.revokeObjectURL(url);
+                status.textContent = `Archivo generado: ${filename}`;
             } catch (error) {
-                statusElement.textContent = `Error: ${error.message}`;
-                console.error(error);
+                status.className = 'meta error';
+                status.textContent = `Error: ${error.message}`;
             }
         }
 
-        function refreshPrinters() { loadPrinters(); }
-        function refreshJobs() { loadJobs(); }
+        (function initInvoiceDates() {
+            const today = new Date();
+            const first = new Date(today.getFullYear(), today.getMonth(), 1);
+            const iso = d => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+            document.getElementById('invoice-from').value = iso(first);
+            document.getElementById('invoice-to').value = iso(today);
+        })();
 
-        initTheme();
-        loadStatistics();
-        loadPrinters();
-        loadNetworkPrinters();
-        loadJobs();
-        loadUserStats();
-        loadMercadoLibreStatus();
+        async function loadAll() {
+            const btn = document.getElementById('refresh-btn');
+            btn.disabled = true;
+            await Promise.all([loadPrinters(), loadPrints(), loadJobs(), loadMercadoLibre()]);
+            btn.disabled = false;
+        }
 
+        renderTiles();
+        loadAll();
+        loadAllPrinters();
         setInterval(() => {
-            loadStatistics();
+            if (document.hidden) return;
             loadPrinters();
-            loadNetworkPrinters();
+            loadPrints();
             loadJobs();
-            loadUserStats();
-            loadMercadoLibreStatus();
         }, 30000);
     </script>
 </body>

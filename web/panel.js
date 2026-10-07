@@ -55,3 +55,27 @@ function timeAgo(value) {
     if (hours < 24) return `hace ${hours} h`;
     return `hace ${Math.round(hours / 24)} d`;
 }
+
+function panelCurrentTheme() {
+    return document.documentElement.getAttribute('data-theme') === 'light' ? 'light' : 'dark';
+}
+
+function panelToggleTheme(button) {
+    const next = panelCurrentTheme() === 'light' ? 'dark' : 'light';
+    const apply = () => {
+        if (next === 'light') document.documentElement.setAttribute('data-theme', 'light');
+        else document.documentElement.removeAttribute('data-theme');
+        try { localStorage.setItem(PANEL_THEME_KEY, next); } catch (e) { /* sin localStorage */ }
+        if (button) button.textContent = next === 'light' ? 'Tema oscuro' : 'Tema claro';
+    };
+    // La animacion del cambio de tema vive en theme-fx.js (opcional por pagina).
+    if (window.ThemeFx) window.ThemeFx.run(apply, button);
+    else apply();
+}
+
+// Fechas "YYYY-MM-DD HH:MM:SS" de SQLite (CURRENT_TIMESTAMP) vienen en UTC sin zona.
+function sqliteUtcToLocal(value) {
+    if (!value) return '';
+    const parsed = new Date(String(value).replace(' ', 'T') + 'Z');
+    return Number.isNaN(parsed.getTime()) ? String(value) : parsed.toLocaleString();
+}

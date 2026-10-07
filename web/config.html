@@ -8,6 +8,8 @@
         @import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Manrope:wght@400;500;600;700&display=swap');
 
         :root {
+            /* Calendario y desplegables nativos acordes al tema. */
+            color-scheme: dark;
             --bg-0: #050c16;
             --bg-1: #0b1728;
             --panel: rgba(10, 21, 37, 0.76);
@@ -1208,6 +1210,8 @@
             color: #153150;
         }
 
+        html[data-theme="light"] { color-scheme: light; }
+
         html[data-theme="light"] .form-group input,
         html[data-theme="light"] .form-group select,
         html[data-theme="light"] .form-group textarea {
@@ -2185,7 +2189,7 @@
 
         <div class="nav admin-hide">
             <div class="nav-pages">
-                <a href="index.html">Dashboard</a>
+                <a href="index.html">Impresion</a>
                 <a href="hoy.html" id="nav-today-link">Hoy</a>
                 <a href="config.html?view=administrado#administrado" id="nav-admin-link">Envios Administrado</a>
                 <a href="config.html" id="nav-config-link" class="active">Configuracion</a>

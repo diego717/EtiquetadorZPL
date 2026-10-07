@@ -27,6 +27,7 @@
             <a href="config.html?view=pos#pos-reconciliation-section">Conciliacion POS</a>
             <a href="reposicion.html">Reposicion</a>
             <a href="cobranzas.html" class="active" aria-current="page">Cobranzas</a>
+            <a href="index.html">Impresion</a>
         </nav>
 
         <div id="notices"></div>
@@ -150,7 +151,7 @@
                 </label>
             </div>
             <label class="field" style="margin-bottom:12px;">Mensaje de WhatsApp
-                <textarea id="cfg-template" rows="3" style="background:transparent;color:var(--text-0);border:1px solid var(--line-strong);border-radius:var(--radius-sm);padding:8px 10px;font:inherit;"></textarea>
+                <textarea id="cfg-template" rows="3"></textarea>
                 <span class="hint">Variables: {cliente}, {empresa}, {cantidad} (facturas vencidas), {saldo} (vencido), {saldo_total}, {vencimiento} (la mas antigua).</span>
             </label>
             <button class="btn" onclick="saveConfig()">Guardar configuracion</button>

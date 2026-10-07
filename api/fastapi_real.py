@@ -126,6 +126,13 @@ try:
 except ImportError as e:
     print(f"ADVERTENCIA: Endpoints de Hoy no disponibles: {e}")
 
+# Incluir estado de impresoras del flujo (panel de Impresion)
+try:
+    from printing_status_endpoints import router as printing_status_router
+    app.include_router(printing_status_router)
+except ImportError as e:
+    print(f"ADVERTENCIA: Endpoints de estado de impresion no disponibles: {e}")
+
 # Incluir endpoints de activos locales de clientes
 try:
     from client_assets_endpoints import router as client_assets_router
