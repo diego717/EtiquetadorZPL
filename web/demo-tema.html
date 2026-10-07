@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>EtiquetadorZPL - Prueba cambio de tema</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Manrope:wght@400;500;600;700&display=swap">
+    <link rel="stylesheet" href="panel.css">
+    <style>
+        .demo-controls { display: flex; flex-wrap: wrap; gap: 16px; align-items: end; }
+        .demo-controls fieldset { border: 0; display: flex; flex-wrap: wrap; gap: 8px; }
+        .demo-controls legend { color: var(--text-1); font-size: 0.85rem; margin-bottom: 4px; }
+        .demo-controls label.opt { border: 1px solid var(--line-strong); border-radius: 999px; padding: 6px 12px; cursor: pointer; font-size: 0.9rem; }
+        .demo-controls label.opt:has(input:checked) { border-color: var(--accent); color: var(--accent); }
+        .demo-controls label.opt input { position: absolute; opacity: 0; pointer-events: none; }
+        .demo-controls input[type="range"] { width: 180px; accent-color: var(--accent); }
+        .demo-note { color: var(--text-1); font-size: 0.85rem; margin-top: 10px; }
+        .demo-table { width: 100%; border-collapse: collapse; font-size: 0.9rem; }
+        .demo-table th, .demo-table td { text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--line); }
+        .demo-table th { color: var(--text-1); font-weight: 600; }
+        .demo-table td.num { text-align: right; font-variant-numeric: tabular-nums; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <div>
+                <h1>Prueba: cambio de tema</h1>
+                <p class="sub">Elegí una variante y tocá el botón de tema.</p>
+            </div>
+            <div class="toolbar">
+                <button class="btn" id="theme-btn" type="button">Tema claro</button>
+            </div>
+        </header>
+
+        <section class="panel">
+            <div class="demo-controls">
+                <fieldset>
+                    <legend>Pintura</legend>
+                    <label class="opt"><input type="radio" name="variant" value="ola" checked>Ola</label>
+                    <label class="opt"><input type="radio" name="variant" value="chorreado">Ola con chorreado</label>
+                    <label class="opt"><input type="radio" name="variant" value="desague">Desagüe</label>
+                </fieldset>
+                <fieldset>
+                    <legend>Raros</legend>
+                    <label class="opt"><input type="radio" name="variant" value="tv">TV vieja</label>
+                    <label class="opt"><input type="radio" name="variant" value="agujero">Agujero negro</label>
+                    <label class="opt"><input type="radio" name="variant" value="glitch">Glitch</label>
+                    <label class="opt"><input type="radio" name="variant" value="persiana">Persiana</label>
+                    <label class="opt"><input type="radio" name="variant" value="bisagra">Se cae la página</label>
+                </fieldset>
+                <label class="field">Duración: <span id="dur-label">1.1 s</span>
+                    <input type="range" id="dur" min="500" max="2500" step="100" value="1100">
+                </label>
+            </div>
+            <p class="demo-note" id="demo-note"></p>
+        </section>
+
+        <nav aria-label="Paginas">
+            <a href="hoy.html">Hoy</a>
+            <a href="config.html">Configuracion</a>
+            <a href="reposicion.html">Reposicion</a>
+            <a href="cobranzas.html">Cobranzas</a>
+            <a href="index.html">Impresion</a>
+        </nav>
+
+        <div class="tiles">
+            <div class="tile" data-status="quiebre"><div class="value">12</div><div class="label">En quiebre</div></div>
+            <div class="tile" data-status="bajo_minimo"><div class="value">34</div><div class="label">Bajo mínimo</div></div>
+            <div class="tile" data-status="cobertura_baja"><div class="value">58</div><div class="label">Cobertura baja</div></div>
+            <div class="tile" data-status="ok"><div class="value">1.204</div><div class="label">OK</div></div>
+        </div>
+
+        <section class="panel">
+            <table class="demo-table">
+                <thead><tr><th>Producto</th><th>Proveedor</th><th class="num">Stock</th><th class="num">Ventas 30 d</th></tr></thead>
+                <tbody>
+                    <tr><td>Remera algodón negra M</td><td>Textil Sur</td><td class="num">4</td><td class="num">37</td></tr>
+                    <tr><td>Buzo canguro gris L</td><td>Textil Sur</td><td class="num">0</td><td class="num">22</td></tr>
+                    <tr><td>Gorro lana azul</td><td>Andes Knit</td><td class="num">15</td><td class="num">9</td></tr>
+                    <tr><td>Medias deportivas x3</td><td>Pie Firme</td><td class="num">61</td><td class="num">48</td></tr>
+                    <tr><td>Campera rompeviento S</td><td>Norte Outdoor</td><td class="num">2</td><td class="num">11</td></tr>
+                </tbody>
+            </table>
+        </section>
+    </div>
+
+    <script src="theme-fx.js"></script>
+    <script>
+        const THEME_KEY = 'etiquetador_ui_theme';
+        const root = document.documentElement;
+        const themeBtn = document.getElementById('theme-btn');
+        const durInput = document.getElementById('dur');
+        const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
+
+        try { if (localStorage.getItem(THEME_KEY) === 'light') root.setAttribute('data-theme', 'light'); } catch (e) { /* sin localStorage */ }
+
+        function currentTheme() { return root.getAttribute('data-theme') === 'light' ? 'light' : 'dark'; }
+        function syncButton() { themeBtn.textContent = currentTheme() === 'light' ? 'Tema oscuro' : 'Tema claro'; }
+
+        function applyTheme(next) {
+            if (next === 'light') root.setAttribute('data-theme', 'light');
+            else root.removeAttribute('data-theme');
+            try { localStorage.setItem(THEME_KEY, next); } catch (e) { /* sin localStorage */ }
+            syncButton();
+        }
+
+        function toggleTheme() {
+            const next = currentTheme() === 'light' ? 'dark' : 'light';
+            const effect = document.querySelector('input[name="variant"]:checked').value;
+            ThemeFx.run(() => applyTheme(next), themeBtn, { effect, duration: Number(durInput.value) });
+        }
+
+        themeBtn.addEventListener('click', toggleTheme);
+        durInput.addEventListener('input', () => {
+            document.getElementById('dur-label').textContent = `${(durInput.value / 1000).toFixed(1)} s`;
+        });
+
+        const note = document.getElementById('demo-note');
+        if (!document.startViewTransition) {
+            note.textContent = 'Este navegador no soporta View Transitions: el tema cambia sin animación.';
+        } else if (reduceMotion.matches) {
+            note.textContent = 'El sistema tiene "reducir movimiento" activado: el tema cambia sin animación.';
+        } else {
+            note.textContent = 'Tip: probá con la ventana maximizada; el efecto se calcula según el tamaño de la pantalla.';
+        }
+        syncButton();
+    </script>
+</body>
+</html>

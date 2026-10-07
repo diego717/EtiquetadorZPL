@@ -520,6 +520,9 @@
         }
 
         .form-group textarea { resize: vertical; min-height: 96px; }
+        .form-group input.fx-range { padding: 0; border: 0; background: none; accent-color: var(--accent, #42d0c7); height: 38px; }
+        .form-group input.fx-range:disabled { opacity: 0.45; }
+        .fx-row { max-width: 640px; margin-top: 12px; }
 
         .form-group input:focus-visible,
         .form-group select:focus-visible,
@@ -3129,6 +3132,29 @@
                 </div>
             </div>
 
+            <!-- Apariencia -->
+            <div class="card" id="appearance-section">
+                <div class="card-title-row">
+                    <h2>Apariencia</h2>
+                </div>
+                <p class="card-sub">Animacion al cambiar entre tema claro y oscuro. Se guarda en este navegador.</p>
+                <div class="form-row fx-row">
+                    <div class="form-group">
+                        <label for="theme-fx-effect">Efecto</label>
+                        <select id="theme-fx-effect" onchange="saveThemeFxSettings()"></select>
+                    </div>
+                    <div class="form-group">
+                        <label for="theme-fx-duration">Duracion: <span id="theme-fx-duration-label">1.1 s</span></label>
+                        <input type="range" id="theme-fx-duration" class="fx-range" min="500" max="2500" step="100" value="1100"
+                               oninput="saveThemeFxSettings()">
+                    </div>
+                </div>
+                <div class="btn-row">
+                    <button type="button" class="btn secondary" onclick="toggleTheme(this)">Probar cambiando el tema</button>
+                </div>
+                <p class="form-hint" id="theme-fx-note" hidden></p>
+            </div>
+
             <!-- Sistema -->
             <div class="card">
                 <h2>Sistema</h2>
@@ -3175,6 +3201,7 @@
     <div class="ui-toasts" id="ui-toasts" aria-live="polite"></div>
 
     <script src="config.js"></script>
+    <script src="theme-fx.js"></script>
     <script>
         // ---- UI: modal de confirmacion y notificaciones (reemplazan alert/confirm del navegador) ----
         const UI_ICONS = {
@@ -3387,9 +3414,58 @@
             applyTheme(stored === 'light' ? 'light' : 'dark', false);
         }
 
-        function toggleTheme() {
+        function initThemeFxControls() {
+            const select = document.getElementById('theme-fx-effect');
+            if (!select || !window.ThemeFx) return;
+            const groups = new Map();
+            ThemeFx.EFFECT_LIST.forEach((fx) => {
+                const option = new Option(fx.label, fx.id);
+                if (!fx.group) {
+                    select.appendChild(option);
+                    return;
+                }
+                if (!groups.has(fx.group)) {
+                    const optgroup = document.createElement('optgroup');
+                    optgroup.label = fx.group;
+                    groups.set(fx.group, optgroup);
+                    select.appendChild(optgroup);
+                }
+                groups.get(fx.group).appendChild(option);
+            });
+            const settings = ThemeFx.getSettings();
+            select.value = settings.effect;
+            document.getElementById('theme-fx-duration').value = settings.duration;
+            updateThemeFxLabels(settings);
+
+            if (!ThemeFx.isSupported()) {
+                const note = document.getElementById('theme-fx-note');
+                note.textContent = typeof document.startViewTransition === 'function'
+                    ? 'El sistema tiene "reducir movimiento" activado: el tema cambia sin animacion.'
+                    : 'Este navegador no soporta la animacion: el tema cambia al instante.';
+                note.hidden = false;
+            }
+        }
+
+        function updateThemeFxLabels(settings) {
+            document.getElementById('theme-fx-duration-label').textContent = `${(settings.duration / 1000).toFixed(1)} s`;
+            document.getElementById('theme-fx-duration').disabled = settings.effect === 'ninguno';
+        }
+
+        function saveThemeFxSettings() {
+            if (!window.ThemeFx) return;
+            const settings = ThemeFx.saveSettings({
+                effect: document.getElementById('theme-fx-effect').value,
+                duration: Number(document.getElementById('theme-fx-duration').value),
+            });
+            updateThemeFxLabels(settings);
+        }
+
+        function toggleTheme(originEl) {
             const nextTheme = currentTheme === 'dark' ? 'light' : 'dark';
-            applyTheme(nextTheme, true);
+            const apply = () => applyTheme(nextTheme, true);
+            const button = originEl || document.getElementById('theme-toggle-btn');
+            if (window.ThemeFx) window.ThemeFx.run(apply, button);
+            else apply();
         }
 
         function applyAdminOnlyMode() {
@@ -6875,6 +6951,7 @@
         updateAdministradoFilterTabs();
 
         initTheme();
+        initThemeFxControls();
         initViewMode();
         if (POS_ONLY_VIEW) {
             loadTotalNetConfig();

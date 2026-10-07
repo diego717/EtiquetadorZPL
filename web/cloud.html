@@ -290,6 +290,7 @@
     </div>
 
     <script src="config.js"></script>
+    <script src="theme-fx.js"></script>
     <script>
         const TOKEN_KEY = 'cloud_access_token';
         const USER_KEY = 'cloud_username';
@@ -327,7 +328,9 @@
         }
 
         function toggleTheme() {
-            applyTheme(currentTheme === 'dark' ? 'light' : 'dark', true);
+            const apply = () => applyTheme(currentTheme === 'dark' ? 'light' : 'dark', true);
+            if (window.ThemeFx) window.ThemeFx.run(apply, document.getElementById('theme-toggle-btn'));
+            else apply();
         }
 
         function setMessage(elementId, text, type) {
