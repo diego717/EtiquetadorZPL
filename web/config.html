@@ -27,7 +27,7 @@
                 <a href="hoy.html" id="nav-today-link">Hoy</a>
                 <a href="config.html?view=administrado#administrado" id="nav-admin-link">Envios Administrado</a>
                 <a href="config.html" id="nav-config-link" class="active">Configuracion</a>
-                <a href="config.html?view=pos#pos-reconciliation-section" id="nav-pos-link">Conciliacion POS</a>
+                <a href="config.html?view=pos#pos-reconciliation-section" id="nav-pos-link">Conciliacion de pagos</a>
                 <a href="reposicion.html" id="nav-stock-link">Reposicion</a>
                 <a href="cobranzas.html" id="nav-receivables-link">Cobranzas</a>
             </div>
@@ -557,7 +557,13 @@
         </section>
 
         <div class="card admin-hide" id="pos-reconciliation-section">
-            <h2>Conciliacion de pagos POS (TotalNet)</h2>
+            <h2>Conciliacion de pagos</h2>
+            <div class="seg-tabs pay-source-tabs" role="tablist" aria-label="Origen de los pagos">
+                <button type="button" role="tab" class="seg-tab is-active" data-pay-source="totalnet" aria-selected="true" aria-controls="pay-source-totalnet" onclick="setPaymentSource('totalnet')">TotalNet (POS)</button>
+                <button type="button" role="tab" class="seg-tab" data-pay-source="mercadolibre" aria-selected="false" aria-controls="pay-source-mercadolibre" onclick="setPaymentSource('mercadolibre')">Mercado Libre</button>
+            </div>
+
+            <div id="pay-source-totalnet" role="tabpanel" data-pay-source-panel="totalnet">
             <p class="muted" style="margin-bottom: 12px;">
                 Trae los cupones de TotalNet, los cruza contra facturas a contado en Odoo y registra el pago recien al confirmar.
             </p>
@@ -858,13 +864,66 @@
                 <span id="pos-payment-operator-status" class="odoo-muted"></span>
             </div>
             <div id="pos-confirm-summary" class="odoo-muted" style="margin-top:8px;"></div>
+            </div>
+
+            <div id="pay-source-mercadolibre" role="tabpanel" data-pay-source-panel="mercadolibre" hidden>
+                <p class="muted" style="margin-bottom: 12px;">
+                    Trae las ventas pagadas de Mercado Libre, las cruza contra la factura de Odoo de la venta (pack) y registra el cobro con el comprobante PDF adjunto.
+                </p>
+                <div class="toolbar-primary">
+                    <button class="btn" onclick="syncMercadoLibrePayments()">Buscar pagos</button>
+                    <div class="form-group compact">
+                        <label for="meli-payment-limit">Traer ultimas ventas</label>
+                        <input type="number" id="meli-payment-limit" min="1" max="50" value="20">
+                    </div>
+                    <div class="form-group compact meli-payment-option">
+                        <label for="meli-payment-operator">Registrar como</label>
+                        <select id="meli-payment-operator" disabled>
+                            <option value="">Sin operadores cargados</option>
+                        </select>
+                    </div>
+                    <div class="form-group compact meli-payment-option">
+                        <label for="meli-payment-journal">Diario contable</label>
+                        <select id="meli-payment-journal" disabled>
+                            <option value="">Sin diarios cargados</option>
+                        </select>
+                    </div>
+                    <div class="form-group compact meli-payment-option">
+                        <label for="meli-payment-rounding-account">Cuenta de redondeo</label>
+                        <select id="meli-payment-rounding-account" disabled title="Recibe la diferencia de centésimos entre Mercado Libre y la factura Odoo">
+                            <option value="">Sin cuentas cargadas</option>
+                        </select>
+                    </div>
+                    <span id="meli-payment-summary" class="summary-pill is-empty">Sin datos</span>
+                </div>
+                <p class="form-hint">Solo se habilitan ventas pagadas con una única factura pendiente del mismo importe (±0,01) y moneda.</p>
+                <div class="table-scroll">
+                    <table class="table-clean meli-payments-table">
+                        <thead>
+                            <tr>
+                                <th>Venta ML</th>
+                                <th>Fecha</th>
+                                <th>Comprador</th>
+                                <th>Importe</th>
+                                <th>Pago ML</th>
+                                <th>Factura Odoo</th>
+                                <th>Estado</th>
+                                <th>Accion</th>
+                            </tr>
+                        </thead>
+                        <tbody id="meli-payments-body">
+                            <tr><td colspan="8" class="empty-cell">Busca pagos para revisar las ventas</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
 
             <h3 style="margin-top:24px;">Pagos registrados</h3>
-            <p class="odoo-muted">Los pagos confirmados dejan de aparecer entre las coincidencias pendientes, pero permanecen en este historial.</p>
+            <p class="odoo-muted">Historial comun de TotalNet y Mercado Libre. Los pagos confirmados dejan de aparecer como pendientes, pero permanecen aqui.</p>
             <div class="pos-history-filters" aria-label="Filtros del historial de pagos">
                 <div class="form-group">
                     <label for="pos-history-search">Buscar:</label>
-                    <input type="search" id="pos-history-search" placeholder="Factura, ticket, autorizacion u operador" oninput="renderPosHistory()">
+                    <input type="search" id="pos-history-search" placeholder="Factura, ticket, venta ML, comprador u operador" oninput="renderPosHistory()">
                 </div>
                 <div class="form-group">
                     <label for="pos-history-date-from">Fecha pago desde:</label>
@@ -873,6 +932,14 @@
                 <div class="form-group">
                     <label for="pos-history-date-to">Fecha pago hasta:</label>
                     <input type="date" id="pos-history-date-to" onchange="renderPosHistory()">
+                </div>
+                <div class="form-group">
+                    <label for="pos-history-source">Origen:</label>
+                    <select id="pos-history-source" onchange="renderPosHistory()">
+                        <option value="all">Todos</option>
+                        <option value="totalnet">TotalNet</option>
+                        <option value="mercadolibre">Mercado Libre</option>
+                    </select>
                 </div>
                 <div class="form-group">
                     <label for="pos-history-state">Estado:</label>
@@ -891,12 +958,12 @@
                 <table class="table-clean">
                     <thead>
                         <tr>
-                            <th>Registrado</th><th>Fecha pago</th><th>Ticket / Autorizacion</th><th>Importe</th>
+                            <th>Registrado</th><th>Origen</th><th>Fecha pago</th><th>Ticket / Venta</th><th>Importe</th>
                             <th>Factura</th><th>Operador</th><th>Estado</th><th>Odoo</th>
                         </tr>
                     </thead>
                     <tbody id="pos-history-body">
-                        <tr><td colspan="8" class="empty-cell">Cargando historial...</td></tr>
+                        <tr><td colspan="9" class="empty-cell">Cargando historial...</td></tr>
                     </tbody>
                 </table>
             </div>

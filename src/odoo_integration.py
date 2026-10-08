@@ -306,6 +306,220 @@ class OdooIntegration:
             return None
         return orders[0]
 
+    def find_sale_invoice_for_reference(
+        self,
+        sale_reference: str,
+        amount: float,
+        currency: str = "",
+        auth_override: Optional[Dict[str, str]] = None,
+    ) -> Dict[str, Any]:
+        """Busca una unica factura pendiente de una venta externa.
+
+        La referencia se compara con el nombre esperado de la orden (por
+        defecto ``ML <id>``), ``client_order_ref`` y ``origin``. Nunca elige
+        una factura si el importe o la moneda difieren.
+        """
+        reference = str(sale_reference or "").strip()
+        if not reference:
+            raise ValueError("Referencia de venta vacia")
+        try:
+            amount_value = float(amount)
+        except (TypeError, ValueError):
+            raise ValueError("Importe de venta invalido")
+        if amount_value <= 0:
+            raise ValueError("El importe de venta debe ser mayor a 0")
+
+        runtime = self._build_runtime_config(auth_override)
+        uid = self._authenticate(auth_override=auth_override)
+        models = self._xmlrpc_models(runtime)
+        db = runtime.get("database", "")
+        password = runtime.get("password", "")
+        expected_name = f"{str(runtime.get('order_prefix', 'ML '))}{reference}"
+
+        sale_orders = models.execute_kw(
+            db,
+            uid,
+            password,
+            "sale.order",
+            "search_read",
+            [[
+                "|",
+                "|",
+                ("name", "=", expected_name),
+                ("client_order_ref", "ilike", reference),
+                ("origin", "ilike", reference),
+            ]],
+            {
+                "fields": ["id", "name", "client_order_ref", "origin", "invoice_ids"],
+                "limit": 10,
+                "order": "id desc",
+            },
+        ) or []
+        exact_orders = [
+            order for order in sale_orders
+            if str(order.get("name") or "").strip().casefold() == expected_name.casefold()
+        ]
+        if len(exact_orders) == 1:
+            sale_order = exact_orders[0]
+        elif len(sale_orders) == 1:
+            sale_order = sale_orders[0]
+        elif len(sale_orders) > 1:
+            return {
+                "can_register": False,
+                "reason": f"Hay varias ordenes Odoo relacionadas con Mercado Libre {reference}",
+                "sale_order": None,
+                "invoice": None,
+            }
+        else:
+            return {
+                "can_register": False,
+                "reason": f"No se encontro la orden Odoo ML {reference}",
+                "sale_order": None,
+                "invoice": None,
+            }
+
+        invoice_ids = [int(item) for item in (sale_order.get("invoice_ids") or []) if item]
+        available_fields = models.execute_kw(
+            db,
+            uid,
+            password,
+            "account.move",
+            "fields_get",
+            [[], ["string"]],
+        ) or {}
+        payment_state_field = next(
+            (name for name in ("invoice_payment_state", "payment_state") if name in available_fields),
+            None,
+        )
+        if not payment_state_field:
+            raise ValueError("Odoo no expone el estado de pago de la factura")
+
+        domain: List[Any] = [
+            ("move_type", "=", "out_invoice"),
+            ("state", "=", "posted"),
+        ]
+        if "reversal_move_id" in available_fields:
+            domain.append(("reversal_move_id", "=", False))
+        if invoice_ids:
+            domain.append(("id", "in", invoice_ids))
+        else:
+            origin_field = next(
+                (name for name in ("invoice_origin", "origin") if name in available_fields),
+                None,
+            )
+            if not origin_field:
+                return {
+                    "can_register": False,
+                    "reason": f"La orden {sale_order.get('name')} no tiene facturas asociadas",
+                    "sale_order": sale_order,
+                    "invoice": None,
+                }
+            domain.append((origin_field, "ilike", str(sale_order.get("name") or expected_name)))
+
+        fields = ["id", "name", "amount_total", "currency_id", payment_state_field]
+        if "amount_residual" in available_fields:
+            fields.append("amount_residual")
+        invoices = models.execute_kw(
+            db,
+            uid,
+            password,
+            "account.move",
+            "search_read",
+            [domain],
+            {"fields": fields, "order": "id desc", "limit": 20},
+        ) or []
+
+        expected_currency = str(currency or "").strip().casefold()
+        exact_pending: List[Dict[str, Any]] = []
+        exact_paid: List[Dict[str, Any]] = []
+        pending: List[Dict[str, Any]] = []
+        settled: List[Dict[str, Any]] = []
+        for invoice in invoices:
+            payment_state = str(invoice.get(payment_state_field) or "")
+            invoice["invoice_payment_state"] = payment_state
+            try:
+                total_value = float(invoice.get("amount_total") or 0)
+            except (TypeError, ValueError):
+                total_value = 0.0
+            due = invoice.get("amount_residual")
+            try:
+                due_value = total_value if due is None else float(due or 0)
+            except (TypeError, ValueError):
+                due_value = 0.0
+            invoice["amount_due"] = round(due_value, 2)
+            currency_value = invoice.get("currency_id")
+            if isinstance(currency_value, (list, tuple)) and len(currency_value) > 1:
+                invoice_currency = str(currency_value[1] or "")
+            else:
+                invoice_currency = str(currency_value or "")
+            currency_matches = not expected_currency or invoice_currency.casefold() == expected_currency
+            if payment_state in {"not_paid", "partial"}:
+                pending.append(invoice)
+                if round(abs(due_value - amount_value), 2) <= 0.01 and currency_matches:
+                    exact_pending.append(invoice)
+            else:
+                # Una factura pagada tiene saldo 0: se compara contra su total.
+                settled.append(invoice)
+                if round(abs(total_value - amount_value), 2) <= 0.01 and currency_matches:
+                    exact_paid.append(invoice)
+
+        if len(exact_pending) == 1:
+            return {
+                "can_register": True,
+                "reason": "",
+                "sale_order": sale_order,
+                "invoice": exact_pending[0],
+            }
+        if len(exact_pending) > 1:
+            return {
+                "can_register": False,
+                "reason": "Hay varias facturas pendientes con el mismo importe y moneda",
+                "sale_order": sale_order,
+                "invoice": None,
+            }
+        if exact_paid:
+            return {
+                "can_register": False,
+                "reason": "La factura relacionada ya tiene el pago registrado en Odoo",
+                "sale_order": sale_order,
+                "invoice": exact_paid[0],
+            }
+        if len(pending) == 1:
+            invoice = pending[0]
+            return {
+                "can_register": False,
+                "reason": (
+                    "El importe o la moneda de Mercado Libre no coincide con la factura "
+                    f"{invoice.get('name')} (pendiente: {invoice.get('amount_due')})"
+                ),
+                "sale_order": sale_order,
+                "invoice": invoice,
+            }
+        if settled and not pending:
+            invoice = settled[0]
+            return {
+                "can_register": False,
+                "reason": (
+                    f"La factura {invoice.get('name')} ya esta pagada, pero su total "
+                    f"({invoice.get('amount_total')}) no coincide con Mercado Libre ({amount_value:.2f})"
+                ),
+                "sale_order": sale_order,
+                "invoice": invoice,
+            }
+        if not invoices:
+            return {
+                "can_register": False,
+                "reason": f"La orden {sale_order.get('name')} no tiene facturas publicadas",
+                "sale_order": sale_order,
+                "invoice": None,
+            }
+        return {
+            "can_register": False,
+            "reason": f"La orden {sale_order.get('name')} no tiene una factura pendiente compatible",
+            "sale_order": sale_order,
+            "invoice": pending[0] if pending else None,
+        }
+
     @staticmethod
     def _normalize_shipment_field_value(raw_value: Any) -> str:
         if raw_value is None:
@@ -2184,16 +2398,16 @@ class OdooIntegration:
         )
         return accounts or []
 
-    def attach_totalnet_receipt_to_payment(
+    def attach_pdf_to_payment(
         self,
         payment_id: int,
         filename: str,
         pdf_bytes: bytes,
         auth_override: Optional[Dict[str, str]] = None,
     ) -> Dict[str, Any]:
-        """Adjunta el PDF del comprobante TotalNet al pago, sin duplicar por nombre."""
+        """Adjunta un PDF al pago, sin duplicarlo por nombre."""
         if not payment_id or not pdf_bytes:
-            raise ValueError("Faltan datos para adjuntar el comprobante TotalNet")
+            raise ValueError("Faltan datos para adjuntar el comprobante al pago")
         runtime = self._build_runtime_config(auth_override)
         uid = self._authenticate(auth_override=auth_override)
         models = self._xmlrpc_models(runtime)
@@ -2242,6 +2456,21 @@ class OdooIntegration:
             "filename": str(filename),
         }
 
+    def attach_totalnet_receipt_to_payment(
+        self,
+        payment_id: int,
+        filename: str,
+        pdf_bytes: bytes,
+        auth_override: Optional[Dict[str, str]] = None,
+    ) -> Dict[str, Any]:
+        """Compatibilidad con el flujo POS existente."""
+        return self.attach_pdf_to_payment(
+            payment_id,
+            filename,
+            pdf_bytes,
+            auth_override,
+        )
+
     def register_invoice_payment(
         self,
         invoice_id: int,
@@ -2253,6 +2482,7 @@ class OdooIntegration:
         require_exact_invoice_total: bool = False,
         rounding_account_id: Optional[int] = None,
         rounding_source_amount: Optional[float] = None,
+        writeoff_label: str = "Redondeo cobro POS TotalNet",
     ) -> Dict[str, Any]:
         """Registra un pago contra una factura via el wizard account.payment.register.
 
@@ -2361,7 +2591,7 @@ class OdooIntegration:
                 {
                     "payment_difference_handling": "reconcile",
                     "writeoff_account_id": int(rounding_account_id),
-                    "writeoff_label": "Redondeo cobro POS TotalNet",
+                    "writeoff_label": writeoff_label,
                 }
             )
 
@@ -2399,22 +2629,28 @@ class OdooIntegration:
         invoice_after = after_data[0] if after_data else {}
 
         payment_id = None
-        try:
-            payment_records = models.execute_kw(
-                db,
-                uid,
-                password,
-                "account.payment",
-                "search_read",
-                [[("reconciled_invoice_ids", "in", [int(invoice_id)])]],
-                {"fields": ["id"], "order": "id desc", "limit": 1},
-            )
-            if payment_records:
-                payment_id = int(payment_records[0]["id"])
-        except Exception as exc:
-            logger.warning(
-                "No se pudo determinar el pago creado para invoice_id=%s: %s", invoice_id, exc
-            )
+        if isinstance(result, dict) and result.get("res_model") == "account.payment":
+            if result.get("res_id"):
+                payment_id = int(result["res_id"])
+            elif result.get("res_ids"):
+                payment_id = int(result["res_ids"][-1])
+        if not payment_id:
+            try:
+                payment_records = models.execute_kw(
+                    db,
+                    uid,
+                    password,
+                    "account.payment",
+                    "search_read",
+                    [[("reconciled_invoice_ids", "in", [int(invoice_id)])]],
+                    {"fields": ["id"], "order": "id desc", "limit": 1},
+                )
+                if payment_records:
+                    payment_id = int(payment_records[0]["id"])
+            except Exception as exc:
+                logger.warning(
+                    "No se pudo determinar el pago creado para invoice_id=%s: %s", invoice_id, exc
+                )
 
         return {
             "invoice_id": int(invoice_id),

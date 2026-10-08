@@ -1,4 +1,4 @@
-// ---- Conciliacion de pagos POS (TotalNet) ----
+// ---- Conciliacion de pagos (TotalNet POS y Mercado Libre) ----
 let posJournals = [];
 let posJournalMap = {};
 let posRoundingAccounts = [];
@@ -7,6 +7,48 @@ let posPaymentOperators = [];
 let posPaymentOperatorFeatureReady = false;
 let posPendingInvoices = [];
 let posPaymentHistory = [];
+let mercadoLibrePaymentOptionsLoaded = false;
+const PAYMENT_SOURCE_STORAGE_KEY = 'etiquetador_payment_source';
+const PAYMENT_SOURCE_LABELS = { totalnet: 'TotalNet', mercadolibre: 'Mercado Libre' };
+
+function setPaymentSource(source, persist = true) {
+    const selected = source === 'mercadolibre' ? 'mercadolibre' : 'totalnet';
+    document.querySelectorAll('[data-pay-source]').forEach((tab) => {
+        const active = tab.dataset.paySource === selected;
+        tab.classList.toggle('is-active', active);
+        tab.setAttribute('aria-selected', active ? 'true' : 'false');
+    });
+    document.querySelectorAll('[data-pay-source-panel]').forEach((panel) => {
+        panel.hidden = panel.dataset.paySourcePanel !== selected;
+    });
+    if (persist) {
+        try {
+            localStorage.setItem(PAYMENT_SOURCE_STORAGE_KEY, selected);
+        } catch (e) {
+            // Ignorar si localStorage no esta disponible.
+        }
+    }
+    if (selected === 'mercadolibre' && !mercadoLibrePaymentOptionsLoaded) {
+        mercadoLibrePaymentOptionsLoaded = true;
+        loadMercadoLibrePaymentOptions().catch(() => {
+            mercadoLibrePaymentOptionsLoaded = false;
+        });
+    }
+}
+
+function initPaymentSource() {
+    let stored = null;
+    try {
+        stored = localStorage.getItem(PAYMENT_SOURCE_STORAGE_KEY);
+    } catch (e) {
+        stored = null;
+    }
+    setPaymentSource(stored, false);
+}
+
+function paymentHistorySource(item) {
+    return item.source === 'mercadolibre' ? 'mercadolibre' : 'totalnet';
+}
 
 async function loadTotalNetConfig() {
     const config = await fetchAPI('/api/totalnet/config');
@@ -553,7 +595,12 @@ function posHistorySearchText(item) {
         coupon.ticket,
         coupon.autorizacion,
         coupon.numero_factura,
-        coupon.sello
+        coupon.sello,
+        PAYMENT_SOURCE_LABELS[paymentHistorySource(item)],
+        item.mercadolibre?.reference,
+        ...(item.mercadolibre?.order_ids || []),
+        item.mercadolibre?.payment_reference,
+        item.mercadolibre?.buyer
     ].map(value => String(value || '').toLowerCase()).join(' ');
 }
 
@@ -565,8 +612,11 @@ function renderPosHistory() {
     const dateFrom = document.getElementById('pos-history-date-from')?.value || '';
     const dateTo = document.getElementById('pos-history-date-to')?.value || '';
     const state = document.getElementById('pos-history-state')?.value || 'ok';
+    const sourceFilter = document.getElementById('pos-history-source')?.value || 'all';
     const filtered = posPaymentHistory.filter(item => {
-        const paymentDate = posPaymentDateIso(item.cupon?.fecha) || String(item.registered_at || '').slice(0, 10);
+        const paymentDate = posPaymentDateIso(item.cupon?.fecha || item.mercadolibre?.payment_date)
+            || String(item.registered_at || '').slice(0, 10);
+        if (sourceFilter !== 'all' && paymentHistorySource(item) !== sourceFilter) return false;
         if (search && !posHistorySearchText(item).includes(search)) return false;
         if (dateFrom && paymentDate && paymentDate < dateFrom) return false;
         if (dateTo && paymentDate && paymentDate > dateTo) return false;
@@ -577,6 +627,8 @@ function renderPosHistory() {
 
     body.innerHTML = filtered.length ? filtered.map(item => {
         const coupon = item.cupon || {};
+        const sale = item.mercadolibre || {};
+        const source = paymentHistorySource(item);
         const invoiceLabel = item.invoice_name || (item.invoice_id ? `Factura #${item.invoice_id}` : '-');
         const statusLabel = item.ok === true ? 'Registrado' : 'Error';
         const statusTitle = item.ok === true
@@ -591,15 +643,20 @@ function renderPosHistory() {
         }
         return `<tr>
             <td class="pos-money">${escapePosHtml(formatPosHistoryDateTime(item.registered_at))}</td>
+            <td><span class="pay-source-badge" data-source="${source}">${escapePosHtml(PAYMENT_SOURCE_LABELS[source])}</span></td>
+            ${source === 'mercadolibre' ? `
+            <td class="pos-money">${escapePosHtml(sale.payment_date || '-')}</td>
+            <td title="${escapePosHtml(sale.order_ids?.length ? `Ordenes: ${sale.order_ids.join(', ')}` : '')}">${escapePosHtml(sale.reference || '-')}${sale.buyer ? `<br><span class="odoo-muted">${escapePosHtml(sale.buyer)}</span>` : ''}</td>
+            <td class="pos-money">${sale.amount !== undefined && sale.amount !== null ? escapePosHtml(formatPosAmountWithCurrency(sale.amount, sale.currency)) : '-'}</td>` : `
             <td class="pos-money">${escapePosHtml(coupon.fecha || '-')}</td>
             <td>${coupon.ticket || coupon.autorizacion ? posCuponLabel(coupon) : escapePosHtml(item.cupon_id || '-')}</td>
-            <td class="pos-money">${coupon.importe !== undefined ? escapePosHtml(formatPosAmountWithCurrency(coupon.importe, coupon.moneda)) : '-'}</td>
+            <td class="pos-money">${coupon.importe !== undefined ? escapePosHtml(formatPosAmountWithCurrency(coupon.importe, coupon.moneda)) : '-'}</td>`}
             <td>${escapePosHtml(invoiceLabel)}</td>
             <td>${escapePosHtml(item.actor_odoo_username || item.operator_app_username || '-')}</td>
             <td><span class="pos-history-status" title="${escapePosHtml(statusTitle)}">${statusLabel}</span></td>
             <td><div class="pos-history-actions">${odooActions.join('') || '<span class="odoo-muted">Sin enlace</span>'}</div></td>
         </tr>`;
-    }).join('') : '<tr><td colspan="8" class="empty-cell">No hay pagos que coincidan con los filtros</td></tr>';
+    }).join('') : '<tr><td colspan="9" class="empty-cell">No hay pagos que coincidan con los filtros</td></tr>';
     summary.textContent = `${filtered.length} de ${posPaymentHistory.length} registro(s)`;
 }
 
@@ -628,6 +685,7 @@ function clearPosHistoryFilters() {
     document.getElementById('pos-history-date-from').value = '';
     document.getElementById('pos-history-date-to').value = '';
     document.getElementById('pos-history-state').value = 'ok';
+    document.getElementById('pos-history-source').value = 'all';
     renderPosHistory();
 }
 

@@ -89,6 +89,33 @@ class TestPosReconciliationUI(unittest.TestCase):
         self.assertIn("async function startMercadoLibreOAuth", self.mercadolibre_script)
         self.assertIn("async function syncMercadoLibreSales", self.mercadolibre_script)
 
+    def test_payment_sources_share_the_reconciliation_section_and_history(self):
+        section_start = self.source.index('id="pos-reconciliation-section"')
+        history_start = self.source.index('id="pos-history-body"')
+        for marker in (
+            'data-pay-source="totalnet"',
+            'data-pay-source="mercadolibre"',
+            'id="pay-source-totalnet"',
+            'id="pay-source-mercadolibre"',
+            'id="meli-payments-body"',
+        ):
+            self.assertGreater(self.source.index(marker), section_start, marker)
+            self.assertLess(self.source.index(marker), history_start, marker)
+        self.assertIn('id="pos-history-source"', self.source)
+        self.assertIn("function setPaymentSource", self.script)
+        self.assertIn("initPaymentSource();", self.page_script)
+        self.assertIn("loadPosHistory()", self.mercadolibre_script)
+
+    def test_mercadolibre_payments_use_confirmation_and_pdf_registration_endpoint(self):
+        self.assertIn('id="pay-source-mercadolibre"', self.source)
+        self.assertIn('id="meli-payment-operator"', self.source)
+        self.assertIn('id="meli-payment-journal"', self.source)
+        self.assertIn('id="meli-payment-rounding-account"', self.source)
+        self.assertIn("async function syncMercadoLibrePayments", self.mercadolibre_script)
+        self.assertIn("async function registerMercadoLibrePayment", self.mercadolibre_script)
+        self.assertIn("/api/mercadolibre/payments/register", self.mercadolibre_script)
+        self.assertIn("Se creara un pago real en Odoo", self.mercadolibre_script)
+
     def test_post_confirmation_refresh_preserves_journal_and_result_message(self):
         self.assertIn("await syncPosReconciliation({", self.script)
         self.assertIn("preservePaymentContext: true", self.script)

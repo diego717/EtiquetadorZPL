@@ -442,7 +442,8 @@ async def get_history() -> Dict[str, Any]:
             coupon = item.get("cupon") if isinstance(item.get("cupon"), dict) else {}
             attachment = item.get("attachment") if isinstance(item.get("attachment"), dict) else {}
             filename = str(attachment.get("filename") or "")
-            if filename and not coupon:
+            item["source"] = item.get("source") or "totalnet"
+            if filename and not coupon and item["source"] == "totalnet":
                 invoice_match = re.search(r"_Fact_([^_]+)", filename, flags=re.IGNORECASE)
                 ticket_match = re.search(r"_Ticket_([^_]+)", filename, flags=re.IGNORECASE)
                 coupon = {

@@ -137,6 +137,9 @@ class MercadoLibreIntegration:
     def is_configured(self) -> bool:
         return bool(self.config.get("client_id") and self.config.get("client_secret"))
 
+    def is_authenticated(self) -> bool:
+        return bool(str(self.config.get("access_token") or "").strip())
+
     def build_auth_url(self, state: Optional[str] = None) -> str:
         if not self.config.get("client_id"):
             raise ValueError("Falta client_id de Mercado Libre")
@@ -270,6 +273,16 @@ class MercadoLibreIntegration:
 
     def get_shipment(self, shipment_id: str) -> Dict[str, Any]:
         response = self.request("GET", f"/shipments/{shipment_id}")
+        response.raise_for_status()
+        return response.json()
+
+    def get_pack(self, pack_id: str) -> Dict[str, Any]:
+        response = self.request("GET", f"/packs/{pack_id}")
+        response.raise_for_status()
+        return response.json()
+
+    def get_shipment_costs(self, shipment_id: str) -> Dict[str, Any]:
+        response = self.request("GET", f"/shipments/{shipment_id}/costs")
         response.raise_for_status()
         return response.json()
 

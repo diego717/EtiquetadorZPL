@@ -10,6 +10,7 @@ import itertools
 import json
 import logging
 import re
+import threading
 import unicodedata
 from datetime import date, datetime, timedelta
 from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
@@ -24,6 +25,11 @@ DEFAULT_SETTLEMENT_LOOKAHEAD_DAYS = 15
 MAX_GROUP_SIZE = 4  # Solo lo usa el comparador historico privado.
 DEFAULT_AUTO_SYNC_INTERVAL_MINUTES = 60
 DEFAULT_AUTO_SYNC_LOOKBACK_DAYS = 7
+HISTORY_LIMIT = 200
+
+# Serializa las escrituras del estado: TotalNet y Mercado Libre comparten el
+# mismo historial de pagos registrados.
+_state_lock = threading.Lock()
 
 
 def _resolve_state_path(filename: str) -> Path:
@@ -411,21 +417,34 @@ def load_processed_cupon_ids() -> set:
     return {str(item) for item in data.get("processed_cupon_ids", [])}
 
 
-def mark_cupones_processed(cupon_ids: List[Any], payment_results: List[Dict[str, Any]]) -> None:
+def _append_history(
+    payment_results: List[Dict[str, Any]],
+    processed_cupon_ids: Optional[List[Any]] = None,
+) -> None:
     path = _resolve_state_path("pos_reconciliation_state.json")
-    data = load_state()
+    with _state_lock:
+        data = load_state()
+        if processed_cupon_ids:
+            processed = set(str(item) for item in data.get("processed_cupon_ids", []))
+            processed.update(str(cid) for cid in processed_cupon_ids if cid is not None)
+            data["processed_cupon_ids"] = sorted(processed)
 
-    processed = set(str(item) for item in data.get("processed_cupon_ids", []))
-    processed.update(str(cid) for cid in cupon_ids if cid is not None)
-    data["processed_cupon_ids"] = sorted(processed)
+        history = data.get("history", [])
+        history.append({"at": datetime.now().isoformat(), "payments": payment_results})
+        data["history"] = history[-HISTORY_LIMIT:]
 
-    history = data.get("history", [])
-    history.append({"at": datetime.now().isoformat(), "payments": payment_results})
-    data["history"] = history[-200:]
+        path.parent.mkdir(parents=True, exist_ok=True)
+        with open(path, "w", encoding="utf-8") as handle:
+            json.dump(data, handle, indent=2, ensure_ascii=True)
 
-    path.parent.mkdir(parents=True, exist_ok=True)
-    with open(path, "w", encoding="utf-8") as handle:
-        json.dump(data, handle, indent=2, ensure_ascii=True)
+
+def mark_cupones_processed(cupon_ids: List[Any], payment_results: List[Dict[str, Any]]) -> None:
+    _append_history(payment_results, cupon_ids)
+
+
+def record_external_payments(payment_results: List[Dict[str, Any]]) -> None:
+    """Agrega al historial pagos registrados fuera de TotalNet (ej. Mercado Libre)."""
+    _append_history(payment_results)
 
 
 def _legacy_match_cupones_to_invoices(

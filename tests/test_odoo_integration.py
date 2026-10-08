@@ -140,6 +140,46 @@ class _AttachmentModels:
         raise AssertionError(f"Llamada Odoo inesperada: {model}.{method}")
 
 
+class _MercadoLibreInvoiceModels:
+    def __init__(self, amount=1154.0, payment_state="not_paid", currency="UYU"):
+        self.amount = amount
+        self.payment_state = payment_state
+        self.currency = currency
+        self.sale_domain = None
+        self.invoice_domain = None
+
+    def execute_kw(self, _db, _uid, _password, model, method, args, kwargs=None):
+        if model == "sale.order" and method == "search_read":
+            self.sale_domain = args[0]
+            return [{
+                "id": 80,
+                "name": "ML 2000015420705457",
+                "client_order_ref": "2000015420705457",
+                "origin": "",
+                "invoice_ids": [100],
+            }]
+        if model == "account.move" and method == "fields_get":
+            return {
+                "payment_state": {},
+                "amount_total": {},
+                "amount_residual": {},
+                "currency_id": {},
+                "reversal_move_id": {},
+                "invoice_origin": {},
+            }
+        if model == "account.move" and method == "search_read":
+            self.invoice_domain = args[0]
+            return [{
+                "id": 100,
+                "name": "e-Ticket A-31028",
+                "amount_total": self.amount,
+                "amount_residual": self.amount if self.payment_state in ("not_paid", "partial") else 0.0,
+                "currency_id": [46, self.currency],
+                "payment_state": self.payment_state,
+            }]
+        raise AssertionError(f"Llamada Odoo inesperada: {model}.{method}")
+
+
 class _ProductModels:
     def __init__(self):
         self.count_domain = None
@@ -420,6 +460,69 @@ class TestOdooIntegration(unittest.TestCase):
         self.assertEqual(len(invoices), 1)
         self.assertIn(("payment_state", "in", ["not_paid", "partial"]), models.invoice_domain)
         self.assertIn(("invoice_payment_term_id", "in", [1]), models.invoice_domain)
+
+    def test_mercadolibre_reference_finds_exact_pending_invoice(self):
+        integration = OdooIntegration()
+        models = _MercadoLibreInvoiceModels()
+        integration._build_runtime_config = lambda auth_override=None: {
+            "database": "test",
+            "password": "test",
+            "order_prefix": "ML ",
+        }
+        integration._authenticate = lambda auth_override=None: 7
+        integration._xmlrpc_models = lambda runtime=None: models
+
+        result = integration.find_sale_invoice_for_reference(
+            "2000015420705457",
+            1154.0,
+            "UYU",
+        )
+
+        self.assertTrue(result["can_register"])
+        self.assertEqual(result["sale_order"]["name"], "ML 2000015420705457")
+        self.assertEqual(result["invoice"]["name"], "e-Ticket A-31028")
+        self.assertIn(("id", "in", [100]), models.invoice_domain)
+
+    def test_mercadolibre_reference_never_selects_different_amount(self):
+        integration = OdooIntegration()
+        models = _MercadoLibreInvoiceModels(amount=1100.0)
+        integration._build_runtime_config = lambda auth_override=None: {
+            "database": "test",
+            "password": "test",
+            "order_prefix": "ML ",
+        }
+        integration._authenticate = lambda auth_override=None: 7
+        integration._xmlrpc_models = lambda runtime=None: models
+
+        result = integration.find_sale_invoice_for_reference(
+            "2000015420705457",
+            1154.0,
+            "UYU",
+        )
+
+        self.assertFalse(result["can_register"])
+        self.assertIn("no coincide", result["reason"])
+
+    def test_mercadolibre_reference_reports_paid_invoice_with_rounding_cent(self):
+        integration = OdooIntegration()
+        models = _MercadoLibreInvoiceModels(amount=1154.01, payment_state="paid")
+        integration._build_runtime_config = lambda auth_override=None: {
+            "database": "test",
+            "password": "test",
+            "order_prefix": "ML ",
+        }
+        integration._authenticate = lambda auth_override=None: 7
+        integration._xmlrpc_models = lambda runtime=None: models
+
+        result = integration.find_sale_invoice_for_reference(
+            "2000015420705457",
+            1154.0,
+            "UYU",
+        )
+
+        self.assertFalse(result["can_register"])
+        self.assertIn("ya tiene el pago registrado", result["reason"])
+        self.assertEqual(result["invoice"]["name"], "e-Ticket A-31028")
 
     def test_register_payment_rejects_invoice_that_is_already_paid(self):
         integration = OdooIntegration()

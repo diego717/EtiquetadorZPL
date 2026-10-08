@@ -423,7 +423,10 @@ body.admin-only .group-index { display: none; }
 .form-group.compact { margin-bottom: 0; }
 .form-group.compact label { font-size: 12px; color: #9cb2d1; }
 .form-group.compact input { width: 150px; }
+.form-group.compact select { width: 220px; }
 .adm-quick-print .form-group.compact input { width: 210px; }
+.meli-payments-table { min-width: 1180px; }
+.meli-payments-table td:last-child { display: flex; gap: 7px; align-items: center; flex-wrap: wrap; }
 
 .form-row {
     display: grid;
@@ -708,7 +711,7 @@ body.pos-only-view #pos-reconciliation-section { display: block !important; }
 
 .pos-history-filters {
     display: grid;
-    grid-template-columns: minmax(220px, 2fr) repeat(3, minmax(150px, 1fr)) auto;
+    grid-template-columns: minmax(220px, 2fr) repeat(4, minmax(140px, 1fr)) auto;
     gap: 10px;
     align-items: end;
     margin: 10px 0 14px;
@@ -717,6 +720,19 @@ body.pos-only-view #pos-reconciliation-section { display: block !important; }
 .pos-history-filters .form-group { margin-bottom: 0; }
 .pos-history-actions { display: flex; gap: 6px; flex-wrap: wrap; }
 .pos-history-status { white-space: nowrap; }
+
+.pay-source-tabs { margin: 4px 0 16px; }
+.pay-source-badge {
+    display: inline-block;
+    padding: 2px 8px;
+    border: 1px solid var(--line);
+    border-radius: 999px;
+    font-size: 12px;
+    font-weight: 700;
+    white-space: nowrap;
+}
+.pay-source-badge[data-source="mercadolibre"] { border-color: var(--warn); color: var(--warn); }
+.pay-source-badge[data-source="totalnet"] { border-color: var(--accent); color: var(--accent); }
 
 @media (max-width: 1000px) {
     .pos-history-filters { grid-template-columns: repeat(2, minmax(0, 1fr)); }

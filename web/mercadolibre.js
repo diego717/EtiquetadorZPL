@@ -2,6 +2,23 @@
 
 let mercadoLibreConfig = {};
 let mercadoLibreSales = [];
+let mercadoLibrePayments = [];
+let mercadoLibrePaymentJournals = [];
+let mercadoLibrePaymentOperators = [];
+
+function escapeMercadoLibreHtml(value) {
+    return String(value ?? '')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+}
+
+function formatMercadoLibreAmount(value, currency) {
+    const amount = Number(value || 0);
+    return `${new Intl.NumberFormat('es-UY', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(amount)} ${currency || ''}`.trim();
+}
 
 function updateMercadoLibreForm() {
     const config = mercadoLibreConfig || {};
@@ -51,6 +68,7 @@ async function loadMercadoLibreConfig() {
         mercadoLibreConfig = {};
     }
     updateMercadoLibreForm();
+    await loadMercadoLibrePaymentOptions();
 }
 
 async function refreshMercadoLibreStatus() {
@@ -228,4 +246,223 @@ async function syncMercadoLibreSales() {
 async function printSyncedShipment(shipmentId) {
     document.getElementById('meli-test-shipment-id').value = shipmentId;
     await testMercadoLibrePrint();
+}
+
+async function loadMercadoLibrePaymentOptions() {
+    const operatorSelect = document.getElementById('meli-payment-operator');
+    const journalSelect = document.getElementById('meli-payment-journal');
+    if (!operatorSelect || !journalSelect) return;
+
+    const previousOperator = operatorSelect.value;
+    const previousJournal = journalSelect.value;
+    const roundingSelect = document.getElementById('meli-payment-rounding-account');
+    const previousRounding = roundingSelect?.value || '';
+    const response = await fetchAPI('/api/mercadolibre/payments/options');
+    mercadoLibrePaymentOperators = response?.operators || [];
+    mercadoLibrePaymentJournals = response?.journals || [];
+
+    operatorSelect.replaceChildren(new Option('Selecciona quien registra', ''));
+    mercadoLibrePaymentOperators.forEach((operator) => {
+        const label = operator.odoo_username
+            ? `${operator.app_username} (${operator.odoo_username})`
+            : operator.app_username;
+        operatorSelect.add(new Option(label, operator.app_username));
+    });
+    operatorSelect.disabled = mercadoLibrePaymentOperators.length === 0;
+    if (mercadoLibrePaymentOperators.some(item => item.app_username === previousOperator)) {
+        operatorSelect.value = previousOperator;
+    }
+
+    journalSelect.replaceChildren(new Option('Selecciona el diario', ''));
+    mercadoLibrePaymentJournals.forEach((journal) => {
+        const currency = Array.isArray(journal.currency_id) ? journal.currency_id[1] : '';
+        journalSelect.add(new Option(`${journal.name}${currency ? ` (${currency})` : ''}`, String(journal.id)));
+    });
+    journalSelect.disabled = mercadoLibrePaymentJournals.length === 0;
+    if (mercadoLibrePaymentJournals.some(item => String(item.id) === previousJournal)) {
+        journalSelect.value = previousJournal;
+    } else {
+        const mercadoPagoJournal = mercadoLibrePaymentJournals.find(item => /mercado\s*pago/i.test(item.name || ''));
+        if (mercadoPagoJournal) journalSelect.value = String(mercadoPagoJournal.id);
+    }
+
+    if (!roundingSelect) return;
+    const roundingAccounts = response?.rounding_accounts || [];
+    roundingSelect.replaceChildren(new Option('Selecciona la cuenta de redondeo', ''));
+    roundingAccounts.forEach((account) => {
+        roundingSelect.add(new Option(`${account.code || ''} - ${account.name}`.replace(/^ - /, ''), String(account.id)));
+    });
+    roundingSelect.disabled = roundingAccounts.length === 0;
+    if (roundingAccounts.some(item => String(item.id) === previousRounding)) {
+        roundingSelect.value = previousRounding;
+    } else {
+        // Misma cuenta sugerida que Conciliacion POS.
+        const suggested = roundingAccounts.find(item => /^redondeos$/i.test(
+            String(item.name || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim()
+        ));
+        if (suggested) roundingSelect.value = String(suggested.id);
+    }
+}
+
+function renderMercadoLibrePayments() {
+    const tbody = document.getElementById('meli-payments-body');
+    const summary = document.getElementById('meli-payment-summary');
+    if (!tbody || !summary) return;
+
+    if (!mercadoLibrePayments.length) {
+        tbody.innerHTML = '<tr><td colspan="8" class="empty-cell">No hay pagos para mostrar</td></tr>';
+        summary.textContent = 'Sin datos';
+        summary.classList.add('is-empty');
+        return;
+    }
+
+    const ready = mercadoLibrePayments.filter(item => item.can_register).length;
+    const registered = mercadoLibrePayments.filter(item => item.registered).length;
+    summary.textContent = `${ready} listos${registered ? ` · ${registered} registrados` : ''} de ${mercadoLibrePayments.length}`;
+    summary.classList.remove('is-empty');
+
+    tbody.innerHTML = mercadoLibrePayments.map((item) => {
+        const orderId = escapeMercadoLibreHtml(item.order_id || '');
+        const reference = escapeMercadoLibreHtml(item.reference || '');
+        const orderTitle = escapeMercadoLibreHtml(item.pack_id
+            ? `Pack ${item.pack_id} - ordenes: ${(item.order_ids || []).join(', ')}`
+            : `Orden ${item.order_id || ''}`);
+        const amountTitle = escapeMercadoLibreHtml(item.shipping_amount
+            ? `Productos ${formatMercadoLibreAmount(item.products_amount, item.currency)} + envio ${formatMercadoLibreAmount(item.shipping_amount, item.currency)}`
+            : '');
+        const invoice = item.invoice || {};
+        const invoiceName = escapeMercadoLibreHtml(invoice.name || '-');
+        const paymentReference = escapeMercadoLibreHtml(item.payment_reference || '-');
+        const registered = item.registered === true;
+        const statusText = registered ? 'Registrado y adjuntado' : (item.can_register ? 'Listo para registrar' : (item.reason || 'No disponible'));
+        const statusClass = registered ? 'completed' : (item.can_register ? 'ready' : 'pending');
+        const paymentUrl = item.registration?.payment_url;
+        const invoiceUrl = item.registration?.invoice_url;
+        return `
+            <tr>
+                <td class="mono-id" title="${orderTitle}">${reference || orderId || '-'}</td>
+                <td>${escapeMercadoLibreHtml(item.payment_date || '-')}</td>
+                <td>${escapeMercadoLibreHtml(item.buyer || '-')}</td>
+                <td title="${amountTitle}">${escapeMercadoLibreHtml(formatMercadoLibreAmount(item.amount, item.currency))}</td>
+                <td class="mono-id">${paymentReference}</td>
+                <td>${invoiceName}</td>
+                <td><span class="status ${statusClass}" title="${escapeMercadoLibreHtml(statusText)}">${escapeMercadoLibreHtml(statusText)}</span></td>
+                <td>
+                    ${item.can_register ? `<button type="button" class="btn success sm" data-order-id="${orderId}" onclick="registerMercadoLibrePayment(this.dataset.orderId, this)">Registrar pago</button>` : ''}
+                    ${paymentUrl ? `<a class="btn secondary sm" href="${escapeMercadoLibreHtml(paymentUrl)}" target="_blank" rel="noopener noreferrer">Abrir pago ↗</a>` : ''}
+                    ${invoiceUrl ? `<a class="btn-link-odoo" href="${escapeMercadoLibreHtml(invoiceUrl)}" target="_blank" rel="noopener noreferrer">Factura ↗</a>` : ''}
+                </td>
+            </tr>
+        `;
+    }).join('');
+}
+
+async function syncMercadoLibrePayments() {
+    const summary = document.getElementById('meli-payment-summary');
+    if (summary) {
+        summary.textContent = 'Buscando...';
+        summary.classList.remove('is-empty');
+    }
+    try {
+        await loadMercadoLibrePaymentOptions();
+        const apiBase = await ensureApiPort();
+        const limit = parseInt(document.getElementById('meli-payment-limit').value, 10) || 20;
+        const response = await fetch(`${apiBase}/api/mercadolibre/payments/proposal`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ limit })
+        });
+        const result = await response.json();
+        if (!response.ok) throw new Error(result.detail || `HTTP ${response.status}`);
+        mercadoLibrePayments = result.items || [];
+        renderMercadoLibrePayments();
+    } catch (error) {
+        mercadoLibrePayments = [];
+        renderMercadoLibrePayments();
+        alert(`Error buscando pagos de Mercado Libre: ${error.message}`);
+    }
+}
+
+async function registerMercadoLibrePayment(orderId, button) {
+    const item = mercadoLibrePayments.find(row => String(row.order_id) === String(orderId));
+    if (!item || !item.can_register) return;
+    const operatorSelect = document.getElementById('meli-payment-operator');
+    const journalSelect = document.getElementById('meli-payment-journal');
+    if (!operatorSelect.value) {
+        alert('Selecciona quien registrara el pago en Odoo');
+        operatorSelect.focus();
+        return;
+    }
+    if (!journalSelect.value) {
+        alert('Selecciona el diario contable Mercado Pago');
+        journalSelect.focus();
+        return;
+    }
+    const roundingSelect = document.getElementById('meli-payment-rounding-account');
+    const roundingAccountId = parseInt(roundingSelect?.value || '', 10) || null;
+    const roundingDifference = Number(item.rounding_difference || 0);
+    if (roundingDifference && !roundingAccountId) {
+        alert('La factura difiere por redondeo: selecciona la cuenta de redondeo');
+        roundingSelect?.focus();
+        return;
+    }
+
+    const confirmed = await uiConfirm({
+        tone: 'danger',
+        title: 'Registrar pago de Mercado Libre',
+        message: 'Se creara un pago real en Odoo y se adjuntara el comprobante PDF.',
+        details: [
+            ['Venta ML', item.pack_id ? `Pack ${item.pack_id}` : item.order_id],
+            ['Factura', item.invoice?.name || item.invoice?.id || '-'],
+            ['Productos', formatMercadoLibreAmount(item.products_amount ?? item.amount, item.currency)],
+            ['Envio', formatMercadoLibreAmount(item.shipping_amount || 0, item.currency)],
+            ['Importe a registrar', formatMercadoLibreAmount(item.amount, item.currency)],
+            ...(roundingDifference ? [[
+                'Redondeo',
+                `${formatMercadoLibreAmount(roundingDifference, item.currency)} a ${roundingSelect.options[roundingSelect.selectedIndex]?.text || ''}`
+            ]] : []),
+            ['Pago ML', item.payment_reference || '-'],
+            ['Operador', operatorSelect.options[operatorSelect.selectedIndex]?.text || operatorSelect.value],
+            ['Diario', journalSelect.options[journalSelect.selectedIndex]?.text || journalSelect.value]
+        ],
+        confirmText: 'Registrar pago'
+    });
+    if (!confirmed) return;
+
+    button.disabled = true;
+    const originalText = button.textContent;
+    button.textContent = 'Registrando...';
+    try {
+        const apiBase = await ensureApiPort();
+        const response = await fetch(`${apiBase}/api/mercadolibre/payments/register`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                order_id: item.order_id,
+                journal_id: parseInt(journalSelect.value, 10),
+                operator_app_username: operatorSelect.value,
+                rounding_account_id: roundingAccountId
+            })
+        });
+        const result = await response.json();
+        if (!response.ok) throw new Error(result.detail || `HTTP ${response.status}`);
+
+        item.registered = true;
+        item.can_register = false;
+        item.registration = result;
+        item.reason = result.attachment_ok
+            ? 'Pago registrado con comprobante PDF'
+            : (result.warning || 'Pago registrado sin comprobante');
+        renderMercadoLibrePayments();
+        if (typeof loadPosHistory === 'function') loadPosHistory();
+        if (result.warning) {
+            uiToast(result.warning, 'info', { title: 'Pago registrado con advertencia', duration: 9000 });
+        } else {
+            uiToast('Pago registrado en Odoo con el PDF adjunto.', 'success');
+        }
+    } catch (error) {
+        button.disabled = false;
+        button.textContent = originalText;
+        alert(`Error registrando pago de Mercado Libre: ${error.message}`);
+    }
 }

@@ -297,6 +297,7 @@ initTheme();
 initThemeFxControls();
 initViewMode();
 if (POS_ONLY_VIEW) {
+    initPaymentSource();
     loadTotalNetConfig();
     loadPosReconciliationConfig();
     loadPosJournals();

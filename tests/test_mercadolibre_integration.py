@@ -140,5 +140,151 @@ class TestMercadoLibreManualTokenEndpoint(unittest.TestCase):
         save_tokens.assert_not_called()
 
 
+class _FakePaymentOdoo:
+    def __init__(self, operator_exists=True):
+        self.operator_exists = operator_exists
+        self.authenticated_with = None
+
+    def is_configured(self):
+        return True
+
+    def get_payment_journals(self):
+        return [{"id": 12, "name": "Mercado Pago $", "type": "bank"}]
+
+    def get_rounding_accounts(self):
+        return [{"id": 31, "code": "5.1.9", "name": "Redondeos"}]
+
+    def get_operator_odoo_users_public(self):
+        return [{"app_username": "vale", "odoo_username": "vale@example.com", "has_password": True}]
+
+    def resolve_operator_auth_exact(self, operator):
+        if self.operator_exists and operator == "vale":
+            return {"username": "vale@example.com", "password": "secret"}
+        return None
+
+    def _authenticate(self, auth_override=None):
+        self.authenticated_with = dict(auth_override or {})
+        return 25
+
+
+class _FakePaymentMercadoLibre:
+    def __init__(self):
+        self.saved = []
+
+    def is_authenticated(self):
+        return True
+
+    def save_config(self, updates):
+        self.saved.append(dict(updates))
+
+
+class TestMercadoLibrePaymentEndpoints(unittest.TestCase):
+    def test_payment_options_do_not_expose_operator_passwords(self):
+        fake_odoo = _FakePaymentOdoo()
+        with patch.object(endpoints, "odoo_integration", fake_odoo):
+            result = asyncio.run(endpoints.get_payment_options())
+
+        self.assertEqual(result["journals"][0]["name"], "Mercado Pago $")
+        self.assertEqual(result["rounding_accounts"][0]["name"], "Redondeos")
+        self.assertEqual(result["operators"][0]["odoo_username"], "vale@example.com")
+        self.assertNotIn("password", result["operators"][0])
+
+    def test_register_payment_rejects_unknown_operator_before_writing(self):
+        request = endpoints.RegisterMercadoLibrePaymentRequest(
+            order_id="2000015420705457",
+            journal_id=12,
+            operator_app_username="desconocido",
+        )
+        with patch.object(endpoints, "odoo_integration", _FakePaymentOdoo(operator_exists=False)), patch.object(
+            endpoints, "mercadolibre_integration", _FakePaymentMercadoLibre()
+        ):
+            with self.assertRaises(endpoints.HTTPException) as caught:
+                asyncio.run(endpoints.register_mercadolibre_payment(request))
+
+        self.assertIn("Selecciona un operador", caught.exception.detail)
+
+    def test_register_payment_forwards_verified_operator_to_service(self):
+        fake_odoo = _FakePaymentOdoo()
+        fake_meli = _FakePaymentMercadoLibre()
+        request = endpoints.RegisterMercadoLibrePaymentRequest(
+            order_id="2000015420705457",
+            journal_id=12,
+            operator_app_username="VALE",
+            rounding_account_id=31,
+        )
+        expected = {"ok": True, "attachment_ok": True}
+        with patch.object(endpoints, "odoo_integration", fake_odoo), patch.object(
+            endpoints, "mercadolibre_integration", fake_meli
+        ), patch.object(
+            endpoints.payment_service, "register_order_payment", return_value=expected
+        ) as register:
+            result = asyncio.run(endpoints.register_mercadolibre_payment(request))
+
+        auth = {"username": "vale@example.com", "password": "secret"}
+        register.assert_called_once_with(
+            fake_meli,
+            fake_odoo,
+            order_id="2000015420705457",
+            journal_id=12,
+            auth_override=auth,
+            rounding_account_id=31,
+        )
+        self.assertEqual(fake_odoo.authenticated_with, auth)
+        self.assertEqual(result["actor_app_username"], "vale")
+        self.assertEqual(result["actor_odoo_username"], "vale@example.com")
+
+    def _register_with_history(self, record_side_effect=None):
+        request = endpoints.RegisterMercadoLibrePaymentRequest(
+            order_id="2000018868191948",
+            journal_id=12,
+            operator_app_username="vale",
+        )
+        service_result = {
+            "ok": True,
+            "attachment_ok": True,
+            "order": {
+                "reference": "2000015420705457",
+                "pack_id": "2000015420705457",
+                "order_ids": ["2000018868191948"],
+                "payment_reference": "182038050669",
+                "buyer": "MARIA.BMB",
+                "payment_date": "2026-10-08",
+                "currency": "UYU",
+                "shipping_amount": 260.0,
+            },
+            "invoice": {"id": 100, "name": "e-Ticket A-31028"},
+            "result": {"payment_id": 951},
+            "payment_amount": 1154.0,
+            "rounding_difference": 0.01,
+        }
+        with patch.object(endpoints, "odoo_integration", _FakePaymentOdoo()), patch.object(
+            endpoints, "mercadolibre_integration", _FakePaymentMercadoLibre()
+        ), patch.object(
+            endpoints.payment_service, "register_order_payment", return_value=service_result
+        ), patch.object(
+            endpoints.recon, "record_external_payments", side_effect=record_side_effect
+        ) as record:
+            result = asyncio.run(endpoints.register_mercadolibre_payment(request))
+        return result, record
+
+    def test_register_payment_is_saved_in_shared_payment_history(self):
+        _result, record = self._register_with_history()
+
+        entry = record.call_args.args[0][0]
+        self.assertEqual(entry["source"], "mercadolibre")
+        self.assertTrue(entry["ok"])
+        self.assertEqual(entry["invoice_name"], "e-Ticket A-31028")
+        self.assertEqual(entry["payment_id"], 951)
+        self.assertEqual(entry["actor_odoo_username"], "vale@example.com")
+        self.assertEqual(entry["mercadolibre"]["reference"], "2000015420705457")
+        self.assertEqual(entry["mercadolibre"]["amount"], 1154.0)
+
+    def test_history_failure_does_not_report_registered_payment_as_failed(self):
+        result, _record = self._register_with_history(OSError("disco lleno"))
+
+        self.assertTrue(result["ok"])
+        self.assertIn("historial", result["warning"])
+
+
 if __name__ == "__main__":
     unittest.main()

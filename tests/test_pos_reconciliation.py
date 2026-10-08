@@ -341,5 +341,23 @@ class TestPosReconciliation(unittest.TestCase):
         self.assertEqual(result["sin_match"][0]["amount_candidates"], [])
 
 
+class TestSharedPaymentHistory(unittest.TestCase):
+    def test_totalnet_and_mercadolibre_share_history_without_marking_coupons(self):
+        import tempfile
+        from unittest.mock import patch
+
+        with tempfile.TemporaryDirectory() as tmp:
+            state_path = Path(tmp) / "pos_reconciliation_state.json"
+            with patch.object(reconciliation, "_resolve_state_path", return_value=state_path):
+                reconciliation.mark_cupones_processed([77], [{"ok": True, "cupon_id": 77}])
+                reconciliation.record_external_payments(
+                    [{"ok": True, "source": "mercadolibre", "payment_id": 951}]
+                )
+                state = reconciliation.load_state()
+
+        self.assertEqual(state["processed_cupon_ids"], ["77"])
+        self.assertEqual(len(state["history"]), 2)
+        self.assertEqual(state["history"][1]["payments"][0]["source"], "mercadolibre")
+
 if __name__ == "__main__":
     unittest.main()

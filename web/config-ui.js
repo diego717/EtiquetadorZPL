@@ -255,8 +255,8 @@ function initViewMode() {
         adminOnlyMode = false;
         document.body.classList.add('pos-only-view');
         applyAdminOnlyMode();
-        document.getElementById('page-title').textContent = 'Conciliacion de pagos POS';
-        document.getElementById('page-subtitle').textContent = 'TotalNet y facturas pendientes de Odoo en una vista operativa independiente';
+        document.getElementById('page-title').textContent = 'Conciliacion de pagos';
+        document.getElementById('page-subtitle').textContent = 'Cobros de TotalNet y Mercado Libre contra facturas de Odoo, con un historial comun';
         document.getElementById('nav-config-link')?.classList.remove('active');
         document.getElementById('nav-pos-link')?.classList.add('active');
         return;

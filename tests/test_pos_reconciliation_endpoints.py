@@ -299,6 +299,41 @@ class TestPosReconciliationEndpoints(unittest.TestCase):
         self.assertEqual(result["items"][0]["cupon"]["ticket"], "815")
         self.assertIn("model=account.move", result["items"][0]["invoice_url"])
         self.assertIn("model=account.payment", result["items"][0]["payment_url"])
+        self.assertEqual(result["items"][0]["source"], "totalnet")
+
+    def test_history_includes_mercadolibre_payments_without_fake_coupon(self):
+        fake = _FakeOdooIntegration()
+        state = {
+            "processed_cupon_ids": [],
+            "history": [
+                {
+                    "at": "2026-10-08T15:00:00",
+                    "payments": [
+                        {
+                            "source": "mercadolibre",
+                            "ok": True,
+                            "invoice_id": 100,
+                            "invoice_name": "e-Ticket A-31028",
+                            "payment_id": 951,
+                            "attachment": {
+                                "filename": "MercadoLibre_Orden_2000015420705457_Pago_99887766.pdf"
+                            },
+                            "mercadolibre": {"reference": "2000015420705457", "amount": 1154.0},
+                        }
+                    ],
+                }
+            ],
+        }
+        with patch.object(endpoints, "odoo_integration", fake), patch.object(
+            endpoints.recon, "load_state", return_value=state
+        ):
+            result = asyncio.run(endpoints.get_history())
+
+        item = result["items"][0]
+        self.assertEqual(item["source"], "mercadolibre")
+        self.assertNotIn("cupon", item)
+        self.assertEqual(item["mercadolibre"]["reference"], "2000015420705457")
+        self.assertIn("model=account.payment", item["payment_url"])
 
     def test_confirm_explains_how_to_fix_a_missing_journal(self):
         fake = _FakeOdooIntegration()

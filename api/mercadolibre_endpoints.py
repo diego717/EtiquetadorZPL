@@ -16,6 +16,9 @@ from pydantic import BaseModel, Field
 from httpx_client import get_sync_http_client
 
 from mercadolibre_integration import mercadolibre_integration
+import mercadolibre_payment_service as payment_service
+import pos_reconciliation as recon
+from odoo_integration import odoo_integration
 from print_dispatch_queue import print_dispatch_queue
 
 logger = logging.getLogger(__name__)
@@ -48,6 +51,13 @@ class PrintShipmentRequest(BaseModel):
 
 class SyncSalesRequest(BaseModel):
     limit: int = Field(default=20, ge=1, le=50)
+
+
+class RegisterMercadoLibrePaymentRequest(BaseModel):
+    order_id: str
+    journal_id: int = Field(gt=0)
+    operator_app_username: str
+    rounding_account_id: Optional[int] = Field(default=None, gt=0)
 
 
 def _read_api_port() -> str:
@@ -302,6 +312,116 @@ async def sync_ready_sales(request: SyncSalesRequest) -> Dict[str, Any]:
     except Exception as exc:
         mercadolibre_integration.save_config({"last_error": str(exc)})
         raise HTTPException(status_code=500, detail=str(exc))
+
+
+@router.get("/payments/options")
+async def get_payment_options() -> Dict[str, Any]:
+    """Opciones publicas para registrar pagos, sin exponer contrasenas."""
+    try:
+        journals = await asyncio.to_thread(odoo_integration.get_payment_journals)
+        rounding_accounts = await asyncio.to_thread(odoo_integration.get_rounding_accounts)
+        return {
+            "journals": journals,
+            "rounding_accounts": rounding_accounts,
+            "operators": odoo_integration.get_operator_odoo_users_public(),
+        }
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+
+
+@router.post("/payments/proposal")
+async def build_payment_proposal(request: SyncSalesRequest) -> Dict[str, Any]:
+    if not mercadolibre_integration.is_authenticated():
+        raise HTTPException(status_code=400, detail="Mercado Libre no esta autenticado")
+    if not odoo_integration.is_configured():
+        raise HTTPException(status_code=400, detail="Odoo no esta configurado")
+    try:
+        return await asyncio.to_thread(
+            payment_service.build_payment_proposal,
+            mercadolibre_integration,
+            odoo_integration,
+            request.limit,
+        )
+    except Exception as exc:
+        message = str(exc or "").strip() or "No se pudieron preparar los pagos de Mercado Libre"
+        raise HTTPException(status_code=400, detail=message)
+
+
+def _history_entry(result: Dict[str, Any]) -> Dict[str, Any]:
+    """Entrada del historial de pagos registrados compartido con TotalNet."""
+    sale = result.get("order") or {}
+    invoice = result.get("invoice") or {}
+    payment_result = result.get("result") or {}
+    return {
+        "source": "mercadolibre",
+        "ok": True,
+        "invoice_id": invoice.get("id"),
+        "invoice_name": invoice.get("name"),
+        "payment_id": payment_result.get("payment_id"),
+        "operator_app_username": result.get("actor_app_username"),
+        "actor_odoo_username": result.get("actor_odoo_username"),
+        "memo": result.get("memo"),
+        "warning": result.get("warning"),
+        "attachment": result.get("attachment"),
+        "mercadolibre": {
+            "reference": sale.get("reference"),
+            "pack_id": sale.get("pack_id"),
+            "order_ids": sale.get("order_ids"),
+            "payment_reference": sale.get("payment_reference"),
+            "buyer": sale.get("buyer"),
+            "payment_date": sale.get("payment_date"),
+            "amount": result.get("payment_amount"),
+            "currency": sale.get("currency"),
+            "shipping_amount": sale.get("shipping_amount"),
+            "rounding_difference": result.get("rounding_difference"),
+        },
+    }
+
+
+@router.post("/payments/register")
+async def register_mercadolibre_payment(
+    request: RegisterMercadoLibrePaymentRequest,
+) -> Dict[str, Any]:
+    if not mercadolibre_integration.is_authenticated():
+        raise HTTPException(status_code=400, detail="Mercado Libre no esta autenticado")
+    if not odoo_integration.is_configured():
+        raise HTTPException(status_code=400, detail="Odoo no esta configurado")
+
+    operator = str(request.operator_app_username or "").strip().lower()
+    auth_override = odoo_integration.resolve_operator_auth_exact(operator)
+    if not auth_override:
+        raise HTTPException(
+            status_code=400,
+            detail="Selecciona un operador con credenciales Odoo completas",
+        )
+    try:
+        await asyncio.to_thread(odoo_integration._authenticate, auth_override)
+        result = await asyncio.to_thread(
+            payment_service.register_order_payment,
+            mercadolibre_integration,
+            odoo_integration,
+            order_id=request.order_id,
+            journal_id=request.journal_id,
+            auth_override=auth_override,
+            rounding_account_id=request.rounding_account_id,
+        )
+        result["actor_app_username"] = operator
+        result["actor_odoo_username"] = str(auth_override.get("username") or "")
+        try:
+            await asyncio.to_thread(recon.record_external_payments, [_history_entry(result)])
+        except Exception as exc:
+            # El pago ya existe en Odoo: no se informa como fallido para no
+            # inducir un reintento, solo se advierte que falta en el historial.
+            logger.warning("No se pudo guardar el pago ML en el historial: %s", exc)
+            result["warning"] = " ".join(filter(None, [
+                result.get("warning"),
+                "No se pudo guardar en el historial de pagos registrados.",
+            ]))
+        return result
+    except Exception as exc:
+        message = str(exc or "").strip() or "No se pudo registrar el pago de Mercado Libre"
+        mercadolibre_integration.save_config({"last_error": message})
+        raise HTTPException(status_code=400, detail=message)
 
 
 @router.get("/shipments/{shipment_id}")
