@@ -76,12 +76,7 @@ def generate_totalnet_transaction_pdf(coupon: Dict[str, Any], branding: Optional
     document = fitz.open()
     try:
         page = document.new_page(width=595, height=842)
-        subtitle = (
-            "Comprobante transcripto manualmente desde el ticket TotalNet"
-            if coupon.get("manual_entry")
-            else "Comprobante generado desde la API de TotalNet"
-        )
-        y = draw_header(page, branding, "Detalle de la transacción", subtitle, margin=44)
+        y = draw_header(page, branding, "Detalle de la transacción", margin=44)
         row_height = 28.0
         for index, (label, value) in enumerate(_rows(coupon)):
             if index % 2 == 0:

@@ -58,6 +58,8 @@ class TestTotalNetReceiptPDF(unittest.TestCase):
         self.assertIn("1.292,02", text)
         self.assertIn("1.270,84", text)
         self.assertIn("BANCO DE LA REPUBLICA", text)
+        self.assertNotIn("Comprobante generado desde la API de TotalNet", text)
+        self.assertNotIn("Comprobante transcripto manualmente desde el ticket TotalNet", text)
 
     def test_filename_is_unique_per_coupon(self):
         self.assertEqual(

@@ -153,6 +153,7 @@ class PosReconciliationWorker:
             invoice = match["invoice"]
             entry: Dict[str, Any] = {
                 "cupon_id": cupon.get("cupon_id"),
+                "cupon": dict(cupon),
                 "invoice_id": invoice.get("invoice_id"),
                 "invoice_name": invoice.get("name"),
                 "operator_app_username": operator,

@@ -113,6 +113,9 @@ class _FakeOdooIntegration:
         )
         return {"attachment_id": 700, "attachment_created": True, "filename": filename}
 
+    def record_url(self, model, record_id):
+        return f"https://odoo.example/web#id={record_id}&model={model}&view_type=form"
+
 
 class TestPosReconciliationEndpoints(unittest.TestCase):
     @staticmethod
@@ -182,6 +185,8 @@ class TestPosReconciliationEndpoints(unittest.TestCase):
         self.assertEqual(result["operator"]["odoo_username"], "vale@example.com")
         self.assertEqual(result["items"][0]["actor_odoo_username"], "vale@example.com")
         self.assertEqual(saved_history[0][1][0]["operator_app_username"], "vale")
+        self.assertEqual(saved_history[0][1][0]["invoice_name"], "e-Ticket A-30300")
+        self.assertEqual(saved_history[0][1][0]["cupon"]["cupon_id"], 77)
         self.assertTrue(result["items"][0]["attachment_ok"])
         self.assertEqual(fake.attachment_calls[0]["auth_override"], expected_auth)
         self.assertTrue(fake.attachment_calls[0]["pdf_bytes"].startswith(b"%PDF"))
@@ -253,6 +258,47 @@ class TestPosReconciliationEndpoints(unittest.TestCase):
         self.assertEqual(raised.exception.status_code, 400)
         self.assertIn("no tiene credenciales Odoo", raised.exception.detail)
         self.assertEqual(fake.payment_calls, [])
+
+    def test_history_is_flattened_and_links_to_invoice_and_payment(self):
+        fake = _FakeOdooIntegration()
+        state = {
+            "processed_cupon_ids": [77],
+            "history": [
+                {
+                    "at": "2026-10-08T14:30:00",
+                    "payments": [
+                        {
+                            "ok": True,
+                            "cupon_id": 77,
+                            "invoice_id": 100,
+                            "result": {
+                                "invoice_id": 100,
+                                "action_result": {
+                                    "res_model": "account.payment",
+                                    "res_id": 950,
+                                },
+                            },
+                            "original_amount": 490.0,
+                            "attachment": {
+                                "filename": "TotalNet_Fact_30300_Ticket_815_Cupon_77.pdf"
+                            },
+                        }
+                    ],
+                }
+            ],
+        }
+        with patch.object(endpoints, "odoo_integration", fake), patch.object(
+            endpoints.recon, "load_state", return_value=state
+        ):
+            result = asyncio.run(endpoints.get_history())
+
+        self.assertEqual(result["total"], 1)
+        self.assertEqual(result["items"][0]["registered_at"], "2026-10-08T14:30:00")
+        self.assertEqual(result["items"][0]["payment_id"], 950)
+        self.assertEqual(result["items"][0]["invoice_name"], "Factura 30300")
+        self.assertEqual(result["items"][0]["cupon"]["ticket"], "815")
+        self.assertIn("model=account.move", result["items"][0]["invoice_url"])
+        self.assertIn("model=account.payment", result["items"][0]["payment_url"])
 
     def test_confirm_explains_how_to_fix_a_missing_journal(self):
         fake = _FakeOdooIntegration()

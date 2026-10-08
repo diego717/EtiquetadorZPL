@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import asyncio
 import hashlib
+import re
 from datetime import date, timedelta
 from decimal import Decimal, InvalidOperation
 from typing import Any, Dict, List, Optional
@@ -364,7 +365,9 @@ async def confirm(request: PosReconciliationConfirmRequest) -> Dict[str, Any]:
 
         entry: Dict[str, Any] = {
             "cupon_id": cupon.get("cupon_id"),
+            "cupon": dict(cupon),
             "invoice_id": item.invoice_id,
+            "invoice_name": item.invoice_name,
             "operator_app_username": operator_app_username,
             "actor_odoo_username": actor_odoo_username,
         }
@@ -416,4 +419,58 @@ async def confirm(request: PosReconciliationConfirmRequest) -> Dict[str, Any]:
 
 @router.get("/history")
 async def get_history() -> Dict[str, Any]:
-    return await asyncio.to_thread(recon.load_state)
+    state = await asyncio.to_thread(recon.load_state)
+    items: List[Dict[str, Any]] = []
+    for batch in reversed(state.get("history", []) or []):
+        registered_at = batch.get("at")
+        for payment in reversed(batch.get("payments", []) or []):
+            item = dict(payment)
+            payment_result = item.get("result") if isinstance(item.get("result"), dict) else {}
+            invoice_id = item.get("invoice_id") or payment_result.get("invoice_id")
+            payment_id = item.get("payment_id") or payment_result.get("payment_id")
+            action_result = payment_result.get("action_result")
+            if (
+                not payment_id
+                and isinstance(action_result, dict)
+                and action_result.get("res_model") == "account.payment"
+            ):
+                payment_id = action_result.get("res_id")
+
+            # Las primeras versiones no guardaban los datos visibles del cupon.
+            # Recuperar numero de factura y ticket desde el nombre del PDF cuando
+            # este disponible permite que el historial previo siga siendo util.
+            coupon = item.get("cupon") if isinstance(item.get("cupon"), dict) else {}
+            attachment = item.get("attachment") if isinstance(item.get("attachment"), dict) else {}
+            filename = str(attachment.get("filename") or "")
+            if filename and not coupon:
+                invoice_match = re.search(r"_Fact_([^_]+)", filename, flags=re.IGNORECASE)
+                ticket_match = re.search(r"_Ticket_([^_]+)", filename, flags=re.IGNORECASE)
+                coupon = {
+                    "ticket": ticket_match.group(1) if ticket_match else "",
+                    "importe": item.get("original_amount"),
+                    "numero_factura": invoice_match.group(1) if invoice_match else "",
+                }
+                item["cupon"] = coupon
+            if not item.get("invoice_name") and coupon.get("numero_factura"):
+                item["invoice_name"] = f"Factura {coupon['numero_factura']}"
+            item["registered_at"] = registered_at
+            item["invoice_id"] = invoice_id
+            item["payment_id"] = payment_id
+            item["invoice_url"] = ""
+            item["payment_url"] = ""
+            try:
+                if invoice_id:
+                    item["invoice_url"] = odoo_integration.record_url("account.move", invoice_id)
+                if payment_id:
+                    item["payment_url"] = odoo_integration.record_url("account.payment", payment_id)
+            except Exception:
+                # El historial debe seguir siendo consultable aunque la URL base
+                # de Odoo este temporalmente incompleta o invalida.
+                pass
+            items.append(item)
+    return {
+        "processed_cupon_ids": state.get("processed_cupon_ids", []),
+        "history": state.get("history", []),
+        "total": len(items),
+        "items": items,
+    }
