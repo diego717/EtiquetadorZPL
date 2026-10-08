@@ -24,7 +24,7 @@ class TestConstants(unittest.TestCase):
         
         self.assertEqual(APP_NAME, "EtiquetadorZPL")
         self.assertIsNotNone(APP_VERSION)
-        print("✅ Constantes de aplicación OK")
+        print("OK: Constantes de aplicación OK")
     
     def test_job_status(self):
         """Test: Estados de trabajo"""
@@ -35,7 +35,7 @@ class TestConstants(unittest.TestCase):
         self.assertIn('COMPLETED', JOB_STATUS)
         self.assertIn('FAILED', JOB_STATUS)
         self.assertIn('CANCELLED', JOB_STATUS)
-        print("✅ Estados de trabajo OK")
+        print("OK: Estados de trabajo OK")
     
     def test_allowed_extensions(self):
         """Test: Extensiones permitidas"""
@@ -45,7 +45,7 @@ class TestConstants(unittest.TestCase):
         self.assertIn('.txt', ALLOWED_EXTENSIONS)
         self.assertIn('.zpl', ALLOWED_EXTENSIONS)
         self.assertIn('.zip', ALLOWED_EXTENSIONS)
-        print("✅ Extensiones permitidas OK")
+        print("OK: Extensiones permitidas OK")
     
     def test_size_limits(self):
         """Test: Límites de tamaño"""
@@ -54,7 +54,7 @@ class TestConstants(unittest.TestCase):
         self.assertGreater(MAX_FILE_SIZE_BYTES, 0)
         self.assertGreater(MAX_ZIP_SIZE_BYTES, 0)
         self.assertGreater(MAX_ZIP_SIZE_BYTES, MAX_FILE_SIZE_BYTES)
-        print("✅ Límites de tamaño OK")
+        print("OK: Límites de tamaño OK")
 
 
 class TestExceptions(unittest.TestCase):
@@ -73,7 +73,7 @@ class TestExceptions(unittest.TestCase):
         error_dict = exc.to_dict()
         self.assertEqual(error_dict["error"], "TEST_CODE")
         self.assertEqual(error_dict["message"], "Test error")
-        print("✅ Excepción base OK")
+        print("OK: Excepción base OK")
     
     def test_file_exceptions(self):
         """Test: Excepciones de archivo"""
@@ -97,7 +97,7 @@ class TestExceptions(unittest.TestCase):
         exc = InvalidExtensionException(".exe", {".pdf", ".txt"})
         self.assertEqual(exc.code, "INVALID_EXTENSION")
         self.assertIn(".exe", exc.message)
-        print("✅ Excepciones de archivo OK")
+        print("OK: Excepciones de archivo OK")
     
     def test_printer_exceptions(self):
         """Test: Excepciones de impresora"""
@@ -116,7 +116,7 @@ class TestExceptions(unittest.TestCase):
         
         exc = PrinterConnectionException("TestPrinter", "Connection refused")
         self.assertEqual(exc.code, "PRINTER_CONNECTION_ERROR")
-        print("✅ Excepciones de impresora OK")
+        print("OK: Excepciones de impresora OK")
     
     def test_exception_handler(self):
         """Test: Manejador de excepciones"""
@@ -135,7 +135,7 @@ class TestExceptions(unittest.TestCase):
         from exceptions import PrinterConnectionException
         self.assertTrue(ExceptionHandler.is_retryable(PrinterConnectionException("Test", "Error")))
         self.assertTrue(ExceptionHandler.is_retryable(TimeoutError()))
-        print("✅ Manejador de excepciones OK")
+        print("OK: Manejador de excepciones OK")
 
 
 class TestUtils(unittest.TestCase):
@@ -158,7 +158,7 @@ class TestUtils(unittest.TestCase):
         result = func_that_fails_twice()
         self.assertEqual(result, "success")
         self.assertEqual(attempt_count, 3)
-        print("✅ Decorador retry OK")
+        print("OK: Decorador retry OK")
     
     def test_timer(self):
         """Test: Timer context manager"""
@@ -171,7 +171,7 @@ class TestUtils(unittest.TestCase):
             time.sleep(0.1)
         
         self.assertGreater(t.elapsed, 0.1)
-        print("✅ Timer OK")
+        print("OK: Timer OK")
     
     def test_safe_filename(self):
         """Test: safe_filename"""
@@ -187,7 +187,7 @@ class TestUtils(unittest.TestCase):
         result = safe_filename(long_name)
         self.assertLessEqual(len(result), 255)
         
-        print("✅ safe_filename OK")
+        print("OK: safe_filename OK")
     
     def test_format_bytes(self):
         """Test: format_bytes"""
@@ -197,7 +197,7 @@ class TestUtils(unittest.TestCase):
         self.assertIn("KB", format_bytes(2048))
         self.assertIn("MB", format_bytes(2 * 1024 * 1024))
         self.assertIn("GB", format_bytes(2 * 1024 * 1024 * 1024))
-        print("✅ format_bytes OK")
+        print("OK: format_bytes OK")
     
     def test_parse_bool(self):
         """Test: parse_bool"""
@@ -214,7 +214,7 @@ class TestUtils(unittest.TestCase):
         self.assertFalse(parse_bool("0"))
         self.assertFalse(parse_bool("no"))
         
-        print("✅ parse_bool OK")
+        print("OK: parse_bool OK")
     
     def test_deep_merge(self):
         """Test: deep_merge"""
@@ -229,7 +229,7 @@ class TestUtils(unittest.TestCase):
         self.assertEqual(result["b"]["c"], 2)
         self.assertEqual(result["b"]["d"], 3)
         self.assertEqual(result["e"], 4)
-        print("✅ deep_merge OK")
+        print("OK: deep_merge OK")
     
     def test_clamp(self):
         """Test: clamp"""
@@ -238,7 +238,7 @@ class TestUtils(unittest.TestCase):
         self.assertEqual(clamp(5, 0, 10), 5)
         self.assertEqual(clamp(-1, 0, 10), 0)
         self.assertEqual(clamp(15, 0, 10), 10)
-        print("✅ clamp OK")
+        print("OK: clamp OK")
 
 
 class TestRateLimiter(unittest.TestCase):
@@ -261,7 +261,7 @@ class TestRateLimiter(unittest.TestCase):
         self.assertFalse(allowed)
         self.assertIsNotNone(retry_after)
         
-        print("✅ Rate limiter básico OK")
+        print("OK: Rate limiter básico OK")
     
     def test_rate_limiter_reset(self):
         """Test: Reset de rate limiter"""
@@ -290,7 +290,7 @@ class TestRateLimiter(unittest.TestCase):
         self.assertTrue(allowed1)
         self.assertTrue(allowed2)
         
-        print("✅ Rate limiter reset OK")
+        print("OK: Rate limiter reset OK")
     
     def test_circuit_breaker_closed(self):
         """Test: Circuit breaker en estado CLOSED"""
@@ -318,7 +318,7 @@ class TestRateLimiter(unittest.TestCase):
         self.assertEqual(cb.state, CircuitBreaker.STATE_OPEN)
         self.assertFalse(cb.can_execute())
         
-        print("✅ Circuit breaker CLOSED OK")
+        print("OK: Circuit breaker CLOSED OK")
     
     def test_circuit_breaker_open_to_half_open(self):
         """Test: Circuit breaker de OPEN a HALF_OPEN"""
@@ -345,7 +345,7 @@ class TestRateLimiter(unittest.TestCase):
         self.assertTrue(cb.can_execute())
         self.assertEqual(cb.state, CircuitBreaker.STATE_HALF_OPEN)
         
-        print("✅ Circuit breaker OPEN -> HALF_OPEN OK")
+        print("OK: Circuit breaker OPEN -> HALF_OPEN OK")
     
     def test_circuit_breaker_half_open_to_closed(self):
         """Test: Circuit breaker de HALF_OPEN a CLOSED"""
@@ -371,7 +371,7 @@ class TestRateLimiter(unittest.TestCase):
         
         self.assertEqual(cb.state, CircuitBreaker.STATE_CLOSED)
         
-        print("✅ Circuit breaker HALF_OPEN -> CLOSED OK")
+        print("OK: Circuit breaker HALF_OPEN -> CLOSED OK")
 
 
 class TestDatabase(unittest.TestCase):
@@ -401,13 +401,13 @@ class TestDatabase(unittest.TestCase):
         self.assertIsInstance(stats, dict)
         self.assertIn('total_jobs', stats)
         
-        print("✅ Base de datos OK")
+        print("OK: Base de datos OK")
 
 
 def run_tests():
     """Ejecutar todos los tests"""
     print("=" * 60)
-    print("🧪 Tests de Mejoras - EtiquetadorZPL")
+    print("Tests de Mejoras - EtiquetadorZPL")
     print("=" * 60)
     
     # Crear suite
@@ -427,10 +427,10 @@ def run_tests():
     
     print("=" * 60)
     if result.wasSuccessful():
-        print("✅ TODOS LOS TESTS PASARON")
+        print("OK: TODOS LOS TESTS PASARON")
     else:
-        print(f"❌ {len(result.failures)} TESTS FALLARON")
-        print(f"⚠️ {len(result.errors)} ERRORES")
+        print(f"ERROR: {len(result.failures)} TESTS FALLARON")
+        print(f"AVISO: {len(result.errors)} ERRORES")
     
     return result.wasSuccessful()
 

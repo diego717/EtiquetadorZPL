@@ -27,7 +27,7 @@ class TestCoreFunctions(unittest.TestCase):
             from printer_utils import obtener_impresoras
             printers = obtener_impresoras()
             self.assertIsInstance(printers, list)
-            print(f"✅ Impresoras detectadas: {len(printers)}")
+            print(f"OK: Impresoras detectadas: {len(printers)}")
         except Exception as e:
             self.fail(f"Error detectando impresoras: {e}")
     
@@ -57,7 +57,7 @@ class TestCoreFunctions(unittest.TestCase):
             loaded_config.read(config_file)
             
             self.assertEqual(loaded_config['CARPETA1']['entrada'], 'C:/test')
-            print("✅ Configuración: Cargar/Guardar OK")
+            print("OK: Configuración: Cargar/Guardar OK")
             
         except Exception as e:
             self.fail(f"Error en configuración: {e}")
@@ -74,48 +74,34 @@ class TestCoreFunctions(unittest.TestCase):
                 api_port = "8003"  # Puerto por defecto
             
             self.assertIsNotNone(api_port)
-            print(f"✅ API Puerto: {api_port}")
+            print(f"OK: API Puerto: {api_port}")
             
             # Test básico de importación de FastAPI
             try:
                 from fastapi_real import app
                 self.assertIsNotNone(app)
-                print("✅ FastAPI: Importación OK")
+                print("OK: FastAPI: Importación OK")
             except ImportError:
-                print("⚠️ FastAPI no disponible")
+                print("AVISO: FastAPI no disponible")
                 
         except Exception as e:
             self.fail(f"Error en API: {e}")
     
     def test_file_validation(self):
         """Test: Validación de archivos"""
-        try:
-            from validacion import validar_archivo_zpl
-            
-            # Test archivo ZPL válido
-            zpl_content = "^XA^FO50,50^A0N,50,50^FDTest^FS^XZ"
-            test_file = self.temp_path / 'test.zpl'
-            test_file.write_text(zpl_content)
-            
-            is_valid = validar_archivo_zpl(str(test_file))
-            self.assertTrue(is_valid)
-            print("✅ Validación ZPL: OK")
-            
-        except Exception as e:
-            print(f"⚠️ Validación no disponible: {e}")
+        from validacion import validar_archivo_zpl
+
+        # validar_archivo_zpl recibe el contenido ZPL, no la ruta del archivo.
+        self.assertTrue(validar_archivo_zpl("^XA^FO50,50^A0N,50,50^FDTest^FS^XZ"))
+        self.assertFalse(validar_archivo_zpl(""))
+        self.assertFalse(validar_archivo_zpl("texto sin comandos zpl"))
     
     def test_database_connection(self):
         """Test: Conexión a base de datos"""
-        try:
-            from database import db
-            
-            # Test básico de conexión
-            stats = db.get_statistics()
-            self.assertIsInstance(stats, dict)
-            print("✅ Base de datos: Conexión OK")
-            
-        except Exception as e:
-            print(f"⚠️ Base de datos no disponible: {e}")
+        from database import db
+
+        stats = db.get_statistics()
+        self.assertIsInstance(stats, dict)
     
     def test_notification_config(self):
         """Test: Configuración de notificaciones"""
@@ -130,6 +116,7 @@ class TestCoreFunctions(unittest.TestCase):
             }
             
             config_path = get_writable_config_path('test_notification.json')
+            self.addCleanup(lambda: Path(config_path).unlink(missing_ok=True))
             with open(config_path, 'w') as f:
                 json.dump(config, f)
             
@@ -141,7 +128,7 @@ class TestCoreFunctions(unittest.TestCase):
                 loaded_config = json.load(f)
             
             self.assertEqual(loaded_config['desktop_enabled'], True)
-            print("✅ Notificaciones: Configuración OK")
+            print("OK: Notificaciones: Configuración OK")
             
         except Exception as e:
             self.fail(f"Error en notificaciones: {e}")
@@ -149,21 +136,17 @@ class TestCoreFunctions(unittest.TestCase):
     def test_gui_components(self):
         """Test: Componentes GUI básicos"""
         try:
-            # Test importación de GUI
             import tkinter as tk
             root = tk.Tk()
+        except Exception as e:
+            self.skipTest(f"GUI no disponible en este equipo: {e}")
+        try:
             root.withdraw()  # Ocultar ventana
-            
-            # Test StringVar
             test_var = tk.StringVar()
             test_var.set("test_value")
             self.assertEqual(test_var.get(), "test_value")
-            
+        finally:
             root.destroy()
-            print("✅ GUI: Componentes básicos OK")
-            
-        except Exception as e:
-            print(f"⚠️ GUI no disponible: {e}")
     
     def tearDown(self):
         """Limpiar después de tests"""
@@ -178,32 +161,24 @@ class TestSystemIntegration(unittest.TestCase):
     
     def test_full_workflow_simulation(self):
         """Test: Simular flujo completo"""
-        try:
-            # 1. Detectar impresoras
-            from printer_utils import obtener_impresoras
-            printers = obtener_impresoras()
-            
-            # 2. Crear configuración temporal
-            import configparser
-            config = configparser.ConfigParser()
-            config['CARPETA1'] = {
-                'entrada': 'C:/temp/test',
-                'impresora': printers[0] if printers else 'Test_Printer',
-                'historial': 'C:/temp/test/historial',
-                'activa': 'True'
-            }
-            
-            # 3. Verificar que se puede procesar
-            self.assertGreater(len(printers), 0, "No hay impresoras disponibles")
-            
-            print("✅ Flujo completo: Simulación OK")
-            
-        except Exception as e:
-            print(f"⚠️ Flujo completo: {e}")
+        from printer_utils import obtener_impresoras
+        printers = obtener_impresoras()
+        if not printers:
+            self.skipTest("No hay impresoras instaladas en este equipo")
+
+        import configparser
+        config = configparser.ConfigParser()
+        config['CARPETA1'] = {
+            'entrada': 'C:/temp/test',
+            'impresora': printers[0],
+            'historial': 'C:/temp/test/historial',
+            'activa': 'True'
+        }
+        self.assertEqual(config['CARPETA1']['impresora'], printers[0])
 
 def run_tests():
     """Ejecutar todos los tests"""
-    print("🧪 Ejecutando tests de funciones principales...")
+    print("Ejecutando tests de funciones principales...")
     print("=" * 50)
     
     # Crear suite de tests
@@ -220,10 +195,10 @@ def run_tests():
     
     print("=" * 50)
     if result.wasSuccessful():
-        print("✅ TODOS LOS TESTS PASARON")
+        print("OK: TODOS LOS TESTS PASARON")
     else:
-        print(f"❌ {len(result.failures)} TESTS FALLARON")
-        print(f"⚠️ {len(result.errors)} ERRORES")
+        print(f"ERROR: {len(result.failures)} TESTS FALLARON")
+        print(f"AVISO: {len(result.errors)} ERRORES")
     
     return result.wasSuccessful()
 

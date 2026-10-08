@@ -13,7 +13,7 @@ class PerformanceTester:
     
     def test_api_response_time(self):
         """Test tiempo de respuesta API"""
-        print("🚀 Test tiempo respuesta API...")
+        print("Test tiempo respuesta API...")
         
         endpoints = [
             "/api/status",
@@ -27,12 +27,12 @@ class PerformanceTester:
             response = requests.get(f"{self.base_url}{endpoint}", timeout=5)
             duration = time.time() - start
             
-            status = "✅" if duration < 1.0 else "⚠️" if duration < 3.0 else "❌"
-            print(f"  {endpoint}: {duration:.3f}s {status}")
+            status = "OK:" if duration < 1.0 else "AVISO:" if duration < 3.0 else "ERROR:"
+            print(f"{endpoint}: {duration:.3f}s {status}")
     
     def test_concurrent_jobs(self, num_jobs=10):
         """Test trabajos concurrentes"""
-        print(f"🔄 Test {num_jobs} trabajos concurrentes...")
+        print(f"Test {num_jobs} trabajos concurrentes...")
         
         def create_job(job_id):
             data = {
@@ -67,14 +67,14 @@ class PerformanceTester:
         successful = sum(1 for success, _ in results if success)
         avg_time = sum(duration for _, duration in results) / len(results)
         
-        print(f"  Exitosos: {successful}/{num_jobs}")
-        print(f"  Tiempo total: {total_time:.2f}s")
-        print(f"  Tiempo promedio: {avg_time:.3f}s")
-        print(f"  Throughput: {num_jobs/total_time:.1f} jobs/s")
+        print(f"Exitosos: {successful}/{num_jobs}")
+        print(f"Tiempo total: {total_time:.2f}s")
+        print(f"Tiempo promedio: {avg_time:.3f}s")
+        print(f"Throughput: {num_jobs/total_time:.1f} jobs/s")
     
     def test_file_processing_speed(self):
         """Test velocidad procesamiento archivos"""
-        print("📁 Test velocidad procesamiento...")
+        print("Test velocidad procesamiento...")
         
         # Crear archivo temporal
         test_content = "^XA^FO50,50^A0N,50,50^FDSpeed Test^FS^XZ"
@@ -98,11 +98,11 @@ class PerformanceTester:
             
             if response.status_code == 200:
                 speed = len(content) / duration / 1024  # KB/s
-                print(f"  {size} bytes: {duration:.3f}s ({speed:.1f} KB/s)")
+                print(f"{size} bytes: {duration:.3f}s ({speed:.1f} KB/s)")
     
     def test_database_performance(self):
         """Test rendimiento base de datos"""
-        print("🗄️ Test rendimiento base de datos...")
+        print("Test rendimiento base de datos...")
         
         from database import db
         
@@ -124,12 +124,12 @@ class PerformanceTester:
         
         query_time = time.time() - start
         
-        print(f"  100 inserciones: {insert_time:.3f}s ({100/insert_time:.1f} ops/s)")
-        print(f"  10 consultas: {query_time:.3f}s ({10/query_time:.1f} ops/s)")
+        print(f"100 inserciones: {insert_time:.3f}s ({100/insert_time:.1f} ops/s)")
+        print(f"10 consultas: {query_time:.3f}s ({10/query_time:.1f} ops/s)")
     
     def run_performance_tests(self):
         """Ejecutar todos los tests de rendimiento"""
-        print("⚡ TESTS DE RENDIMIENTO")
+        print("TESTS DE RENDIMIENTO")
         print("=" * 40)
         
         self.test_api_response_time()
@@ -144,7 +144,7 @@ class PerformanceTester:
         self.test_database_performance()
         print()
         
-        print("✅ Tests de rendimiento completados")
+        print("OK: Tests de rendimiento completados")
 
 def main():
     """Función principal"""
@@ -162,7 +162,7 @@ def main():
             continue
     
     if not api_url:
-        print("❌ API no encontrada")
+        print("ERROR: API no encontrada")
         return
     
     tester = PerformanceTester(api_url)
