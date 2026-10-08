@@ -343,8 +343,20 @@ async def build_payment_proposal(request: SyncSalesRequest) -> Dict[str, Any]:
             request.limit,
         )
     except Exception as exc:
-        message = str(exc or "").strip() or "No se pudieron preparar los pagos de Mercado Libre"
+        message = _rate_limit_message(exc) or str(exc or "").strip() or (
+            "No se pudieron preparar los pagos de Mercado Libre"
+        )
         raise HTTPException(status_code=400, detail=message)
+
+
+def _rate_limit_message(exc: Exception) -> str:
+    response = getattr(exc, "response", None)
+    if getattr(response, "status_code", None) == 429:
+        return (
+            "Mercado Libre limito temporalmente las consultas (demasiadas en poco tiempo). "
+            "Espera un minuto y vuelve a buscar; con menos ventas por busqueda es mas rapido."
+        )
+    return ""
 
 
 def _history_entry(result: Dict[str, Any]) -> Dict[str, Any]:
@@ -419,7 +431,9 @@ async def register_mercadolibre_payment(
             ]))
         return result
     except Exception as exc:
-        message = str(exc or "").strip() or "No se pudo registrar el pago de Mercado Libre"
+        message = _rate_limit_message(exc) or str(exc or "").strip() or (
+            "No se pudo registrar el pago de Mercado Libre"
+        )
         mercadolibre_integration.save_config({"last_error": message})
         raise HTTPException(status_code=400, detail=message)
 

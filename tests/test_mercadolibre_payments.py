@@ -77,7 +77,8 @@ class _FakeMercadoLibre:
             raise ValueError("orden inesperada")
         return dict(self.orders[str(order_id)])
 
-    def get_pack(self, pack_id):
+    def get_pack(self, pack_id, use_cache=True):
+        self.cache_flags = getattr(self, "cache_flags", []) + [("pack", use_cache)]
         return {
             "id": pack_id,
             "orders": [
@@ -86,8 +87,9 @@ class _FakeMercadoLibre:
             ],
         }
 
-    def get_shipment_costs(self, shipment_id):
+    def get_shipment_costs(self, shipment_id, use_cache=True):
         self.cost_calls.append(shipment_id)
+        self.cache_flags = getattr(self, "cache_flags", []) + [("costs", use_cache)]
         return {"receiver": {"cost": self.shipping_cost}}
 
 
@@ -99,8 +101,11 @@ class _FakeOdoo:
         self.attachment_calls = []
         self.lookups = []
 
-    def find_sale_invoice_for_reference(self, reference, amount, currency, auth_override=None):
+    def find_sale_invoice_for_reference(
+        self, reference, amount, currency, auth_override=None, amount_tolerance=0.01
+    ):
         self.lookups.append((reference, amount, currency))
+        self.tolerances = getattr(self, "tolerances", []) + [amount_tolerance]
         if not self.can_register:
             return {"can_register": False, "reason": "Factura ya pagada", "invoice": None}
         return {
@@ -261,6 +266,57 @@ class TestMercadoLibrePaymentService(unittest.TestCase):
         self.assertEqual(item["rounding_difference"], 0.01)
         self.assertTrue(item["can_register"])
 
+    def test_single_order_paid_amount_with_shipping_is_not_counted_twice(self):
+        # Orden suelta real: total_amount 363 (productos), paid_amount 532
+        # (ya incluye el envio de 169). La factura Odoo es 532,01.
+        order = _order()
+        order.update({"total_amount": 363.0, "paid_amount": 532.0})
+        order["payments"][0]["transaction_amount"] = 363.0
+        mercadolibre = _FakeMercadoLibre(order=order, shipping_cost=169.0)
+        odoo = _FakeOdoo(amount_due=532.01)
+
+        item = service.build_payment_proposal(mercadolibre, odoo, 20)["items"][0]
+
+        self.assertEqual(item["products_amount"], 363.0)
+        self.assertEqual(item["shipping_amount"], 169.0)
+        self.assertEqual(item["amount"], 532.0)
+        self.assertEqual(item["rounding_difference"], 0.01)
+
+    def test_proposal_reuses_complete_search_results_without_order_detail_calls(self):
+        order = _order()
+
+        class _SearchWithDetails(_FakeMercadoLibre):
+            detail_calls = 0
+
+            def search_orders(self, limit=20, offset=0, status="paid"):
+                return {"results": [dict(order)]}
+
+            def get_order(self, order_id):
+                type(self).detail_calls += 1
+                return super().get_order(order_id)
+
+        mercadolibre = _SearchWithDetails(order=order, shipping_cost=0.0)
+        result = service.build_payment_proposal(mercadolibre, _FakeOdoo(), 20)
+
+        self.assertEqual(result["count"], 1)
+        self.assertEqual(_SearchWithDetails.detail_calls, 0)
+
+    def test_proposal_uses_cache_but_registration_reads_fresh_data(self):
+        mercadolibre = _FakeMercadoLibre(orders=[_pack_order()], shipping_cost=260.0)
+        service.build_payment_proposal(mercadolibre, _FakeOdoo(), 20)
+        self.assertEqual(mercadolibre.cache_flags, [("pack", True), ("costs", True)])
+
+        mercadolibre.cache_flags = []
+        with patch.object(service, "get_branding", return_value=None):
+            service.register_order_payment(
+                mercadolibre,
+                _FakeOdoo(),
+                order_id="2000018868191948",
+                journal_id=12,
+                auth_override=None,
+            )
+        self.assertEqual(mercadolibre.cache_flags, [("pack", False), ("costs", False)])
+
     def test_pack_groups_all_orders_and_charges_shipping_once(self):
         orders = [
             _pack_order(2000018868191948, 500.0, 111),
@@ -306,6 +362,40 @@ class TestMercadoLibrePaymentService(unittest.TestCase):
         self.assertIn("2000018868191948", text)
         self.assertIn("260,00", text)
         self.assertIn("1.154,00", text)
+
+    def test_tolerance_allows_one_cent_per_invoiced_line(self):
+        # Caso e-Factura A-50975: 2 x 525,00 + envio 43,00 en ML; Odoo factura
+        # 1.050,01 + 43,01 = 1.093,02 por el IVA recalculado en cada linea.
+        order = _pack_order(product_amount=1050.0)
+        odoo = _FakeOdoo(amount_due=1093.02)
+        with patch.object(service, "get_branding", return_value=None):
+            result = service.register_order_payment(
+                _FakeMercadoLibre(orders=[order], shipping_cost=43.0),
+                odoo,
+                order_id=str(order["id"]),
+                journal_id=12,
+                auth_override=None,
+                rounding_account_id=31,
+            )
+
+        self.assertEqual(odoo.tolerances, [0.02])
+        self.assertEqual(result["rounding_difference"], 0.02)
+        self.assertEqual(odoo.payment_calls[0][1], 1093.0)
+        self.assertEqual(odoo.payment_calls[0][7], 31)
+
+    def test_difference_above_line_tolerance_is_rejected(self):
+        order = _pack_order(product_amount=1050.0)
+        odoo = _FakeOdoo(amount_due=1093.03)
+        with self.assertRaisesRegex(ValueError, "no coincide"):
+            service.register_order_payment(
+                _FakeMercadoLibre(orders=[order], shipping_cost=43.0),
+                odoo,
+                order_id=str(order["id"]),
+                journal_id=12,
+                auth_override=None,
+                rounding_account_id=31,
+            )
+        self.assertEqual(odoo.payment_calls, [])
 
     def test_rounding_cent_requires_rounding_account(self):
         odoo = _FakeOdoo(amount_due=1154.01)

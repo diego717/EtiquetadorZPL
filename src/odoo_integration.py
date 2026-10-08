@@ -312,12 +312,14 @@ class OdooIntegration:
         amount: float,
         currency: str = "",
         auth_override: Optional[Dict[str, str]] = None,
+        amount_tolerance: float = 0.01,
     ) -> Dict[str, Any]:
         """Busca una unica factura pendiente de una venta externa.
 
         La referencia se compara con el nombre esperado de la orden (por
         defecto ``ML <id>``), ``client_order_ref`` y ``origin``. Nunca elige
-        una factura si el importe o la moneda difieren.
+        una factura si la moneda difiere o el importe se aparta mas de
+        ``amount_tolerance``.
         """
         reference = str(sale_reference or "").strip()
         if not reference:
@@ -455,12 +457,12 @@ class OdooIntegration:
             currency_matches = not expected_currency or invoice_currency.casefold() == expected_currency
             if payment_state in {"not_paid", "partial"}:
                 pending.append(invoice)
-                if round(abs(due_value - amount_value), 2) <= 0.01 and currency_matches:
+                if round(abs(due_value - amount_value), 2) <= amount_tolerance and currency_matches:
                     exact_pending.append(invoice)
             else:
                 # Una factura pagada tiene saldo 0: se compara contra su total.
                 settled.append(invoice)
-                if round(abs(total_value - amount_value), 2) <= 0.01 and currency_matches:
+                if round(abs(total_value - amount_value), 2) <= amount_tolerance and currency_matches:
                     exact_paid.append(invoice)
 
         if len(exact_pending) == 1:

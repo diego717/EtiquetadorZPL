@@ -503,6 +503,25 @@ class TestOdooIntegration(unittest.TestCase):
         self.assertFalse(result["can_register"])
         self.assertIn("no coincide", result["reason"])
 
+    def test_mercadolibre_reference_accepts_custom_amount_tolerance(self):
+        integration = OdooIntegration()
+        models = _MercadoLibreInvoiceModels(amount=1093.02)
+        integration._build_runtime_config = lambda auth_override=None: {
+            "database": "test",
+            "password": "test",
+            "order_prefix": "ML ",
+        }
+        integration._authenticate = lambda auth_override=None: 7
+        integration._xmlrpc_models = lambda runtime=None: models
+
+        strict = integration.find_sale_invoice_for_reference("2000015420705457", 1093.0, "UYU")
+        per_line = integration.find_sale_invoice_for_reference(
+            "2000015420705457", 1093.0, "UYU", amount_tolerance=0.02
+        )
+
+        self.assertFalse(strict["can_register"])
+        self.assertTrue(per_line["can_register"])
+
     def test_mercadolibre_reference_reports_paid_invoice_with_rounding_cent(self):
         integration = OdooIntegration()
         models = _MercadoLibreInvoiceModels(amount=1154.01, payment_state="paid")

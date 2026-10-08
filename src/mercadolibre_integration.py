@@ -16,6 +16,7 @@ from urllib.parse import urlencode
 from httpx import Response
 
 from httpx_client import get_sync_http_client
+from mercadolibre_cache import PersistentCache
 
 logger = logging.getLogger(__name__)
 
@@ -30,6 +31,7 @@ class MercadoLibreIntegration:
     def __init__(self) -> None:
         self.config_path = self._resolve_config_path()
         self.config = self._load_config()
+        self.cache = PersistentCache(lambda: self.config_path.with_name("mercadolibre_cache.json"))
 
     def _resolve_config_path(self) -> Path:
         try:
@@ -217,6 +219,21 @@ class MercadoLibreIntegration:
 
         return access_token
 
+    # Mercado Libre responde 429 cuando se superan las consultas por minuto.
+    # Se reintenta respetando Retry-After, con un tope para no colgar la UI.
+    RATE_LIMIT_RETRIES = 3
+    RATE_LIMIT_MAX_WAIT_SECONDS = 10.0
+
+    @classmethod
+    def _rate_limit_wait(cls, response: Response, attempt: int) -> float:
+        try:
+            wait = float(response.headers.get("Retry-After") or 0)
+        except ValueError:
+            wait = 0.0
+        if wait <= 0:
+            wait = 2.0 ** attempt
+        return min(wait, cls.RATE_LIMIT_MAX_WAIT_SECONDS)
+
     def request(
         self,
         method: str,
@@ -237,14 +254,20 @@ class MercadoLibreIntegration:
             request_headers.update(headers)
 
         url = resource if resource.startswith("http") else f"{self.API_BASE_URL}{resource}"
-        response = get_sync_http_client().request(
-            method=method,
-            url=url,
-            params=params,
-            json=json_body,
-            headers=request_headers,
-            timeout=timeout,
-        )
+        for attempt in range(self.RATE_LIMIT_RETRIES + 1):
+            response = get_sync_http_client().request(
+                method=method,
+                url=url,
+                params=params,
+                json=json_body,
+                headers=request_headers,
+                timeout=timeout,
+            )
+            if response.status_code != 429 or attempt == self.RATE_LIMIT_RETRIES:
+                break
+            wait = self._rate_limit_wait(response, attempt)
+            logger.info("Mercado Libre respondio 429 en %s, reintento en %.1fs", resource, wait)
+            time.sleep(wait)
 
         if response.status_code == 401 and retry_on_401 and self.config.get("refresh_token"):
             logger.info("Mercado Libre respondio 401, intentando refresh token")
@@ -276,15 +299,33 @@ class MercadoLibreIntegration:
         response.raise_for_status()
         return response.json()
 
-    def get_pack(self, pack_id: str) -> Dict[str, Any]:
+    def get_pack(self, pack_id: str, use_cache: bool = True) -> Dict[str, Any]:
+        """Ordenes del pack. Con ``use_cache=False`` consulta y refresca el cache."""
+        key = f"pack:{pack_id}"
+        cached = self.cache.get(key) if use_cache else None
+        if cached is not None:
+            return cached
         response = self.request("GET", f"/packs/{pack_id}")
         response.raise_for_status()
-        return response.json()
+        pack = response.json()
+        order_ids = [{"id": item["id"]} for item in (pack.get("orders") or []) if (item or {}).get("id")]
+        if order_ids:
+            self.cache.set(key, {"id": pack.get("id", pack_id), "orders": order_ids})
+        return pack
 
-    def get_shipment_costs(self, shipment_id: str) -> Dict[str, Any]:
+    def get_shipment_costs(self, shipment_id: str, use_cache: bool = True) -> Dict[str, Any]:
+        """Costos del envio. Con ``use_cache=False`` consulta y refresca el cache."""
+        key = f"shipment_costs:{shipment_id}"
+        cached = self.cache.get(key) if use_cache else None
+        if cached is not None:
+            return cached
         response = self.request("GET", f"/shipments/{shipment_id}/costs")
         response.raise_for_status()
-        return response.json()
+        costs = response.json()
+        receiver = costs.get("receiver") or {}
+        if "cost" in receiver:
+            self.cache.set(key, {"receiver": {"cost": receiver.get("cost")}})
+        return costs
 
     def search_orders(self, limit: int = 20, offset: int = 0, status: str = "paid") -> Dict[str, Any]:
         seller_id = self.config.get("user_id")

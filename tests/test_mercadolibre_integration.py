@@ -60,6 +60,54 @@ class TestMercadoLibreManualTokens(unittest.TestCase):
             self.integration.save_manual_tokens(access_token="   ")
 
 
+class _FakeResponse:
+    def __init__(self, status_code, headers=None):
+        self.status_code = status_code
+        self.headers = headers or {}
+
+
+class _FakeHttpClient:
+    def __init__(self, statuses):
+        self.statuses = list(statuses)
+        self.calls = 0
+
+    def request(self, **kwargs):
+        self.calls += 1
+        status, headers = self.statuses.pop(0)
+        return _FakeResponse(status, headers)
+
+
+class TestMercadoLibreRateLimit(unittest.TestCase):
+    def _integration(self):
+        integration = MercadoLibreIntegration()
+        integration.ensure_token = lambda: "token"
+        integration.config = {"access_token": "token"}
+        return integration
+
+    def test_request_retries_429_respecting_retry_after(self):
+        client = _FakeHttpClient([(429, {"Retry-After": "3"}), (200, {})])
+        with patch("mercadolibre_integration.get_sync_http_client", return_value=client), patch(
+            "mercadolibre_integration.time.sleep"
+        ) as sleep:
+            response = self._integration().request("GET", "/orders/search")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(client.calls, 2)
+        sleep.assert_called_once_with(3.0)
+
+    def test_request_gives_up_after_retries_with_capped_wait(self):
+        client = _FakeHttpClient([(429, {"Retry-After": "120"})] * 4)
+        with patch("mercadolibre_integration.get_sync_http_client", return_value=client), patch(
+            "mercadolibre_integration.time.sleep"
+        ) as sleep:
+            response = self._integration().request("GET", "/orders/search")
+
+        self.assertEqual(response.status_code, 429)
+        self.assertEqual(client.calls, 4)
+        self.assertEqual(sleep.call_count, 3)
+        self.assertTrue(all(call.args[0] <= 10.0 for call in sleep.call_args_list))
+
+
 class TestMercadoLibreManualTokenEndpoint(unittest.TestCase):
     def test_config_endpoint_forwards_manual_token_fields(self):
         request = endpoints.MercadoLibreConfigRequest(
@@ -278,6 +326,20 @@ class TestMercadoLibrePaymentEndpoints(unittest.TestCase):
         self.assertEqual(entry["actor_odoo_username"], "vale@example.com")
         self.assertEqual(entry["mercadolibre"]["reference"], "2000015420705457")
         self.assertEqual(entry["mercadolibre"]["amount"], 1154.0)
+
+    def test_rate_limit_error_is_explained_to_the_operator(self):
+        class _RateLimited(Exception):
+            response = _FakeResponse(429)
+
+        with patch.object(endpoints, "odoo_integration", _FakePaymentOdoo()), patch.object(
+            endpoints, "mercadolibre_integration", _FakePaymentMercadoLibre()
+        ), patch.object(
+            endpoints.payment_service, "build_payment_proposal", side_effect=_RateLimited("429")
+        ):
+            with self.assertRaises(endpoints.HTTPException) as caught:
+                asyncio.run(endpoints.build_payment_proposal(endpoints.SyncSalesRequest(limit=40)))
+
+        self.assertIn("Espera un minuto", caught.exception.detail)
 
     def test_history_failure_does_not_report_registered_payment_as_failed(self):
         result, _record = self._register_with_history(OSError("disco lleno"))

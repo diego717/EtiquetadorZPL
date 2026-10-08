@@ -21,10 +21,11 @@ from mercadolibre_payment_pdf import (
 
 _register_lock = threading.Lock()
 
-# Odoo puede facturar un centesimo por encima o por debajo del total cobrado
-# por Mercado Libre al redondear impuestos linea a linea. Esa diferencia se
-# contabiliza en la cuenta de redondeos, igual que en Conciliacion POS.
-ROUNDING_TOLERANCE = 0.01
+# Odoo guarda el precio sin IVA con 3 decimales y recalcula el IVA por linea,
+# asi que cada linea facturada (productos y envio) puede quedar un centesimo
+# arriba o abajo del precio de Mercado Libre. Esa diferencia se contabiliza en
+# la cuenta de redondeos, igual que en Conciliacion POS.
+ROUNDING_TOLERANCE_PER_LINE = 0.01
 ROUNDING_WRITEOFF_LABEL = "Redondeo cobro Mercado Libre"
 
 
@@ -85,6 +86,9 @@ def summarize_order_payment(order: Dict[str, Any]) -> Dict[str, Any]:
         "payment_methods": list(dict.fromkeys(methods)),
         "payment_method": ", ".join(dict.fromkeys(methods)),
         "amount": round(paid_amount, 2),
+        # paid_amount incluye el envio en ordenes sueltas pero no en packs;
+        # total_amount es siempre solo productos.
+        "products_amount": round(_as_float(order.get("total_amount")) or paid_amount, 2),
         "currency": str(order.get("currency_id") or ""),
         "payment_date": payment_date,
         "buyer": str(buyer.get("nickname") or buyer.get("id") or ""),
@@ -101,6 +105,7 @@ def _load_sale_orders(
     mercadolibre: Any,
     order: Dict[str, Any],
     cache: Optional[Dict[str, Dict[str, Any]]] = None,
+    use_cache: bool = True,
 ) -> List[Dict[str, Any]]:
     """Devuelve todas las ordenes del pack de ``order`` (o solo ella si no hay pack)."""
     cache = cache if cache is not None else {}
@@ -108,7 +113,7 @@ def _load_sale_orders(
     pack_id = str(order.get("pack_id") or "")
     if not pack_id:
         return [order]
-    pack = mercadolibre.get_pack(pack_id)
+    pack = mercadolibre.get_pack(pack_id, use_cache=use_cache)
     order_ids = [
         str((item or {}).get("id") or "")
         for item in (pack.get("orders") or [])
@@ -132,11 +137,13 @@ def _shipment_id(orders: List[Dict[str, Any]]) -> str:
     return ""
 
 
-def _buyer_shipping_cost(mercadolibre: Any, orders: List[Dict[str, Any]]) -> float:
+def _buyer_shipping_cost(
+    mercadolibre: Any, orders: List[Dict[str, Any]], use_cache: bool = True
+) -> float:
     """Envio pagado por el comprador; se cobra una sola vez por pack/shipment."""
     shipment_id = _shipment_id(orders)
     if shipment_id:
-        costs = mercadolibre.get_shipment_costs(shipment_id)
+        costs = mercadolibre.get_shipment_costs(shipment_id, use_cache=use_cache)
         return round(_as_float((costs.get("receiver") or {}).get("cost")), 2)
     return 0.0
 
@@ -148,7 +155,7 @@ def summarize_sale_payment(orders: List[Dict[str, Any]], shipping_cost: float) -
     payment_ids = list(dict.fromkeys(pid for item in summaries for pid in item["payment_ids"]))
     methods = list(dict.fromkeys(m for item in summaries for m in item["payment_methods"]))
     statuses = {item["order_status"].lower() for item in summaries}
-    products_amount = round(sum(item["amount"] for item in summaries), 2)
+    products_amount = round(sum(item["products_amount"] for item in summaries), 2)
     shipping_amount = round(_as_float(shipping_cost), 2)
     payment_dates = sorted(item["payment_date"] for item in summaries if item["payment_date"])
     return {
@@ -169,7 +176,16 @@ def summarize_sale_payment(orders: List[Dict[str, Any]], shipping_cost: float) -
         "payment_date": payment_dates[-1] if payment_dates else first["payment_date"],
         "buyer": first["buyer"],
         "shipment_id": _shipment_id(orders),
+        "amount_tolerance": _amount_tolerance(orders, shipping_amount),
     }
+
+
+def _amount_tolerance(orders: List[Dict[str, Any]], shipping_amount: float) -> float:
+    """Un centesimo por cada linea que Odoo factura: productos mas el envio."""
+    lines = sum(len(order.get("order_items") or []) for order in orders)
+    if shipping_amount > 0:
+        lines += 1
+    return round(ROUNDING_TOLERANCE_PER_LINE * max(1, lines), 2)
 
 
 def _sale_document(orders: List[Dict[str, Any]], summary: Dict[str, Any]) -> Dict[str, Any]:
@@ -202,17 +218,32 @@ def _rounding_difference(summary: Dict[str, Any], invoice: Dict[str, Any]) -> fl
     return round(_as_float(invoice.get("amount_due")) - summary["amount"], 2)
 
 
+def _has_payment_details(order: Dict[str, Any]) -> bool:
+    payments = order.get("payments")
+    return (
+        bool(payments)
+        and isinstance(payments, list)
+        and all(isinstance(item, dict) and "status" in item for item in payments)
+        and order.get("total_amount") is not None
+        and "status" in order
+    )
+
+
 def _load_paid_sales(mercadolibre: Any, limit: int) -> List[List[Dict[str, Any]]]:
     data = mercadolibre.search_orders(limit=limit, offset=0, status="paid")
-    cache: Dict[str, Dict[str, Any]] = {}
+    results = [item for item in (data.get("results", []) or []) if isinstance(item, dict)]
+    # La busqueda devuelve ordenes completas: se reutilizan para no pedir el
+    # detalle una por una (Mercado Libre responde 429 ante muchas consultas).
+    # Si a una le faltan datos de pago se consulta su detalle. La propuesta es
+    # solo una vista previa: al registrar se vuelve a leer la orden completa.
+    cache: Dict[str, Dict[str, Any]] = {
+        str(item["id"]): item for item in results if item.get("id") and _has_payment_details(item)
+    }
     sales: Dict[str, List[Dict[str, Any]]] = {}
-    for listed in data.get("results", []) or []:
-        listed = listed or {}
+    for listed in results:
         order_id = str(listed.get("id") or "")
         if not order_id or (listed.get("pack_id") and str(listed["pack_id"]) in sales):
             continue
-        # La busqueda puede omitir campos de pago segun el site. Consultar el
-        # detalle evita registrar usando un resumen incompleto o desactualizado.
         order = cache.get(order_id) or mercadolibre.get_order(order_id)
         reference = sale_reference(order)
         if reference not in sales:
@@ -241,6 +272,7 @@ def build_payment_proposal(mercadolibre: Any, odoo: Any, limit: int = 20) -> Dic
                     summary["reference"],
                     summary["amount"],
                     summary["currency"],
+                    amount_tolerance=summary["amount_tolerance"],
                 )
                 item.update(match)
                 item["can_register"] = bool(match.get("can_register"))
@@ -271,8 +303,13 @@ def register_order_payment(
     redondeo, el centesimo se salda contra ``rounding_account_id``.
     """
     with _register_lock:
-        orders = _load_sale_orders(mercadolibre, mercadolibre.get_order(str(order_id)))
-        summary = summarize_sale_payment(orders, _buyer_shipping_cost(mercadolibre, orders))
+        # Antes de crear un pago real se lee todo de nuevo, sin cache.
+        orders = _load_sale_orders(
+            mercadolibre, mercadolibre.get_order(str(order_id)), use_cache=False
+        )
+        summary = summarize_sale_payment(
+            orders, _buyer_shipping_cost(mercadolibre, orders, use_cache=False)
+        )
         if not summary["all_orders_paid"]:
             raise ValueError("La venta de Mercado Libre ya no figura como pagada")
         if _unusable_reason(summary):
@@ -283,6 +320,7 @@ def register_order_payment(
             summary["amount"],
             summary["currency"],
             auth_override=auth_override,
+            amount_tolerance=summary["amount_tolerance"],
         )
         if not match.get("can_register"):
             raise ValueError(str(match.get("reason") or "No se encontro una factura pendiente compatible"))
@@ -291,7 +329,7 @@ def register_order_payment(
         invoice_name = str(invoice.get("name") or invoice.get("id") or "")
         memo = f"{invoice_name} - {summary['reference']}"
         rounding_difference = _rounding_difference(summary, invoice)
-        if abs(rounding_difference) > ROUNDING_TOLERANCE:
+        if abs(rounding_difference) > summary["amount_tolerance"]:
             raise ValueError("El importe de Mercado Libre no coincide con el saldo de la factura")
         if rounding_difference and not rounding_account_id:
             raise ValueError(
