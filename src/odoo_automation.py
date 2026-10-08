@@ -240,7 +240,8 @@ class OdooAutomationWorker:
         # Si no se incluyen reimpresiones, traemos una ventana mas grande para
         # no quedar bloqueados en "reimprimir" al inicio del dia.
         fetch_limit = sync_limit if include_reprint else min(200, max(sync_limit * 5, sync_limit))
-        sales = administrado_integration.list_label_links(fetch_limit)
+        # El worker imprime: siempre trabaja con la lista recien descargada.
+        sales = administrado_integration.list_label_links(fetch_limit, use_cache=False)
         sales_to_process, skipped_reprint = self._prioritize_sales(sales, include_reprint, sync_limit)
         processed_map = self._get_processed_map()
 

@@ -5,6 +5,7 @@ Integracion con Administrado para descargar etiquetas PDF.
 from __future__ import annotations
 
 import asyncio
+import copy
 import json
 import logging
 import re
@@ -31,6 +32,9 @@ logger = logging.getLogger(__name__)
 
 class AdministradoIntegration:
     BASE_URL = "https://www.administrado.net"
+    # La lista de ventas cambia con cada impresion: se guarda solo unos segundos
+    # para que varias pantallas abiertas a la vez compartan una sola descarga.
+    SALES_CACHE_TTL_SECONDS = 10.0
 
     def __init__(self) -> None:
         self.config_path = self._resolve_config_path()
@@ -45,6 +49,9 @@ class AdministradoIntegration:
         }
         self._http_session_lock = threading.Lock()
         self._http_session: Optional[requests.Session] = None
+        self._sales_fetch_lock = threading.Lock()
+        self._sales_cache: Optional[Tuple[float, int, List[Dict[str, Any]]]] = None
+        self._sales_cache_generation = 0
         self._http_session_cookie_header = ""
 
     def _resolve_config_path(self) -> Path:
@@ -89,6 +96,8 @@ class AdministradoIntegration:
     def save_config(self, updates: Dict[str, Any]) -> Dict[str, Any]:
         previous_cookie = str(self.config.get("cookie_header", "")).strip()
         self.config.update(updates)
+        if set(updates) - {"last_error"}:
+            self.invalidate_sales_cache()
         self.config_path.parent.mkdir(parents=True, exist_ok=True)
         self.config_path.write_text(json.dumps(self.config, indent=2, ensure_ascii=True), encoding="utf-8")
         if "cookie_header" in updates and str(self.config.get("cookie_header", "")).strip() != previous_cookie:
@@ -304,7 +313,44 @@ class AdministradoIntegration:
         )
         return sales, has_sales_markers
 
-    def list_label_links(self, limit: int = 20) -> List[Dict[str, Any]]:
+    def invalidate_sales_cache(self) -> None:
+        """Descarta la lista guardada; se llama al imprimir o cambiar la sesion."""
+        self._sales_cache_generation += 1
+        self._sales_cache = None
+
+    def _cached_sales(self, limit: int) -> Optional[List[Dict[str, Any]]]:
+        cached = self._sales_cache
+        if cached is None:
+            return None
+        fetched_at, cached_limit, sales = cached
+        if time.monotonic() - fetched_at > self.SALES_CACHE_TTL_SECONDS:
+            return None
+        # Una lista pedida con mas ventas sirve para una pedida con menos,
+        # salvo que la mas grande se haya cortado justo por su limite.
+        if limit > cached_limit and len(sales) >= cached_limit:
+            return None
+        return copy.deepcopy(sales[:limit])
+
+    def list_label_links(self, limit: int = 20, use_cache: bool = True) -> List[Dict[str, Any]]:
+        """Ventas de Administrado. ``use_cache=False`` siempre descarga (y refresca el cache)."""
+        if use_cache:
+            cached = self._cached_sales(limit)
+            if cached is not None:
+                return cached
+        with self._sales_fetch_lock:
+            # Si otra pantalla descargo mientras esperabamos, se reutiliza.
+            if use_cache:
+                cached = self._cached_sales(limit)
+                if cached is not None:
+                    return cached
+            generation = self._sales_cache_generation
+            sales = self._fetch_label_links(limit)
+            # Si se imprimio durante la descarga, esta lista ya puede estar vieja.
+            if generation == self._sales_cache_generation:
+                self._sales_cache = (time.monotonic(), limit, copy.deepcopy(sales))
+            return sales
+
+    def _fetch_label_links(self, limit: int = 20) -> List[Dict[str, Any]]:
         request_error: Optional[Exception] = None
 
         if self.get_cookie_header():
@@ -556,6 +602,9 @@ class AdministradoIntegration:
         return sales
 
     def download_label_pdf(self, envio_id: str) -> bytes:
+        # Descargar la etiqueta la marca como impresa en Administrado: la lista
+        # guardada deja de ser valida (todas las rutas de impresion pasan por aca).
+        self.invalidate_sales_cache()
         response = self.request(f"/seller/envios/{envio_id}/imprimir_etiqueta", timeout=60)
         if response.status_code >= 400:
             response.raise_for_status()

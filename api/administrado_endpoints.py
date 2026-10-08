@@ -5,6 +5,7 @@ Endpoints para integracion con Administrado.
 from __future__ import annotations
 
 import asyncio
+import copy
 import json
 import logging
 import time
@@ -33,6 +34,11 @@ ODOO_CANCEL_CACHE_LOCK = threading.Lock()
 ODOO_CANCEL_CACHE: Dict[str, tuple[bool, float]] = {}
 ODOO_CANCEL_CACHE_TTL_SECONDS = 45.0
 ODOO_CANCEL_CACHE_MAX_ITEMS = 2000
+# Estado de entregas/stock por envio. La pantalla se refresca cada 15s: con
+# 30s se evita consultar Odoo en cada refresco. Al imprimir se descarta.
+ODOO_STOCK_CACHE_LOCK = threading.Lock()
+ODOO_STOCK_CACHE: Dict[str, tuple[Dict[str, Any], float]] = {}
+ODOO_STOCK_CACHE_TTL_SECONDS = 30.0
 
 
 def _friendly_error(error: Any) -> str:
@@ -183,6 +189,8 @@ def _record_print_event(
     error: str = "",
 ) -> Dict[str, Any]:
     shipment_id = str(envio_id or "").strip()
+    with ODOO_STOCK_CACHE_LOCK:
+        ODOO_STOCK_CACHE.pop(shipment_id, None)
     if not shipment_id:
         return {}
 
@@ -305,12 +313,27 @@ def _attach_odoo_stock_statuses(sales: list[Dict[str, Any]]) -> list[Dict[str, A
         for sale in sales
         if isinstance(sale, dict) and str(sale.get("envio_id") or "").strip()
     ]
+    statuses: Dict[str, Dict[str, Any]] = {}
+    now = time.monotonic()
+    with ODOO_STOCK_CACHE_LOCK:
+        for envio, (status, expires_at) in list(ODOO_STOCK_CACHE.items()):
+            if expires_at <= now:
+                ODOO_STOCK_CACHE.pop(envio, None)
+        for envio in envio_ids:
+            if envio in ODOO_STOCK_CACHE:
+                statuses[envio] = copy.deepcopy(ODOO_STOCK_CACHE[envio][0])
+    pending = [envio for envio in dict.fromkeys(envio_ids) if envio not in statuses]
     try:
-        statuses = odoo_integration.get_sale_order_stock_statuses(envio_ids)
+        if pending:
+            fresh = odoo_integration.get_sale_order_stock_statuses(pending)
+            expires_at = time.monotonic() + ODOO_STOCK_CACHE_TTL_SECONDS
+            with ODOO_STOCK_CACHE_LOCK:
+                for envio, status in fresh.items():
+                    ODOO_STOCK_CACHE[str(envio)] = (copy.deepcopy(status), expires_at)
+            statuses.update(fresh)
     except Exception as exc:
         message = _friendly_error(exc)
         logger.warning("No se pudo consultar stock Odoo en bloque: %s", message)
-        statuses = {}
         fallback = {
             "code": "error",
             "label": "Stock no disponible",

@@ -4,10 +4,13 @@ Integracion Odoo (XML-RPC + descarga de reportes PDF) para flujo de expedicion.
 
 from __future__ import annotations
 
+import copy
+import hashlib
 import json
 import logging
 import re
 import tempfile
+import threading
 import time
 import xmlrpc.client
 import base64
@@ -18,6 +21,55 @@ from typing import Any, Dict, List, Optional
 import httpx
 
 logger = logging.getLogger(__name__)
+
+# El uid y la estructura de los modelos (fields_get) no cambian entre
+# consultas: se guardan para no repetir esas llamadas en cada sincronizacion.
+AUTH_CACHE_TTL_SECONDS = 15 * 60
+FIELDS_GET_CACHE_TTL_SECONDS = 60 * 60
+_metadata_cache_lock = threading.Lock()
+_auth_cache: Dict[tuple, tuple] = {}
+_fields_get_cache: Dict[tuple, tuple] = {}
+
+
+def clear_metadata_cache() -> None:
+    with _metadata_cache_lock:
+        _auth_cache.clear()
+        _fields_get_cache.clear()
+
+
+def _cache_get(cache: Dict[tuple, tuple], key: tuple, ttl: float) -> Any:
+    with _metadata_cache_lock:
+        entry = cache.get(key)
+    if entry is None or time.monotonic() - entry[0] > ttl:
+        return None
+    return copy.deepcopy(entry[1])
+
+
+def _cache_set(cache: Dict[tuple, tuple], key: tuple, value: Any) -> None:
+    with _metadata_cache_lock:
+        cache[key] = (time.monotonic(), copy.deepcopy(value))
+
+
+class _CachingModelsProxy:
+    """Envuelve el proxy XML-RPC de Odoo y guarda las respuestas de fields_get."""
+
+    def __init__(self, proxy: Any, base_url: str) -> None:
+        self._proxy = proxy
+        self._base_url = base_url
+
+    def execute_kw(self, db: str, uid: int, password: str, model: str, method: str, *rest: Any) -> Any:
+        if method != "fields_get":
+            return self._proxy.execute_kw(db, uid, password, model, method, *rest)
+        key = (self._base_url, db, uid, model, json.dumps(rest, sort_keys=True, default=str))
+        cached = _cache_get(_fields_get_cache, key, FIELDS_GET_CACHE_TTL_SECONDS)
+        if cached is not None:
+            return cached
+        result = self._proxy.execute_kw(db, uid, password, model, method, *rest)
+        _cache_set(_fields_get_cache, key, result)
+        return result
+
+    def __getattr__(self, name: str) -> Any:
+        return getattr(self._proxy, name)
 
 
 class OdooIntegration:
@@ -157,6 +209,7 @@ class OdooIntegration:
 
     def save_config(self, updates: Dict[str, Any]) -> Dict[str, Any]:
         self.config.update(updates)
+        clear_metadata_cache()
         if not isinstance(self.config.get("operator_odoo_users"), dict):
             self.config["operator_odoo_users"] = {}
         self.config_path.parent.mkdir(parents=True, exist_ok=True)
@@ -214,22 +267,40 @@ class OdooIntegration:
     def _xmlrpc_common(self, runtime: Optional[Dict[str, Any]] = None) -> xmlrpc.client.ServerProxy:
         return xmlrpc.client.ServerProxy(f"{self._base_url(runtime)}/xmlrpc/2/common", allow_none=True)
 
-    def _xmlrpc_models(self, runtime: Optional[Dict[str, Any]] = None) -> xmlrpc.client.ServerProxy:
-        return xmlrpc.client.ServerProxy(f"{self._base_url(runtime)}/xmlrpc/2/object", allow_none=True)
+    def _xmlrpc_models(self, runtime: Optional[Dict[str, Any]] = None) -> Any:
+        base_url = self._base_url(runtime)
+        proxy = xmlrpc.client.ServerProxy(f"{base_url}/xmlrpc/2/object", allow_none=True)
+        return _CachingModelsProxy(proxy, base_url)
 
-    def _authenticate(self, auth_override: Optional[Dict[str, str]] = None) -> int:
+    def _authenticate(
+        self,
+        auth_override: Optional[Dict[str, str]] = None,
+        use_cache: bool = True,
+    ) -> int:
         runtime = self._build_runtime_config(auth_override)
-        common = self._xmlrpc_common(runtime)
         db = runtime.get("database", "")
         username = runtime.get("username", "")
         password = runtime.get("password", "")
+        key = (
+            self._base_url(runtime),
+            db,
+            username,
+            hashlib.sha256(str(password).encode("utf-8")).hexdigest(),
+        )
+        if use_cache:
+            cached = _cache_get(_auth_cache, key, AUTH_CACHE_TTL_SECONDS)
+            if cached is not None:
+                return cached
+        common = self._xmlrpc_common(runtime)
         uid = common.authenticate(db, username, password, {})
         if not uid:
             raise ValueError("No se pudo autenticar en Odoo (revisar URL/DB/usuario/clave)")
+        _cache_set(_auth_cache, key, int(uid))
         return int(uid)
 
     def test_connection(self) -> Dict[str, Any]:
-        uid = self._authenticate()
+        # Probar conexion siempre verifica contra Odoo, sin cache.
+        uid = self._authenticate(use_cache=False)
         common = self._xmlrpc_common()
         version = common.version()
         return {
