@@ -2281,9 +2281,14 @@ class OdooIntegration:
         self,
         auth_override: Optional[Dict[str, str]] = None,
     ) -> List[Dict[str, Any]]:
-        """Ordenes de venta confirmadas con algo pendiente de facturar. Solo lectura."""
+        """Ordenes de venta confirmadas con algo pendiente de facturar. Solo lectura.
+
+        Cada orden incluye ``invoiced_total`` y ``refunded_total`` (facturas y
+        notas de credito publicadas): Odoo vuelve a marcar "a facturar" una
+        orden cuya factura se anulo con nota de credito.
+        """
         _, call = self._readonly_session(auth_override)
-        return self._search_read_all(
+        orders = self._search_read_all(
             call,
             "sale.order",
             [("state", "=", "sale"), ("invoice_status", "=", "to invoice")],
@@ -2297,9 +2302,34 @@ class OdooIntegration:
                 "team_id",
                 "user_id",
                 "client_order_ref",
+                "invoice_ids",
             ],
             "date_order asc, id asc",
         )
+        move_ids = sorted({int(move_id) for order in orders for move_id in (order.get("invoice_ids") or [])})
+        moves: Dict[int, Dict[str, Any]] = {}
+        if move_ids:
+            for move in self._search_read_all(
+                call,
+                "account.move",
+                [
+                    ("id", "in", move_ids),
+                    ("state", "=", "posted"),
+                    ("move_type", "in", ["out_invoice", "out_refund"]),
+                ],
+                ["move_type", "amount_total"],
+                "id asc",
+            ):
+                moves[int(move["id"])] = move
+        for order in orders:
+            linked = [moves[int(move_id)] for move_id in (order.get("invoice_ids") or []) if int(move_id) in moves]
+            order["invoiced_total"] = round(
+                sum(float(move.get("amount_total") or 0) for move in linked if move.get("move_type") == "out_invoice"), 2
+            )
+            order["refunded_total"] = round(
+                sum(float(move.get("amount_total") or 0) for move in linked if move.get("move_type") == "out_refund"), 2
+            )
+        return orders
 
     def get_today_alerts(
         self,

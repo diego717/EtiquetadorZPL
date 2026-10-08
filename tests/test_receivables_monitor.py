@@ -129,6 +129,21 @@ class TestPureFunctions(unittest.TestCase):
         )
         self.assertEqual(rows, [])
 
+    def test_uninvoiced_skips_orders_cancelled_by_credit_note(self):
+        # Caso real ML 2000013791746265: e-Ticket A-29691 por 759,02 anulado
+        # con nota de credito por el mismo importe; Odoo la vuelve "a facturar".
+        base = {"date_order": "2026-07-01", "amount_total": 759.02, "amount_to_invoice": 759.02, "currency_id": [1, "UYU"]}
+        rows = build_uninvoiced(
+            [
+                {**base, "id": 1, "name": "ML 2000013791746265", "invoiced_total": 759.02, "refunded_total": 759.02},
+                {**base, "id": 2, "name": "PARCIAL", "invoiced_total": 759.02, "refunded_total": 200.0},
+                {**base, "id": 3, "name": "NUNCA FACTURADA", "invoiced_total": 0.0, "refunded_total": 0.0},
+                {**base, "id": 4, "name": "SIN DATOS"},
+            ],
+            TODAY, 180, url_for,
+        )
+        self.assertEqual([r["name"] for r in rows], ["PARCIAL", "NUNCA FACTURADA", "SIN DATOS"])
+
     def test_summary_counts_this_week(self):
         invoices = build_invoice_rows(
             [_move(1, 10, "2026-10-02", 100.0), _move(2, 10, "2026-10-10", 50.0), _move(3, 10, "2026-08-01", 10.0)],

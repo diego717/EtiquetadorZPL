@@ -312,6 +312,18 @@ def build_clients(
     return result
 
 
+def is_cancelled_by_credit_note(order: Dict[str, Any]) -> bool:
+    """La orden se facturo y una nota de credito anulo todo lo facturado.
+
+    Odoo descuenta la nota de credito de lo facturado y vuelve a mostrar la
+    orden como "a facturar", aunque la venta ya se anulo. Una nota de credito
+    parcial no la oculta: queda un saldo que si podria facturarse.
+    """
+    invoiced = _as_float(order.get("invoiced_total"))
+    refunded = _as_float(order.get("refunded_total"))
+    return invoiced > 0 and refunded >= invoiced - 0.01
+
+
 def build_uninvoiced(orders: Iterable[Dict[str, Any]], today: date, stale_days: int, url_for: Any) -> List[Dict[str, Any]]:
     rows = []
     for order in orders:
@@ -328,6 +340,8 @@ def build_uninvoiced(orders: Iterable[Dict[str, Any]], today: date, stale_days: 
         if amount_to_invoice <= 0.005:
             # Odoo marca "a facturar" ordenes en cero o con devoluciones pendientes:
             # no hay plata para cobrar, solo ruido en este tablero.
+            continue
+        if is_cancelled_by_credit_note(order):
             continue
         rows.append(
             {
