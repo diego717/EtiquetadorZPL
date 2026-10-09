@@ -347,11 +347,11 @@ function renderMercadoLibrePayments() {
                 <td class="mono-id">${paymentReference}</td>
                 <td>${invoiceName}</td>
                 <td><span class="status ${statusClass}" title="${escapeMercadoLibreHtml(statusText)}">${escapeMercadoLibreHtml(statusText)}</span></td>
-                <td>
+                <td class="meli-payment-actions"><div class="meli-payment-actions-inner">
                     ${item.can_register ? `<button type="button" class="btn success sm" data-order-id="${orderId}" onclick="registerMercadoLibrePayment(this.dataset.orderId, this)">Registrar pago</button>` : ''}
                     ${paymentUrl ? `<a class="btn secondary sm" href="${escapeMercadoLibreHtml(paymentUrl)}" target="_blank" rel="noopener noreferrer">Abrir pago ↗</a>` : ''}
                     ${invoiceUrl ? `<a class="btn-link-odoo" href="${escapeMercadoLibreHtml(invoiceUrl)}" target="_blank" rel="noopener noreferrer">Factura ↗</a>` : ''}
-                </td>
+                </div></td>
             </tr>
         `;
     }).join('');

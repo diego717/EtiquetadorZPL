@@ -426,7 +426,11 @@ body.admin-only .group-index { display: none; }
 .form-group.compact select { width: 220px; }
 .adm-quick-print .form-group.compact input { width: 210px; }
 .meli-payments-table { min-width: 1180px; }
-.meli-payments-table td:last-child { display: flex; gap: 7px; align-items: center; flex-wrap: wrap; }
+/* La celda sigue siendo table-cell (si fuera flex perderia el alto y los bordes de la fila);
+   el flex va en un contenedor interno. */
+.meli-payments-table td.meli-payment-actions { vertical-align: middle; min-width: 150px; }
+.meli-payment-actions-inner { display: flex; gap: 7px; align-items: center; flex-wrap: wrap; }
+.meli-payment-actions-inner .btn { white-space: nowrap; }
 
 .form-row {
     display: grid;
