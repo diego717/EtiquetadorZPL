@@ -227,6 +227,18 @@ class _FakePaymentMercadoLibre:
 
 
 class TestMercadoLibrePaymentEndpoints(unittest.TestCase):
+    def setUp(self):
+        # Registrar un pago escribe en el historial compartido de pagos: sin esto los tests
+        # agregaban pagos falsos al historial real del usuario.
+        self.tmp = tempfile.TemporaryDirectory()
+        tmp_path = Path(self.tmp.name)
+        self.state_patcher = patch.object(endpoints.recon, "_resolve_state_path", lambda name: tmp_path / name)
+        self.state_patcher.start()
+
+    def tearDown(self):
+        self.state_patcher.stop()
+        self.tmp.cleanup()
+
     def test_payment_options_do_not_expose_operator_passwords(self):
         fake_odoo = _FakePaymentOdoo()
         with patch.object(endpoints, "odoo_integration", fake_odoo):

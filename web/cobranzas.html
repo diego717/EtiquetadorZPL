@@ -26,6 +26,7 @@
             <a href="config.html">Configuracion</a>
             <a href="config.html?view=pos#pos-reconciliation-section">Conciliacion de pagos</a>
             <a href="reposicion.html">Reposicion</a>
+            <a href="proyeccion.html">Proyeccion</a>
             <a href="cobranzas.html" class="active" aria-current="page">Cobranzas</a>
             <a href="index.html">Impresion</a>
         </nav>
@@ -73,7 +74,7 @@
                 <p class="meta" id="clients-meta" role="status" aria-live="polite">Cargando...</p>
             </div>
 
-            <div class="table-scroll">
+            <div class="table-scroll" data-sticky-head>
                 <table>
                     <thead>
                         <tr>
@@ -116,7 +117,7 @@
                 </div>
                 <p class="meta" id="uninvoiced-meta" role="status" aria-live="polite"></p>
             </div>
-            <div class="table-scroll">
+            <div class="table-scroll" data-sticky-head>
                 <table>
                     <thead>
                         <tr>
@@ -159,7 +160,9 @@
         </details>
     </div>
 
+    <script src="panel-cache.js"></script>
     <script src="config.js"></script>
+    <script src="sticky-head.js"></script>
     <script src="panel.js"></script>
     <script>
         const BUCKETS = [
@@ -298,7 +301,7 @@
             try {
                 const data = await panelApi(`/api/receivables/clients/${id}`);
                 const rows = data.invoices.map(inv => `<tr>
-                    <td>${inv.url ? `<a class="link" href="${esc(inv.url)}" target="_blank" rel="noopener">${esc(inv.name)}</a>` : esc(inv.name)}${inv.is_refund ? ' <span class="code">(nota de credito)</span>' : ''}</td>
+                    <td>${inv.url ? `<a class="link" href="${esc(inv.url)}" target="_blank" rel="noopener">${esc(inv.name)}</a>` : esc(inv.name)}${inv.label || inv.is_refund ? ` <span class="code">(${esc((inv.label || 'nota de credito').toLowerCase())})</span>` : ''}${inv.reference ? `<div class="code">${esc(inv.reference)}</div>` : ''}</td>
                     <td>${shortDate(inv.invoice_date)}</td>
                     <td>${shortDate(inv.due_date)}</td>
                     <td class="num${inv.days_overdue ? ' overdue-strong' : ''}">${inv.days_overdue || '-'}</td>

@@ -14,6 +14,7 @@ import threading
 import time
 import xmlrpc.client
 import base64
+from datetime import datetime, timedelta
 from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
 from pathlib import Path
 from typing import Any, Dict, List, Optional
@@ -2199,6 +2200,154 @@ class OdooIntegration:
                 offset += len(moves)
         return totals
 
+    def get_manufactured_products(
+        self,
+        auth_override: Optional[Dict[str, str]] = None,
+    ) -> List[Dict[str, Any]]:
+        """Productos fabricados: con lista de materiales normal o con alguna orden terminada.
+
+        Los kits (BoM phantom) quedan afuera: no se fabrican, se descomponen al venderse.
+        Incluye stock actual/proyectado y precios, igual que `get_replenishment_products`.
+        """
+        _, call = self._readonly_session(auth_override)
+        template_ids = {
+            tmpl_id
+            for tmpl_id, _ in (
+                self._many2one_parts(bom.get("product_tmpl_id"))
+                for bom in self._search_read_all(call, "mrp.bom", [("type", "=", "normal")], ["product_tmpl_id"], "id asc")
+            )
+            if tmpl_id is not None
+        }
+        product_ids = {
+            product_id
+            for product_id, _ in (
+                self._many2one_parts(mo.get("product_id"))
+                for mo in self._search_read_all(call, "mrp.production", [("state", "=", "done")], ["product_id"], "id asc")
+            )
+            if product_id is not None
+        }
+        domain: List[Any] = [("active", "=", True)]
+        if template_ids:
+            domain = ["&", ("active", "=", True), "|", ("product_tmpl_id", "in", sorted(template_ids)), ("id", "in", sorted(product_ids))]
+        elif product_ids:
+            domain.append(("id", "in", sorted(product_ids)))
+        else:
+            return []
+
+        fields = [
+            "display_name", "default_code", "barcode", "uom_id", "categ_id",
+            "qty_available", "virtual_available", "incoming_qty", "outgoing_qty",
+            "list_price", "standard_price",
+        ]
+        items: List[Dict[str, Any]] = []
+        for product in self._search_read_all(call, "product.product", domain, fields, "default_code asc, id asc", page_size=500):
+            _, uom_name = self._many2one_parts(product.get("uom_id"))
+            category_id, category_name = self._many2one_parts(product.get("categ_id"))
+            items.append(
+                {
+                    "id": product.get("id"),
+                    "default_code": str(product.get("default_code") or ""),
+                    "barcode": str(product.get("barcode") or ""),
+                    "name": str(product.get("display_name") or ""),
+                    "uom": uom_name,
+                    "category_id": category_id,
+                    "category": category_name,
+                    "qty_available": product.get("qty_available") or 0.0,
+                    "virtual_available": product.get("virtual_available") or 0.0,
+                    "incoming_qty": product.get("incoming_qty") or 0.0,
+                    "outgoing_qty": product.get("outgoing_qty") or 0.0,
+                    "list_price": product.get("list_price") or 0.0,
+                    "standard_price": product.get("standard_price") or 0.0,
+                }
+            )
+        return items
+
+    def get_open_productions(
+        self,
+        auth_override: Optional[Dict[str, str]] = None,
+    ) -> Dict[int, Dict[str, Any]]:
+        """Ordenes de fabricacion abiertas por producto: cantidad que falta producir y fecha mas proxima.
+
+        Las confirmadas ya suman en `incoming_qty`/`virtual_available`; los borradores no.
+        """
+        _, call = self._readonly_session(auth_override)
+        productions = self._search_read_all(
+            call,
+            "mrp.production",
+            [("state", "in", ["draft", "confirmed", "progress", "to_close"])],
+            ["name", "product_id", "product_qty", "qty_produced", "date_start", "state"],
+            "date_start asc, id asc",
+        )
+        by_product: Dict[int, Dict[str, Any]] = {}
+        for mo in productions:
+            product_id, _ = self._many2one_parts(mo.get("product_id"))
+            if product_id is None:
+                continue
+            remaining = max(0.0, float(mo.get("product_qty") or 0.0) - float(mo.get("qty_produced") or 0.0))
+            entry = by_product.setdefault(
+                product_id, {"qty": 0.0, "draft_qty": 0.0, "orders": [], "next_date": ""}
+            )
+            entry["qty"] += remaining
+            if mo.get("state") == "draft":
+                entry["draft_qty"] += remaining
+            entry["orders"].append(str(mo.get("name") or ""))
+            start = str(mo.get("date_start") or "")[:10]
+            if start and (not entry["next_date"] or start < entry["next_date"]):
+                entry["next_date"] = start
+        return by_product
+
+    def get_monthly_sales(
+        self,
+        product_ids: List[int],
+        since_date: str,
+        auth_override: Optional[Dict[str, str]] = None,
+    ) -> Dict[int, Dict[str, Dict[str, float]]]:
+        """Venta confirmada por producto y mes desde `since_date` (YYYY-MM-DD).
+
+        Devuelve {product_id: {"YYYY-MM": {"qty": unidades, "amount": pesos sin impuestos}}}.
+        Usa lo pedido (product_uom_qty) y no lo entregado: los pedidos migrados de NEO
+        no tienen entregas en Odoo. El mes sale de la fecha del pedido en hora de Uruguay
+        y los montos en otra moneda se pasan a la moneda de la compania con la
+        cotizacion guardada en el pedido.
+        """
+        if not product_ids:
+            return {}
+        _, call = self._readonly_session(auth_override)
+        # date_order se guarda en UTC; Uruguay es UTC-3 todo el anio.
+        since_utc = (datetime.strptime(since_date, "%Y-%m-%d") + timedelta(hours=3)).strftime("%Y-%m-%d %H:%M:%S")
+        lines = self._search_read_all(
+            call,
+            "sale.order.line",
+            [
+                ("state", "in", ["sale", "done"]),
+                ("product_id", "in", sorted(set(product_ids))),
+                ("order_id.date_order", ">=", since_utc),
+            ],
+            ["product_id", "product_uom_qty", "price_subtotal", "order_id"],
+            "id asc",
+        )
+        order_ids = sorted({order_id for order_id, _ in (self._many2one_parts(line.get("order_id")) for line in lines) if order_id})
+        orders: Dict[int, Dict[str, Any]] = {}
+        for start in range(0, len(order_ids), 2000):
+            chunk = order_ids[start:start + 2000]
+            for order in call("sale.order", "read", [chunk], {"fields": ["date_order", "currency_rate"]}) or []:
+                orders[order["id"]] = order
+
+        result: Dict[int, Dict[str, Dict[str, float]]] = {}
+        for line in lines:
+            product_id, _ = self._many2one_parts(line.get("product_id"))
+            order_id, _ = self._many2one_parts(line.get("order_id"))
+            order = orders.get(order_id or 0)
+            if product_id is None or not order or not order.get("date_order"):
+                continue
+            local = datetime.strptime(str(order["date_order"])[:19], "%Y-%m-%d %H:%M:%S") - timedelta(hours=3)
+            month = local.strftime("%Y-%m")
+            rate = float(order.get("currency_rate") or 0.0) or 1.0
+            bucket = result.setdefault(product_id, {}).setdefault(month, {"qty": 0.0, "amount": 0.0})
+            bucket["qty"] += float(line.get("product_uom_qty") or 0.0)
+            bucket["amount"] += float(line.get("price_subtotal") or 0.0) / rate
+        return result
+
     def record_url(self, model: str, record_id: Any) -> str:
         """URL de formulario clasica; Odoo 17+ la redirige a su ruta nueva."""
         return f"{self._base_url()}/web#id={int(record_id)}&model={model}&view_type=form"
@@ -2225,6 +2374,66 @@ class OdooIntegration:
             if len(page) < page_size:
                 return rows
             offset += len(page)
+
+    def _get_unapplied_receivable_lines(self, call: Any) -> List[Dict[str, Any]]:
+        """Lineas abiertas de deudores que no son facturas ni notas de credito.
+
+        Cobros, retenciones y asientos manuales que nadie concilio contra una
+        factura: sin ellos el saldo del cliente queda inflado (o, con debitos
+        manuales, por debajo). Solo cuentan las cuentas que usan las facturas
+        de cliente, para no mezclar otras cuentas por cobrar (adelantos al
+        personal, etc.). Devuelve ``commercial_partner_id`` como las facturas.
+        """
+        try:
+            lines = self._search_read_all(
+                call,
+                "account.move.line",
+                [
+                    ("account_id.account_type", "=", "asset_receivable"),
+                    ("parent_state", "=", "posted"),
+                    ("reconciled", "=", False),
+                    ("amount_residual", "!=", 0),
+                ],
+                [
+                    "account_id",
+                    "move_id",
+                    "move_name",
+                    "move_type",
+                    "journal_id",
+                    "partner_id",
+                    "date",
+                    "date_maturity",
+                    "amount_residual",
+                    "amount_residual_currency",
+                    "currency_id",
+                    "ref",
+                    "name",
+                ],
+                "date asc, id asc",
+            )
+        except xmlrpc.client.Fault as exc:
+            logger.warning("No se pudieron leer los cobros sin aplicar: %s", self.humanize_exception(exc))
+            return []
+
+        invoice_types = {"out_invoice", "out_refund"}
+        customer_accounts = {
+            self._many2one_parts(line.get("account_id"))[0] for line in lines if line.get("move_type") in invoice_types
+        }
+        unapplied = [
+            line
+            for line in lines
+            if line.get("move_type") not in invoice_types
+            and self._many2one_parts(line.get("account_id"))[0] in customer_accounts
+        ]
+        partner_ids = sorted({pid for pid in (self._many2one_parts(l.get("partner_id"))[0] for l in unapplied) if pid})
+        commercial: Dict[int, Any] = {}
+        if partner_ids:
+            for partner in call("res.partner", "read", [partner_ids], {"fields": ["commercial_partner_id"]}) or []:
+                commercial[int(partner["id"])] = partner.get("commercial_partner_id")
+        for line in unapplied:
+            partner_id, _ = self._many2one_parts(line.get("partner_id"))
+            line["commercial_partner_id"] = commercial.get(partner_id or 0) or line.get("partner_id")
+        return unapplied
 
     def get_receivables_data(
         self,
@@ -2258,8 +2467,9 @@ class OdooIntegration:
             ],
             "invoice_date_due asc, id asc",
         )
+        unapplied = self._get_unapplied_receivable_lines(call)
         partner_ids = set()
-        for move in moves:
+        for move in moves + unapplied:
             for key in ("commercial_partner_id", "partner_id"):
                 partner_id, _ = self._many2one_parts(move.get(key))
                 if partner_id:
@@ -2278,7 +2488,7 @@ class OdooIntegration:
         commercial_ids = sorted(
             {
                 pid
-                for pid in (self._many2one_parts(m.get("commercial_partner_id"))[0] for m in moves)
+                for pid in (self._many2one_parts(m.get("commercial_partner_id"))[0] for m in moves + unapplied)
                 if pid
             }
         )
@@ -2325,6 +2535,7 @@ class OdooIntegration:
         companies = call("res.company", "search_read", [[]], {"fields": ["name"], "limit": 1}) or []
         return {
             "moves": moves,
+            "unapplied_lines": unapplied,
             "partners": partners,
             "last_payments": last_payments,
             "company_name": str(companies[0].get("name") or "") if companies else "",
@@ -2501,14 +2712,138 @@ class OdooIntegration:
         )
         return accounts or []
 
+    def get_difference_accounts(
+        self,
+        auth_override: Optional[Dict[str, str]] = None,
+    ) -> List[Dict[str, Any]]:
+        """Cuentas de gasto para la diferencia de un cobro (gastos bancarios, comisiones, redondeos)."""
+        _, call = self._readonly_session(auth_override)
+        domain = [
+            "&", "&",
+            ("deprecated", "=", False),
+            ("account_type", "in", ["expense", "expense_direct_cost"]),
+            "|", "|",
+            ("name", "ilike", "bancari"),
+            ("name", "ilike", "comision"),
+            ("name", "ilike", "redonde"),
+        ]
+        return call(
+            "account.account",
+            "search_read",
+            [domain],
+            {"fields": ["id", "code", "name"], "order": "code, name", "limit": 100},
+        ) or []
+
+    def get_company_currency(self, auth_override: Optional[Dict[str, str]] = None) -> str:
+        uid, call = self._readonly_session(auth_override)
+        users = call("res.users", "read", [[uid]], {"fields": ["company_id"]}) or []
+        company_id, _ = self._many2one_parts((users or [{}])[0].get("company_id"))
+        if not company_id:
+            return ""
+        companies = call("res.company", "read", [[company_id]], {"fields": ["currency_id"]}) or []
+        _, currency = self._many2one_parts((companies or [{}])[0].get("currency_id"))
+        return str(currency or "")
+
+    def find_open_customer_invoices(
+        self,
+        number: str,
+        auth_override: Optional[Dict[str, str]] = None,
+        limit: int = 10,
+    ) -> List[Dict[str, Any]]:
+        """Facturas de cliente publicadas con saldo, cualquier plazo de pago, por numero (ej. 50915 o A-50915)."""
+        text = str(number or "").strip()
+        if not text:
+            return []
+        _, call = self._readonly_session(auth_override)
+        rows = call(
+            "account.move",
+            "search_read",
+            [[
+                ("move_type", "=", "out_invoice"),
+                ("state", "=", "posted"),
+                ("payment_state", "in", ["not_paid", "partial"]),
+                ("name", "ilike", text),
+            ]],
+            {
+                "fields": ["name", "partner_id", "invoice_date", "amount_total", "amount_residual", "currency_id", "invoice_payment_term_id"],
+                "order": "invoice_date desc, id desc",
+                "limit": int(limit),
+            },
+        ) or []
+        items = []
+        for row in rows:
+            _, partner = self._many2one_parts(row.get("partner_id"))
+            _, currency = self._many2one_parts(row.get("currency_id"))
+            _, term = self._many2one_parts(row.get("invoice_payment_term_id"))
+            items.append(
+                {
+                    "invoice_id": row.get("id"),
+                    "name": str(row.get("name") or ""),
+                    "partner": str(partner or ""),
+                    "invoice_date": str(row.get("invoice_date") or ""),
+                    "amount_total": float(row.get("amount_total") or 0.0),
+                    "amount_residual": float(row.get("amount_residual") or 0.0),
+                    "currency": str(currency or ""),
+                    "payment_term": str(term or ""),
+                }
+            )
+        return items
+
+    def get_invoice_payment_context(
+        self,
+        invoice_id: int,
+        journal_id: int,
+        auth_override: Optional[Dict[str, str]] = None,
+    ) -> Dict[str, Any]:
+        """Datos para validar un cobro antes de registrarlo: saldo y moneda de la factura y del diario.
+
+        Un diario sin moneda propia opera en la moneda de la compania.
+        """
+        _, call = self._readonly_session(auth_override)
+        invoices = call(
+            "account.move",
+            "read",
+            [[int(invoice_id)]],
+            {"fields": ["name", "partner_id", "amount_residual", "currency_id", "company_id", "payment_state", "move_type", "state"]},
+        ) or []
+        if not invoices:
+            raise ValueError("La factura indicada no existe en Odoo")
+        journals = call(
+            "account.journal", "read", [[int(journal_id)]], {"fields": ["name", "type", "currency_id", "company_id"]}
+        ) or []
+        if not journals:
+            raise ValueError("El diario indicado no existe en Odoo")
+        invoice, journal = invoices[0], journals[0]
+        company_id, _ = self._many2one_parts(invoice.get("company_id"))
+        companies = call("res.company", "read", [[company_id]], {"fields": ["currency_id"]}) if company_id else []
+        _, company_currency = self._many2one_parts((companies or [{}])[0].get("currency_id"))
+        _, invoice_currency = self._many2one_parts(invoice.get("currency_id"))
+        _, journal_currency = self._many2one_parts(journal.get("currency_id"))
+        _, partner = self._many2one_parts(invoice.get("partner_id"))
+        return {
+            "invoice_id": int(invoice_id),
+            "invoice_name": str(invoice.get("name") or ""),
+            "partner": str(partner or ""),
+            "move_type": str(invoice.get("move_type") or ""),
+            "state": str(invoice.get("state") or ""),
+            "payment_state": str(invoice.get("payment_state") or ""),
+            "amount_residual": float(invoice.get("amount_residual") or 0.0),
+            "invoice_currency": str(invoice_currency or company_currency or ""),
+            "journal_id": int(journal_id),
+            "journal_name": str(journal.get("name") or ""),
+            "journal_type": str(journal.get("type") or ""),
+            "journal_currency": str(journal_currency or company_currency or ""),
+        }
+
     def attach_pdf_to_payment(
         self,
         payment_id: int,
         filename: str,
         pdf_bytes: bytes,
         auth_override: Optional[Dict[str, str]] = None,
+        mimetype: str = "application/pdf",
     ) -> Dict[str, Any]:
-        """Adjunta un PDF al pago, sin duplicarlo por nombre."""
+        """Adjunta un archivo (PDF por defecto) al pago, sin duplicarlo por nombre."""
         if not payment_id or not pdf_bytes:
             raise ValueError("Faltan datos para adjuntar el comprobante al pago")
         runtime = self._build_runtime_config(auth_override)
@@ -2545,7 +2880,7 @@ class OdooIntegration:
                         "name": str(filename),
                         "type": "binary",
                         "datas": base64.b64encode(pdf_bytes).decode("ascii"),
-                        "mimetype": "application/pdf",
+                        "mimetype": str(mimetype or "application/pdf"),
                         "res_model": "account.payment",
                         "res_id": int(payment_id),
                     }],

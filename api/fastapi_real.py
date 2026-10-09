@@ -112,6 +112,13 @@ try:
 except ImportError as e:
     print(f"ADVERTENCIA: Endpoints de Reposicion no disponibles: {e}")
 
+# Incluir endpoints de proyeccion de ventas de productos fabricados (solo lectura sobre Odoo)
+try:
+    from sales_projection_endpoints import router as sales_projection_router
+    app.include_router(sales_projection_router)
+except ImportError as e:
+    print(f"ADVERTENCIA: Endpoints de Proyeccion no disponibles: {e}")
+
 # Incluir endpoints de cobranzas y ventas sin facturar (solo lectura sobre Odoo)
 try:
     from receivables_endpoints import router as receivables_router
@@ -250,6 +257,13 @@ async def startup_events():
         print(f"ADVERTENCIA: No se pudo iniciar monitor de reposicion: {e}")
 
     try:
+        from sales_projection import sales_projection_monitor
+
+        sales_projection_monitor.start()
+    except Exception as e:
+        print(f"ADVERTENCIA: No se pudo iniciar monitor de proyeccion de ventas: {e}")
+
+    try:
         from receivables_monitor import receivables_monitor
 
         receivables_monitor.start()
@@ -297,6 +311,13 @@ async def shutdown_events():
         replenishment_monitor.stop()
     except Exception as e:
         print(f"ADVERTENCIA: No se pudo detener monitor de reposicion: {e}")
+
+    try:
+        from sales_projection import sales_projection_monitor
+
+        sales_projection_monitor.stop()
+    except Exception as e:
+        print(f"ADVERTENCIA: No se pudo detener monitor de proyeccion de ventas: {e}")
 
     try:
         from receivables_monitor import receivables_monitor

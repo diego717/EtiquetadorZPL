@@ -9,7 +9,7 @@ let posPendingInvoices = [];
 let posPaymentHistory = [];
 let mercadoLibrePaymentOptionsLoaded = false;
 const PAYMENT_SOURCE_STORAGE_KEY = 'etiquetador_payment_source';
-const PAYMENT_SOURCE_LABELS = { totalnet: 'TotalNet', mercadolibre: 'Mercado Libre' };
+const PAYMENT_SOURCE_LABELS = { totalnet: 'TotalNet', mercadolibre: 'Mercado Libre', transferencia: 'Transferencia' };
 
 function setPaymentSource(source, persist = true) {
     const selected = source === 'mercadolibre' ? 'mercadolibre' : 'totalnet';
@@ -47,7 +47,7 @@ function initPaymentSource() {
 }
 
 function paymentHistorySource(item) {
-    return item.source === 'mercadolibre' ? 'mercadolibre' : 'totalnet';
+    return Object.prototype.hasOwnProperty.call(PAYMENT_SOURCE_LABELS, item.source) ? item.source : 'totalnet';
 }
 
 async function loadTotalNetConfig() {
@@ -144,6 +144,8 @@ function renderJournalMapTable() {
 async function loadPosJournals() {
     const response = await fetchAPI('/api/pos-reconciliation/journals');
     posJournals = (response && response.items) || [];
+    posCompanyCurrency = (response && response.company_currency) || posCompanyCurrency;
+    renderTransferJournals();
     const mappingSelect = document.getElementById('pos-journal-map-journal');
     mappingSelect.innerHTML = posJournals.length
         ? posJournals.map(j => `<option value="${j.id}">${j.name}</option>`).join('')
@@ -273,6 +275,7 @@ function renderPosPaymentOperators() {
     status.textContent = validOperators.length
         ? 'La seleccion se usara para autenticar y auditar el pago.'
         : 'Carga al menos un usuario Odoo por operador.';
+    syncTransferOperators();
 }
 
 async function loadPosPaymentOperators() {
@@ -600,7 +603,10 @@ function posHistorySearchText(item) {
         item.mercadolibre?.reference,
         ...(item.mercadolibre?.order_ids || []),
         item.mercadolibre?.payment_reference,
-        item.mercadolibre?.buyer
+        item.mercadolibre?.buyer,
+        item.transfer?.reference,
+        item.transfer?.journal_name,
+        item.transfer?.partner
     ].map(value => String(value || '').toLowerCase()).join(' ');
 }
 
@@ -614,7 +620,7 @@ function renderPosHistory() {
     const state = document.getElementById('pos-history-state')?.value || 'ok';
     const sourceFilter = document.getElementById('pos-history-source')?.value || 'all';
     const filtered = posPaymentHistory.filter(item => {
-        const paymentDate = posPaymentDateIso(item.cupon?.fecha || item.mercadolibre?.payment_date)
+        const paymentDate = posPaymentDateIso(item.cupon?.fecha || item.mercadolibre?.payment_date || item.transfer?.date)
             || String(item.registered_at || '').slice(0, 10);
         if (sourceFilter !== 'all' && paymentHistorySource(item) !== sourceFilter) return false;
         if (search && !posHistorySearchText(item).includes(search)) return false;
@@ -644,7 +650,10 @@ function renderPosHistory() {
         return `<tr>
             <td class="pos-money">${escapePosHtml(formatPosHistoryDateTime(item.registered_at))}</td>
             <td><span class="pay-source-badge" data-source="${source}">${escapePosHtml(PAYMENT_SOURCE_LABELS[source])}</span></td>
-            ${source === 'mercadolibre' ? `
+            ${source === 'transferencia' ? `
+            <td class="pos-money">${escapePosHtml(item.transfer?.date || '-')}</td>
+            <td>${escapePosHtml(item.transfer?.reference || '-')}${item.transfer?.journal_name ? `<br><span class="odoo-muted">${escapePosHtml(item.transfer.journal_name)}</span>` : ''}</td>
+            <td class="pos-money">${item.transfer?.amount !== undefined ? escapePosHtml(formatPosAmountWithCurrency(item.transfer.amount, item.transfer.currency)) : '-'}</td>` : source === 'mercadolibre' ? `
             <td class="pos-money">${escapePosHtml(sale.payment_date || '-')}</td>
             <td title="${escapePosHtml(sale.order_ids?.length ? `Ordenes: ${sale.order_ids.join(', ')}` : '')}">${escapePosHtml(sale.reference || '-')}${sale.buyer ? `<br><span class="odoo-muted">${escapePosHtml(sale.buyer)}</span>` : ''}</td>
             <td class="pos-money">${sale.amount !== undefined && sale.amount !== null ? escapePosHtml(formatPosAmountWithCurrency(sale.amount, sale.currency)) : '-'}</td>` : `
@@ -700,7 +709,7 @@ function renderPosPendingInvoices() {
             <td class="pos-money">${formatPosAmount(invoice.amount_residual ?? invoice.amount_total)}</td>
             <td>${escapePosHtml(formatPosCurrency(invoice.currency))}</td>
             <td>${escapePosHtml(invoice.invoice_origin || '-')}</td>
-            <td><button class="btn secondary" onclick="prefillManualPosTicket(${idx})">Cargar ticket</button></td>
+            <td><div class="pos-history-actions"><button class="btn secondary" onclick="prefillManualPosTicket(${idx})">Cargar ticket</button><button class="btn secondary" onclick="prefillTransferFromPending(${idx})">Transferencia</button></div></td>
         </tr>`).join('') :
         '<tr><td colspan="7" class="empty-cell">No hay facturas a contado pendientes en el rango</td></tr>';
 }
@@ -1264,3 +1273,304 @@ async function confirmPosReconciliation() {
     manualDate?.setAttribute('max', todayPosDate);
     if (manualDate && !manualDate.value) manualDate.value = maxPosDate;
 })();
+
+// ---- Cobro por transferencia bancaria ----
+// Sin ticket POS: el operador elige la factura (cualquier plazo), el banco y la referencia,
+// y el pago se registra en Odoo con el mismo asistente que "Registrar pago".
+let posCompanyCurrency = 'UYU';
+let transferInvoice = null;
+let transferDiffAccounts = null;
+let transferSearchResults = [];
+// Si el operador elige la cuenta a mano, no se vuelve a preseleccionar al cambiar el importe.
+let transferDiffAccountTouched = false;
+// Diferencias menores a esto (centesimos) van a la cuenta de redondeo, como en los demas cobros.
+const TRANSFER_ROUNDING_LIMIT = 1;
+// Diarios de tipo banco que son cuentas bancarias (no tarjetas, cheques ni retenciones).
+const TRANSFER_BANK_RE = /(BROU|Santander|Ita[uú]|Scotia|HSBC|BBVA|Heritage|Bandes|Bank|Banco)/i;
+const TRANSFER_NOT_BANK_RE = /(Master|Visa|Maestro|OCA|American|Tarjeta|Cheque|Retenc|Redondeo|Canje|RedPagos|Mercado ?Pago)/i;
+
+function transferJournalCurrency(journal) {
+    return (Array.isArray(journal.currency_id) ? journal.currency_id[1] : '') || posCompanyCurrency;
+}
+
+function syncTransferOperators() {
+    const source = document.getElementById('pos-payment-operator');
+    const target = document.getElementById('pos-transfer-operator');
+    if (!source || !target) return;
+    const previous = target.value || source.value;
+    target.innerHTML = source.innerHTML;
+    target.disabled = source.disabled;
+    if ([...target.options].some(option => option.value === previous)) target.value = previous;
+}
+
+function setTransferStatus(text, kind = '') {
+    const status = document.getElementById('pos-transfer-status');
+    if (!status) return;
+    status.className = `pos-inline-message${kind ? ` ${kind}` : ''}`;
+    status.textContent = text;
+}
+
+function openTransferPanel() {
+    const panel = document.getElementById('pos-transfer-panel');
+    if (!panel) return;
+    panel.open = true;
+    const today = new Date().toLocaleDateString('en-CA');
+    const dateInput = document.getElementById('pos-transfer-date');
+    if (!dateInput.value) dateInput.value = today;
+    dateInput.max = today;
+    syncTransferOperators();
+    loadTransferDiffAccounts();
+    renderTransferDifference();
+}
+
+function setTransferInvoice(invoice) {
+    transferInvoice = invoice;
+    transferSearchResults = [];
+    transferDiffAccountTouched = false;
+    const result = document.getElementById('pos-transfer-invoice-result');
+    if (invoice) {
+        result.innerHTML = `<div class="chosen"><span><strong>${escapePosHtml(invoice.name)}</strong> · ${escapePosHtml(invoice.partner || '-')}
+            · saldo <b>${escapePosHtml(formatPosAmountWithCurrency(invoice.amount_residual, invoice.currency))}</b></span>
+            ${invoice.payment_term ? `<span class="odoo-muted">${escapePosHtml(invoice.payment_term)}</span>` : ''}</div>`;
+        document.getElementById('pos-transfer-amount').value = Number(invoice.amount_residual || 0).toFixed(2);
+    } else {
+        result.innerHTML = '';
+    }
+    document.getElementById('pos-transfer-submit').disabled = !invoice;
+    setTransferStatus('');
+    renderTransferJournals();
+    renderTransferDifference();
+}
+
+function prefillTransferFromPending(index) {
+    const invoice = posPendingInvoices[index];
+    if (!invoice) return;
+    openTransferPanel();
+    setTransferInvoice({
+        invoice_id: invoice.invoice_id,
+        name: invoice.name || `Factura #${invoice.invoice_id}`,
+        partner: invoice.partner || '',
+        amount_residual: Number(invoice.amount_residual ?? invoice.amount_total ?? 0),
+        currency: posCurrencyCode(invoice.currency) || String(invoice.currency || ''),
+        payment_term: '',
+    });
+    document.getElementById('pos-transfer-panel').scrollIntoView({ block: 'start' });
+    document.getElementById('pos-transfer-reference').focus();
+}
+
+async function searchTransferInvoice() {
+    const number = document.getElementById('pos-transfer-invoice-search').value.trim();
+    const result = document.getElementById('pos-transfer-invoice-result');
+    openTransferPanel();
+    if (number.length < 3) {
+        result.innerHTML = '<span class="pos-inline-message error">Escribi al menos 3 caracteres del numero de factura.</span>';
+        return;
+    }
+    result.innerHTML = '<span class="pos-inline-message">Buscando en Odoo...</span>';
+    try {
+        const apiBase = await ensureApiPort();
+        const response = await fetch(`${apiBase}/api/pos-reconciliation/open-invoices?number=${encodeURIComponent(number)}`);
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok) throw new Error(data.detail || `HTTP ${response.status}`);
+        const items = (data.items || []).map(item => ({ ...item, currency: posCurrencyCode(item.currency) || item.currency }));
+        if (items.length === 1) {
+            setTransferInvoice(items[0]);
+            return;
+        }
+        setTransferInvoice(null);
+        transferSearchResults = items;
+        result.innerHTML = items.length
+            ? `<span class="odoo-muted">${items.length} facturas con saldo coinciden. Elegi una:</span>${items.map((item, i) =>
+                `<button type="button" class="btn secondary small pick" onclick="setTransferInvoice(transferSearchResults[${i}])">${escapePosHtml(item.name)} · ${escapePosHtml(item.partner)} · ${escapePosHtml(formatPosAmountWithCurrency(item.amount_residual, item.currency))}</button>`).join('')}`
+            : '<span class="pos-inline-message error">No hay facturas de cliente con saldo con ese numero.</span>';
+    } catch (error) {
+        result.innerHTML = `<span class="pos-inline-message error">No se pudo buscar: ${escapePosHtml(error.message)}</span>`;
+    }
+}
+
+function renderTransferJournals() {
+    const select = document.getElementById('pos-transfer-journal');
+    if (!select) return;
+    const previous = select.value;
+    const showAll = document.getElementById('pos-transfer-all-journals')?.checked;
+    const currency = transferInvoice?.currency || '';
+    const options = posJournals.filter(journal =>
+        journal.type === 'bank'
+        && (!currency || transferJournalCurrency(journal) === currency)
+        && (showAll || (TRANSFER_BANK_RE.test(journal.name) && !TRANSFER_NOT_BANK_RE.test(journal.name))));
+    select.innerHTML = '';
+    if (!transferInvoice) {
+        select.add(new Option('Elegi primero la factura', ''));
+    } else {
+        select.add(new Option(options.length ? `Elegi el banco (${currency})` : `No hay bancos en ${currency}`, ''));
+        options.forEach(journal => select.add(new Option(`${journal.name} · ${transferJournalCurrency(journal)}`, journal.id)));
+    }
+    if ([...select.options].some(option => option.value === previous)) select.value = previous;
+}
+
+async function loadTransferDiffAccounts() {
+    if (transferDiffAccounts) return;
+    const select = document.getElementById('pos-transfer-diff-account');
+    try {
+        const result = await fetchAPI('/api/pos-reconciliation/difference-accounts');
+        transferDiffAccounts = (result && result.items) || [];
+    } catch (error) {
+        transferDiffAccounts = null;
+        select.innerHTML = '<option value="">No se pudieron cargar las cuentas</option>';
+        return;
+    }
+    select.innerHTML = transferDiffAccounts.map(account =>
+        `<option value="${account.id}">${escapePosHtml(`${account.code} - ${account.name}`)}</option>`).join('');
+    selectTransferDiffAccount();
+}
+
+// Centesimos: la cuenta de redondeo elegida para los cobros POS (Redondeos).
+// Diferencias mayores (comisiones del banco): Gastos Bancarios.
+function selectTransferDiffAccount() {
+    const select = document.getElementById('pos-transfer-diff-account');
+    if (!select || !transferDiffAccounts || transferDiffAccountTouched) return;
+    const has = id => transferDiffAccounts.some(account => String(account.id) === String(id));
+    const byName = re => transferDiffAccounts.find(account => re.test(account.name));
+    let target = null;
+    if (Math.abs(transferDifference()) < TRANSFER_ROUNDING_LIMIT) {
+        const posRounding = document.getElementById('pos-rounding-account')?.value;
+        target = has(posRounding) ? posRounding : byName(/^redondeos?$/i)?.id;
+    } else {
+        target = byName(/gastos bancarios/i)?.id;
+    }
+    if (target) select.value = String(target);
+}
+
+function transferDifference() {
+    if (!transferInvoice) return 0;
+    const amount = Number(document.getElementById('pos-transfer-amount').value);
+    if (!Number.isFinite(amount) || amount <= 0) return 0;
+    return Math.round((Number(transferInvoice.amount_residual) - amount) * 100) / 100;
+}
+
+function renderTransferDifference() {
+    const box = document.getElementById('pos-transfer-difference');
+    if (!box) return;
+    const difference = transferDifference();
+    box.hidden = !difference;
+    const reconcileRadio = document.querySelector('input[name="pos-transfer-diff"][value="reconcile"]');
+    document.getElementById('pos-transfer-diff-account').disabled = !reconcileRadio.checked;
+    if (!difference) return;
+    const currency = transferInvoice.currency;
+    document.getElementById('pos-transfer-difference-text').textContent = difference > 0
+        ? `Se recibieron ${formatPosAmountWithCurrency(Math.abs(difference), currency)} menos que el saldo de la factura.`
+        : `Se recibieron ${formatPosAmountWithCurrency(Math.abs(difference), currency)} mas que el saldo de la factura.`;
+    document.getElementById('pos-transfer-open-label').textContent = difference > 0
+        ? 'Dejar el saldo pendiente (pago parcial)'
+        : 'Dejar el excedente a favor del cliente';
+    const reconcile = document.querySelector('input[name="pos-transfer-diff"][value="reconcile"]').checked;
+    document.getElementById('pos-transfer-diff-account').disabled = !reconcile;
+    selectTransferDiffAccount();
+}
+
+function readTransferFile(file) {
+    return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(String(reader.result).split(',')[1] || '');
+        reader.onerror = () => reject(new Error('No se pudo leer el comprobante'));
+        reader.readAsDataURL(file);
+    });
+}
+
+async function registerTransferPayment() {
+    if (!transferInvoice) {
+        setTransferStatus('Elegi la factura.', 'error');
+        return;
+    }
+    const operator = document.getElementById('pos-transfer-operator').value;
+    const journalSelect = document.getElementById('pos-transfer-journal');
+    const amount = Number(document.getElementById('pos-transfer-amount').value);
+    const paymentDate = document.getElementById('pos-transfer-date').value;
+    const reference = document.getElementById('pos-transfer-reference').value.trim();
+    const file = document.getElementById('pos-transfer-file').files[0];
+    const difference = transferDifference();
+    const handling = difference
+        ? document.querySelector('input[name="pos-transfer-diff"]:checked').value
+        : 'open';
+    const missing = [
+        [!operator, 'quien registra el pago'],
+        [!journalSelect.value, 'el banco'],
+        [!(amount > 0), 'el importe'],
+        [!paymentDate, 'la fecha'],
+        [!reference, 'la referencia de la transferencia'],
+    ].filter(([isMissing]) => isMissing).map(([, label]) => label);
+    if (missing.length) {
+        setTransferStatus(`Falta completar: ${missing.join(', ')}.`, 'error');
+        return;
+    }
+    if (file && file.size > 8 * 1024 * 1024) {
+        setTransferStatus('El comprobante supera los 8 MB.', 'error');
+        return;
+    }
+
+    const currency = transferInvoice.currency;
+    const accountSelect = document.getElementById('pos-transfer-diff-account');
+    const lines = [
+        `Registrar en Odoo el cobro de ${transferInvoice.name} (${transferInvoice.partner || 'sin cliente'}):`,
+        '',
+        `Importe: ${formatPosAmountWithCurrency(amount, currency)}`,
+        `Banco: ${journalSelect.selectedOptions[0].textContent}`,
+        `Fecha: ${paymentDate.split('-').reverse().join('/')}`,
+        `Referencia: ${reference}`,
+    ];
+    if (difference) {
+        lines.push(handling === 'reconcile'
+            ? `Diferencia de ${formatPosAmountWithCurrency(Math.abs(difference), currency)} a ${accountSelect.selectedOptions[0]?.textContent || '-'} (la factura queda pagada)`
+            : (difference > 0
+                ? `La factura queda con saldo de ${formatPosAmountWithCurrency(difference, currency)}`
+                : `Quedan ${formatPosAmountWithCurrency(-difference, currency)} a favor del cliente`));
+    }
+    if (file) lines.push(`Comprobante: ${file.name}`);
+    if (!confirm(lines.join('\n'))) return;
+
+    const button = document.getElementById('pos-transfer-submit');
+    button.disabled = true;
+    setTransferStatus('Registrando en Odoo...');
+    try {
+        const body = {
+            operator_app_username: operator,
+            invoice_id: transferInvoice.invoice_id,
+            journal_id: Number(journalSelect.value),
+            amount,
+            payment_date: paymentDate,
+            reference,
+            difference_handling: handling,
+            difference_account_id: handling === 'reconcile' ? Number(accountSelect.value) || null : null,
+        };
+        if (file) {
+            body.attachment_filename = file.name;
+            body.attachment_mimetype = file.type;
+            body.attachment_base64 = await readTransferFile(file);
+        }
+        const apiBase = await ensureApiPort();
+        const response = await fetch(`${apiBase}/api/pos-reconciliation/transfer`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(body),
+        });
+        const result = await response.json().catch(() => ({}));
+        if (!response.ok) throw new Error(result.detail || `HTTP ${response.status}`);
+
+        const links = [
+            result.invoice_url ? `<a class="btn secondary small" href="${escapePosHtml(result.invoice_url)}" target="_blank" rel="noopener noreferrer">Factura</a>` : '',
+            result.payment_url ? `<a class="btn secondary small" href="${escapePosHtml(result.payment_url)}" target="_blank" rel="noopener noreferrer">Pago</a>` : '',
+        ].join(' ');
+        document.getElementById('pos-transfer-reference').value = '';
+        document.getElementById('pos-transfer-file').value = '';
+        document.getElementById('pos-transfer-invoice-search').value = '';
+        setTransferInvoice(null);
+        const status = document.getElementById('pos-transfer-status');
+        status.className = `pos-inline-message ${result.warning ? 'error' : 'success'}`;
+        status.innerHTML = `Cobro de ${escapePosHtml(result.invoice_name)} registrado en Odoo. ${links}${result.warning ? `<br>${escapePosHtml(result.warning)}` : ''}`;
+        loadPosPendingInvoicesFromRange();
+        loadPosHistory();
+    } catch (error) {
+        setTransferStatus(`No se registro el pago: ${error.message}`, 'error');
+        button.disabled = false;
+    }
+}

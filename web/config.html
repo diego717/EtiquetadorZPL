@@ -29,6 +29,7 @@
                 <a href="config.html" id="nav-config-link" class="active">Configuracion</a>
                 <a href="config.html?view=pos#pos-reconciliation-section" id="nav-pos-link">Conciliacion de pagos</a>
                 <a href="reposicion.html" id="nav-stock-link">Reposicion</a>
+                <a href="proyeccion.html">Proyeccion</a>
                 <a href="cobranzas.html" id="nav-receivables-link">Cobranzas</a>
             </div>
             <div class="nav-jump" aria-label="Ir a una seccion">
@@ -792,6 +793,57 @@
                 </div>
             </details>
 
+            <details class="pos-manual-panel" id="pos-transfer-panel">
+                <summary>Registrar cobro por transferencia bancaria</summary>
+                <p class="odoo-muted">Para cobros que llegan por transferencia, sin ticket TotalNet ni Mercado Pago. Sirve para cualquier factura con saldo, tambien a credito. El pago se registra en Odoo recien al confirmar.</p>
+                <div class="pos-transfer-invoice">
+                    <div class="form-group">
+                        <label for="pos-transfer-invoice-search">Factura:</label>
+                        <input type="text" id="pos-transfer-invoice-search" placeholder="50915 o A-50915" onkeydown="if (event.key === 'Enter') { event.preventDefault(); searchTransferInvoice(); }">
+                    </div>
+                    <button class="btn secondary" type="button" onclick="searchTransferInvoice()">Buscar</button>
+                    <div id="pos-transfer-invoice-result" class="pos-transfer-invoice-result" role="status" aria-live="polite"></div>
+                </div>
+                <div class="pos-manual-grid">
+                    <div class="form-group">
+                        <label for="pos-transfer-date">Fecha de la transferencia:</label>
+                        <input type="date" id="pos-transfer-date" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="pos-transfer-amount">Importe recibido:</label>
+                        <input type="number" id="pos-transfer-amount" min="0.01" step="0.01" required oninput="renderTransferDifference()">
+                    </div>
+                    <div class="form-group">
+                        <label for="pos-transfer-journal">Banco:</label>
+                        <select id="pos-transfer-journal"><option value="">Elegi primero la factura</option></select>
+                        <label class="check-label pos-transfer-all"><input type="checkbox" id="pos-transfer-all-journals" onchange="renderTransferJournals()"> Ver todos los diarios</label>
+                    </div>
+                    <div class="form-group">
+                        <label for="pos-transfer-reference">Referencia de la transferencia:</label>
+                        <input type="text" id="pos-transfer-reference" placeholder="Nro. de operacion del banco" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="pos-transfer-operator">Registrar como:</label>
+                        <select id="pos-transfer-operator"><option value="">Cargando usuarios...</option></select>
+                    </div>
+                    <div class="form-group">
+                        <label for="pos-transfer-file">Comprobante (opcional):</label>
+                        <input type="file" id="pos-transfer-file" accept="application/pdf,image/png,image/jpeg">
+                        <span class="odoo-muted">PDF, PNG o JPG, hasta 8 MB. Se adjunta al pago en Odoo.</span>
+                    </div>
+                </div>
+                <div id="pos-transfer-difference" class="pos-transfer-difference" hidden>
+                    <p id="pos-transfer-difference-text"></p>
+                    <label class="check-label"><input type="radio" name="pos-transfer-diff" value="open" checked autocomplete="off" onchange="renderTransferDifference()"> <span id="pos-transfer-open-label">Dejar el saldo pendiente (pago parcial)</span></label>
+                    <label class="check-label"><input type="radio" name="pos-transfer-diff" value="reconcile" autocomplete="off" onchange="renderTransferDifference()"> Dar la factura por pagada y registrar la diferencia en:</label>
+                    <div class="form-group"><select id="pos-transfer-diff-account" aria-label="Cuenta para la diferencia" autocomplete="off" onchange="transferDiffAccountTouched = true"></select></div>
+                </div>
+                <div class="pos-manual-actions">
+                    <button class="btn success" id="pos-transfer-submit" onclick="registerTransferPayment()" disabled>Registrar transferencia en Odoo</button>
+                    <span id="pos-transfer-status" class="pos-inline-message" role="status" aria-live="polite"></span>
+                </div>
+            </details>
+
             <h4>Coincidencias pendientes</h4>
             <div class="table-scroll">
                 <table class="table-clean">
@@ -832,36 +884,40 @@
                 </table>
             </div>
 
-            <div class="inline-toolbar" style="margin-top:12px;">
-                <div class="form-group" style="margin-bottom:0; min-width:320px;">
+            <div class="pos-confirm-grid">
+                <div class="form-group">
                     <label for="pos-payment-operator">Registrar pagos en Odoo como:</label>
                     <select id="pos-payment-operator" disabled>
                         <option value="">Cargando usuarios...</option>
                     </select>
+                    <span id="pos-payment-operator-status" class="odoo-muted"></span>
                 </div>
-                <div class="form-group" style="margin-bottom:0; min-width:320px;">
+                <div class="form-group">
                     <label for="pos-payment-journal">Diario para los pagos seleccionados:</label>
                     <select id="pos-payment-journal" disabled>
                         <option value="">Cargando diarios...</option>
                     </select>
                     <span id="pos-payment-journal-status" class="odoo-muted"></span>
                 </div>
-                <div class="form-group" style="margin-bottom:0; min-width:320px;">
-                    <label style="display:flex; gap:8px; align-items:center;">
+                <div class="form-group">
+                    <label class="check-label">
                         <input type="checkbox" id="pos-round-payment" checked>
                         Redondear el pago al peso
                     </label>
-                    <select id="pos-rounding-account" disabled>
+                    <select id="pos-rounding-account" disabled aria-label="Cuenta de redondeo">
                         <option value="">Cargando cuentas de redondeo...</option>
                     </select>
                     <span class="odoo-muted">0,00–0,49 baja; 0,50–0,99 sube. La diferencia se contabiliza en esta cuenta.</span>
-                    <label style="display:flex; gap:8px; align-items:center; margin-top:8px;">
+                </div>
+                <div class="form-group">
+                    <label class="check-label">
                         <input type="checkbox" id="pos-attach-receipt-pdf" checked>
                         Adjuntar detalle TotalNet en PDF a la factura
                     </label>
                 </div>
+            </div>
+            <div class="pos-confirm-actions">
                 <button class="btn success" onclick="confirmPosReconciliation()">Confirmar seleccionados</button>
-                <span id="pos-payment-operator-status" class="odoo-muted"></span>
             </div>
             <div id="pos-confirm-summary" class="odoo-muted" style="margin-top:8px;"></div>
             </div>
@@ -939,6 +995,7 @@
                         <option value="all">Todos</option>
                         <option value="totalnet">TotalNet</option>
                         <option value="mercadolibre">Mercado Libre</option>
+                        <option value="transferencia">Transferencia</option>
                     </select>
                 </div>
                 <div class="form-group">
@@ -1148,6 +1205,7 @@
     </div>
     <div class="ui-toasts" id="ui-toasts" aria-live="polite"></div>
 
+    <script src="panel-cache.js"></script>
     <script src="config.js"></script>
     <script src="theme-fx.js"></script>
     <script src="config-ui.js"></script>

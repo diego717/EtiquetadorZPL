@@ -1,0 +1,564 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>EtiquetadorZPL - Proyeccion de ventas</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Manrope:wght@400;500;600;700&display=swap">
+    <link rel="stylesheet" href="panel.css">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <div>
+                <h1>Proyeccion de ventas</h1>
+                <p class="sub">Productos fabricados: venta por mes, proyeccion, stock minimo sugerido y que fabricar. Informativo: no modifica Odoo.</p>
+            </div>
+            <div class="toolbar">
+                <button class="btn" id="refresh-btn" onclick="refreshReport()">Actualizar desde Odoo</button>
+                <a class="btn secondary" href="#" onclick="exportReport(event)">Exportar Excel</a>
+            </div>
+        </header>
+
+        <nav aria-label="Paginas">
+            <a href="hoy.html">Hoy</a>
+            <a href="config.html?view=administrado#administrado">Envios Administrado</a>
+            <a href="config.html">Configuracion</a>
+            <a href="config.html?view=pos#pos-reconciliation-section">Conciliacion de pagos</a>
+            <a href="reposicion.html">Reposicion</a>
+            <a href="proyeccion.html" class="active" aria-current="page">Proyeccion</a>
+            <a href="cobranzas.html">Cobranzas</a>
+            <a href="index.html">Impresion</a>
+        </nav>
+
+        <div id="notices"></div>
+
+        <div class="tiles" id="money-tiles" role="group" aria-label="Totales"></div>
+        <div class="tiles" id="tiles" role="group" aria-label="Resumen por estado"></div>
+
+        <div class="panel">
+            <div class="toolbar">
+                <div class="field">Vista
+                    <div class="seg" id="seg-view">
+                        <button type="button" data-value="sales" aria-pressed="true">Ventas por mes</button>
+                        <button type="button" data-value="stock" aria-pressed="false">Stock y fabricacion</button>
+                    </div>
+                </div>
+                <div class="field" id="measure-field">Medida
+                    <div class="seg" id="seg-measure">
+                        <button type="button" data-value="qty" aria-pressed="true">Unidades</button>
+                        <button type="button" data-value="amount" aria-pressed="false">Pesos</button>
+                    </div>
+                </div>
+                <label class="field">Agrupar por
+                    <select id="group-by" onchange="render()">
+                        <option value="top">Categoria principal</option>
+                        <option value="category">Categoria completa</option>
+                        <option value="abc">ABC</option>
+                        <option value="">Sin agrupar</option>
+                    </select>
+                </label>
+                <label class="field">Buscar
+                    <input type="text" id="filter-search" placeholder="Referencia, nombre o categoria" oninput="render()">
+                </label>
+                <label class="field">Estado
+                    <select id="filter-status" onchange="render()">
+                        <option value="">Todos</option>
+                    </select>
+                </label>
+                <label class="field">ABC
+                    <select id="filter-abc" onchange="render()">
+                        <option value="">Todos</option>
+                        <option value="A">A (80% de la venta)</option>
+                        <option value="B">B (siguiente 15%)</option>
+                        <option value="C">C (resto)</option>
+                    </select>
+                </label>
+                <label class="check"><input type="checkbox" id="filter-alerts" onchange="render()"> Solo alertas</label>
+                <label class="check"><input type="checkbox" id="filter-idle" onchange="render()"> Incluir sin venta</label>
+            </div>
+            <p class="meta" id="report-meta" role="status" aria-live="polite">Cargando...</p>
+        </div>
+
+        <div class="table-scroll" data-sticky-head>
+            <table>
+                <thead id="report-head"></thead>
+                <tbody id="report-body">
+                    <tr><td class="empty">Cargando...</td></tr>
+                </tbody>
+            </table>
+        </div>
+
+        <details class="panel" style="margin-top:16px;">
+            <summary>Como se calcula</summary>
+            <ul class="hint" style="display:grid; gap:6px; padding-left:18px; font-size:0.88rem;">
+                <li><b>Venta</b>: lo pedido en pedidos confirmados, sin impuestos, en pesos (los pedidos en dolares se convierten con la cotizacion del pedido). Se usa lo pedido y no lo entregado porque los pedidos migrados de NEO no tienen entregas en Odoo.</li>
+                <li><b>Proyeccion mensual</b>: promedio ponderado de los ultimos meses completos (el mas reciente pesa mas). Si el producto vende casi todos los meses, se ajusta por el mismo mes del anio anterior (factor estacional entre 0,5 y 2).</li>
+                <li><b>Stock de seguridad</b>: cubre la variacion de la venta durante el lead time con el nivel de servicio elegido.</li>
+                <li><b>Minimo sugerido</b> = consumo diario &times; lead time + stock de seguridad. <b>Maximo</b> = minimo + dias de cobertura objetivo.</li>
+                <li><b>Proyectado</b> = stock - comprometido + entradas (incluye ordenes de fabricacion confirmadas y borradores). Un stock negativo se toma como 0 y se marca para revisar.</li>
+                <li><b>A pedido</b>: productos que se venden pocos meses al anio (o marcados a mano). No llevan minimo; solo se avisa si hay pedidos sin cubrir.</li>
+                <li><b>Fabricar sugerido</b>: lo que falta para llegar al maximo (o para cubrir los pedidos, si es a pedido).</li>
+            </ul>
+        </details>
+
+        <details class="panel">
+            <summary>Configuracion</summary>
+            <div class="config-grid">
+                <label class="field">Lead time de fabricacion (dias)
+                    <input type="number" id="cfg-lead-time" min="1" max="120">
+                    <span class="hint">Desde que se decide fabricar hasta que esta en stock.</span>
+                </label>
+                <label class="field">Nivel de servicio
+                    <select id="cfg-service-level">
+                        <option value="90">90%</option>
+                        <option value="95">95%</option>
+                        <option value="98">98%</option>
+                        <option value="99">99%</option>
+                    </select>
+                    <span class="hint">Mas alto = mas stock de seguridad.</span>
+                </label>
+                <label class="field">Meses para el promedio
+                    <input type="number" id="cfg-base-months" min="2" max="24">
+                </label>
+                <label class="field">Cobertura objetivo sobre el minimo (dias)
+                    <input type="number" id="cfg-target-coverage" min="0" max="365">
+                    <span class="hint">Define el maximo y el tamanio del lote sugerido.</span>
+                </label>
+                <label class="field">Meses con venta para ser "a stock"
+                    <input type="number" id="cfg-active-months" min="1" max="12">
+                    <span class="hint">De los ultimos 12. Menos que esto = a pedido.</span>
+                </label>
+                <label class="check"><input type="checkbox" id="cfg-seasonality"> Ajustar por estacionalidad</label>
+                <label class="check"><input type="checkbox" id="cfg-auto"> Actualizar automaticamente</label>
+                <label class="field">Cada cuantos minutos
+                    <input type="number" id="cfg-interval" min="30" max="1440">
+                </label>
+            </div>
+            <div class="config-grid">
+                <label class="field">Categorias a pedido
+                    <textarea id="cfg-mto-categories" placeholder="PERSONALIZADOS, PROMOCIONALES"></textarea>
+                    <span class="hint">Separadas por coma. Alcanza con una parte del nombre de la categoria.</span>
+                </label>
+                <label class="field">Referencias a pedido
+                    <textarea id="cfg-mto-codes" placeholder="NEO109TRO, NEO107ACR90130"></textarea>
+                </label>
+                <label class="field">Referencias siempre a stock
+                    <textarea id="cfg-mts-codes" placeholder="NEO106COLL"></textarea>
+                    <span class="hint">Ganan sobre todo lo anterior.</span>
+                </label>
+            </div>
+            <button class="btn" onclick="saveConfig()">Guardar configuracion</button>
+            <span class="meta" id="config-status" role="status"></span>
+        </details>
+    </div>
+
+    <script src="panel-cache.js"></script>
+    <script src="config.js"></script>
+    <script src="sticky-head.js"></script>
+    <script>
+        const THEME_STORAGE_KEY = 'etiquetador_ui_theme';
+        const PREFS_KEY = 'etiquetador_proyeccion_prefs';
+        const STATUS_TILES = [
+            ['quiebre', 'Quiebre'],
+            ['fabricar', 'Fabricar'],
+            ['pedido_pendiente', 'Pedido sin cubrir'],
+            ['atento', 'Atento'],
+            ['ok', 'OK'],
+            ['a_pedido', 'A pedido'],
+            ['sin_venta', 'Sin venta'],
+        ];
+        const ALERTS = new Set(['quiebre', 'fabricar', 'pedido_pendiente', 'atento']);
+        const MONTHS = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'set', 'oct', 'nov', 'dic'];
+        let apiBase = '';
+        let report = null;
+        const state = { view: 'sales', measure: 'qty' };
+
+        try {
+            if (localStorage.getItem(THEME_STORAGE_KEY) === 'light') {
+                document.documentElement.setAttribute('data-theme', 'light');
+            }
+            Object.assign(state, JSON.parse(localStorage.getItem(PREFS_KEY) || '{}'));
+        } catch (e) { /* sin localStorage: valores por defecto */ }
+
+        function savePrefs() {
+            try { localStorage.setItem(PREFS_KEY, JSON.stringify(state)); } catch (e) { /* ignorar */ }
+        }
+
+        function esc(value) {
+            return String(value ?? '').replace(/[&<>"']/g, ch => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[ch]));
+        }
+
+        const qtyFormat = new Intl.NumberFormat('es-UY', { maximumFractionDigits: 0 });
+        const moneyFormat = new Intl.NumberFormat('es-UY', { maximumFractionDigits: 0 });
+        function num(value) {
+            const n = Number(value || 0);
+            if (!n) return '<span class="code">-</span>';
+            return `<span class="${n < 0 ? 'neg' : ''}">${qtyFormat.format(n)}</span>`;
+        }
+        function money(value) {
+            const n = Number(value || 0);
+            return n ? `$ ${moneyFormat.format(n)}` : '<span class="code">-</span>';
+        }
+        function cell(value) { return state.measure === 'amount' ? money(value) : num(value); }
+        function monthLabel(key) { return `${MONTHS[Number(key.slice(5, 7)) - 1]}-${key.slice(2, 4)}`; }
+        function shortDate(iso) { return iso ? iso.split('-').reverse().join('/') : ''; }
+
+        async function api(path, options) {
+            if (!apiBase) {
+                const port = await getApiPort();
+                apiBase = `${window.location.protocol}//${window.location.hostname}:${port}`;
+            }
+            const response = await fetch(`${apiBase}${path}`, options);
+            const data = await response.json().catch(() => ({}));
+            if (!response.ok) throw new Error(data.detail || `HTTP ${response.status}`);
+            return data;
+        }
+
+        function setupSeg(id, key) {
+            const seg = document.getElementById(id);
+            const sync = () => seg.querySelectorAll('button').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.value === state[key])));
+            seg.addEventListener('click', event => {
+                const btn = event.target.closest('button');
+                if (!btn) return;
+                state[key] = btn.dataset.value;
+                sync();
+                savePrefs();
+                render();
+            });
+            sync();
+        }
+
+        function filters() {
+            return {
+                search: document.getElementById('filter-search').value.trim().toLowerCase(),
+                status: document.getElementById('filter-status').value,
+                abc: document.getElementById('filter-abc').value,
+                alerts: document.getElementById('filter-alerts').checked,
+                idle: document.getElementById('filter-idle').checked,
+            };
+        }
+
+        function filteredRows() {
+            const f = filters();
+            return (report.items || []).filter(row => {
+                if (f.alerts && !ALERTS.has(row.status)) return false;
+                if (f.status && row.status !== f.status) return false;
+                if (!f.status && !f.idle && row.status === 'sin_venta') return false;
+                if (f.abc && row.abc !== f.abc) return false;
+                if (f.search && !`${row.default_code} ${row.name} ${row.category}`.toLowerCase().includes(f.search)) return false;
+                return true;
+            });
+        }
+
+        function groupKey(row) {
+            const by = document.getElementById('group-by').value;
+            if (by === 'top') return (row.category || 'Sin categoria').split(' / ')[0];
+            if (by === 'category') return row.category || 'Sin categoria';
+            if (by === 'abc') return row.abc === '-' ? 'Sin venta en 12 meses' : `Clase ${row.abc}`;
+            return '';
+        }
+
+        function renderTiles() {
+            const summary = (report && report.summary) || {};
+            const current = document.getElementById('filter-status').value;
+            document.getElementById('tiles').innerHTML = STATUS_TILES.map(([status, label]) => `
+                <button type="button" class="tile" data-status="${status}" aria-pressed="${current === status}" onclick="filterByStatus('${status}')">
+                    <div class="value">${qtyFormat.format(Number(summary[status] || 0))}</div>
+                    <div class="label">${label}</div>
+                </button>`).join('');
+            const forecast = (report && report.forecast_months) || [];
+            document.getElementById('money-tiles').innerHTML = [
+                ['Venta ultimos 12 meses', summary.amount_12m, ''],
+                [`Proyeccion ${forecast.length ? monthLabel(forecast[0]) + ' a ' + monthLabel(forecast[forecast.length - 1]) : ''}`, summary.forecast_amount_total, ''],
+                ['Fabricar sugerido (a precio de venta)', summary.suggested_amount, 'warn'],
+            ].map(([label, value, tone]) => `
+                <div class="tile static ${tone}">
+                    <div class="value">$ ${moneyFormat.format(Number(value || 0))}</div>
+                    <div class="label">${esc(label)}</div>
+                </div>`).join('');
+        }
+
+        function filterByStatus(status) {
+            const select = document.getElementById('filter-status');
+            select.value = select.value === status ? '' : status;
+            render();
+        }
+
+        function renderNotices() {
+            const notices = [];
+            const negatives = (report.summary || {}).negative_stock || 0;
+            if (negatives) {
+                notices.push(`${negatives} productos tienen stock negativo en Odoo (se vendio sin registrar la fabricacion). Se calculan como si tuvieran 0: conviene corregir el stock en Odoo.`);
+            }
+            document.getElementById('notices').innerHTML = notices.map(text => `<div class="notice">${esc(text)}</div>`).join('');
+        }
+
+        function productCell(row) {
+            const flags = [];
+            if (row.negative_stock) flags.push(`<span class="flag" title="Stock en Odoo: ${qtyFormat.format(row.qty_available)}">stock negativo</span>`);
+            if (row.mode === 'pedido') flags.push(`<span class="flag soft" title="${row.mode_source === 'auto' ? `Vendio en ${row.active_months} de los ultimos 12 meses` : 'Marcado a mano (' + row.mode_source + ')'}">a pedido</span>`);
+            // Odoo antepone "[codigo] " al nombre; el codigo ya va en la linea de abajo.
+            const prefix = row.default_code ? `[${row.default_code}] ` : '';
+            const name = prefix && row.name.startsWith(prefix) ? row.name.slice(prefix.length) : row.name;
+            const leaf = (row.category || '').split(' / ').pop();
+            return `<td class="name">${esc(name)}${flags.join('')}<div class="code">${esc(row.default_code)}${leaf ? ` · <span title="${esc(row.category)}">${esc(leaf)}</span>` : ''}</div></td>`;
+        }
+
+        function salesColumns() {
+            const months = report.months || [];
+            const forecast = report.forecast_months || [];
+            return {
+                head: `<tr>
+                    <th>Estado</th><th>ABC</th><th>Producto</th>
+                    ${months.map(m => `<th class="num">${monthLabel(m)}</th>`).join('')}
+                    <th class="num cur" title="Mes en curso, hasta hoy">${monthLabel(report.current_month)} *</th>
+                    ${forecast.map(m => `<th class="num fc" title="Proyeccion">Proy. ${monthLabel(m)}</th>`).join('')}
+                    <th class="num">Total 12m</th>
+                </tr>`,
+                count: 3 + months.length + 1 + forecast.length + 1,
+                values(row) {
+                    const key = state.measure;
+                    return [
+                        ...months.map(m => (row.months[m] || {})[key] || 0),
+                        (row.months[report.current_month] || {})[key] || 0,
+                        ...row.forecast.map(item => item[key] || 0),
+                        key === 'amount' ? row.amount_12m : row.qty_12m,
+                    ];
+                },
+                classes: [...months.map(() => 'num'), 'num cur', ...forecast.map(() => 'num fc'), 'num'],
+                cells(row) {
+                    const factors = row.forecast.map(item => item.seasonal_factor);
+                    return this.values(row).map((v, i) => {
+                        const fcIndex = i - months.length - 1;
+                        const title = fcIndex >= 0 && fcIndex < forecast.length && factors[fcIndex] ? ` title="Factor estacional ${factors[fcIndex]}"` : '';
+                        return `<td class="${this.classes[i]}"${title}>${cell(v)}</td>`;
+                    }).join('');
+                },
+            };
+        }
+
+        function stockColumns() {
+            return {
+                head: `<tr>
+                    <th>Estado</th><th>ABC</th><th>Producto</th>
+                    <th class="num" title="Proyeccion del mes en curso">Venta/mes</th>
+                    <th class="num">Stock</th>
+                    <th class="num" title="Pedidos confirmados sin entregar">Comprometido</th>
+                    <th class="num" title="Ordenes de fabricacion abiertas (lo que falta producir)">En fabricacion</th>
+                    <th class="num" title="Stock - comprometido + entradas">Proyectado</th>
+                    <th class="num" title="Regla de reabastecimiento en Odoo">Min. Odoo</th>
+                    <th class="num" title="Consumo diario x lead time + stock de seguridad">Min. sugerido</th>
+                    <th class="num">Max. sugerido</th>
+                    <th class="num" title="Proyectado / consumo diario">Cobertura</th>
+                    <th class="num" title="Si no se fabrica nada">Se agota</th>
+                    <th class="num fc">Fabricar</th>
+                    <th class="num fc">Fabricar $</th>
+                </tr>`,
+                count: 15,
+                values(row) { return [row.suggested_amount]; },
+                classes: ['num fc'],
+                cells(row) {
+                    const coverage = row.coverage_days === null || row.coverage_days === undefined
+                        ? '<span class="code">-</span>' : `${qtyFormat.format(row.coverage_days)} d`;
+                    const production = row.in_production
+                        ? `<span title="${esc((row.production_orders || []).join(', '))}${row.next_production_date ? ' · desde ' + shortDate(row.next_production_date) : ''}">${num(row.in_production)}</span>`
+                        : num(0);
+                    return `
+                        <td class="num">${num(row.forecast[0] ? row.forecast[0].qty : 0)}</td>
+                        <td class="num">${row.negative_stock ? `<span class="neg">${qtyFormat.format(row.qty_available)}</span>` : num(row.qty_available)}</td>
+                        <td class="num">${num(row.outgoing_qty)}</td>
+                        <td class="num">${production}</td>
+                        <td class="num"><strong>${num(row.virtual_available)}</strong></td>
+                        <td class="num">${row.odoo_min_qty === null ? '<span class="code">sin regla</span>' : num(row.odoo_min_qty)}</td>
+                        <td class="num">${num(row.min_suggested)}</td>
+                        <td class="num">${num(row.max_suggested)}</td>
+                        <td class="num">${coverage}</td>
+                        <td class="num">${row.stockout_date && row.status !== 'ok' ? shortDate(row.stockout_date) : '<span class="code">-</span>'}</td>
+                        <td class="num fc"><strong>${num(row.suggested_qty)}</strong></td>
+                        <td class="num fc">${money(row.suggested_amount)}</td>`;
+                },
+            };
+        }
+
+        function render() {
+            renderTiles();
+            if (!report) return;
+            document.getElementById('measure-field').style.display = state.view === 'sales' ? '' : 'none';
+            const columns = state.view === 'sales' ? salesColumns() : stockColumns();
+            const rows = filteredRows();
+            document.getElementById('report-head').innerHTML = columns.head;
+            const body = document.getElementById('report-body');
+            if (!rows.length) {
+                body.innerHTML = `<tr><td colspan="${columns.count}" class="empty">${report.generated_at ? 'No hay productos con este filtro' : 'Todavia no se genero la proyeccion. Presiona "Actualizar desde Odoo".'}</td></tr>`;
+                return;
+            }
+
+            const groups = new Map();
+            rows.forEach(row => {
+                const key = groupKey(row);
+                if (!groups.has(key)) groups.set(key, []);
+                groups.get(key).push(row);
+            });
+            const sortedGroups = [...groups.entries()].sort((a, b) =>
+                b[1].reduce((s, r) => s + r.amount_12m, 0) - a[1].reduce((s, r) => s + r.amount_12m, 0));
+
+            const sumRows = list => {
+                const totals = [];
+                list.forEach(row => columns.values(row).forEach((v, i) => { totals[i] = (totals[i] || 0) + Number(v || 0); }));
+                return totals;
+            };
+            const totalCells = totals => {
+                const pad = columns.count - 3 - totals.length;
+                const lead = pad > 0 ? `<td colspan="${pad}"></td>` : '';
+                const moneyOnly = state.view === 'stock';
+                return lead + totals.map((v, i) => `<td class="${columns.classes[i]}">${moneyOnly ? money(v) : cell(v)}</td>`).join('');
+            };
+
+            const html = [];
+            sortedGroups.forEach(([key, list]) => {
+                if (key) {
+                    const alerts = list.filter(r => ALERTS.has(r.status)).length;
+                    html.push(`<tr class="group"><td colspan="3">${esc(key)} <span class="code">· ${list.length} productos${alerts ? ` · ${alerts} con alerta` : ''}</span></td>${totalCells(sumRows(list))}</tr>`);
+                }
+                list.forEach(row => html.push(`<tr>
+                    <td><span class="badge" data-status="${esc(row.status)}">${esc(row.status_label)}</span></td>
+                    <td>${esc(row.abc)}</td>
+                    ${productCell(row)}
+                    ${columns.cells(row)}
+                </tr>`));
+            });
+            if (sortedGroups.length > 1 || !sortedGroups[0][0]) {
+                html.push(`<tr class="total"><td colspan="3">Total · ${rows.length} productos</td>${totalCells(sumRows(rows))}</tr>`);
+            }
+            body.innerHTML = html.join('');
+        }
+
+
+        async function loadReport() {
+            const meta = document.getElementById('report-meta');
+            try {
+                report = await api('/api/projection/report?include_idle=true');
+                renderNotices();
+                render();
+                meta.className = report.last_error ? 'meta error' : 'meta';
+                if (!report.generated_at) {
+                    meta.textContent = 'Todavia no se genero la proyeccion. Presiona "Actualizar desde Odoo".';
+                    return;
+                }
+                const cfg = report.config || {};
+                const parts = [
+                    `actualizado ${new Date(report.generated_at).toLocaleString()}`,
+                    `proyeccion con ${(report.base_months || []).length} meses (${monthLabel(report.base_months[0])} a ${monthLabel(report.base_months[report.base_months.length - 1])})`,
+                    `lead time ${cfg.lead_time_days} dias`,
+                    `servicio ${cfg.service_level}%`,
+                    `* ${monthLabel(report.current_month)} hasta hoy`,
+                ];
+                if (report.last_error) parts.push(`ultimo intento fallo: ${report.last_error}`);
+                meta.textContent = parts.join(' · ');
+            } catch (error) {
+                meta.className = 'meta error';
+                meta.textContent = `No se pudo cargar la proyeccion: ${error.message}`;
+            }
+        }
+
+        async function refreshReport() {
+            const btn = document.getElementById('refresh-btn');
+            const meta = document.getElementById('report-meta');
+            btn.disabled = true;
+            btn.textContent = 'Actualizando...';
+            meta.className = 'meta';
+            meta.textContent = 'Consultando Odoo, puede tardar unos segundos...';
+            try {
+                await api('/api/projection/refresh', { method: 'POST' });
+            } catch (error) {
+                meta.className = 'meta error';
+                meta.textContent = `No se pudo actualizar: ${error.message}`;
+            } finally {
+                btn.disabled = false;
+                btn.textContent = 'Actualizar desde Odoo';
+            }
+            if (!meta.classList.contains('error')) await loadReport();
+        }
+
+        async function exportReport(event) {
+            event.preventDefault();
+            if (!apiBase) await api('/api/projection/status');
+            const f = filters();
+            const params = new URLSearchParams();
+            if (f.search) params.set('search', f.search);
+            if (f.status) params.set('status', f.status);
+            if (f.abc) params.set('abc', f.abc);
+            if (f.alerts && !f.status) params.set('only_alerts', 'true');
+            if (f.idle) params.set('include_idle', 'true');
+            window.location.href = `${apiBase}/api/projection/export?${params.toString()}`;
+        }
+
+        const listText = list => (list || []).join(', ');
+        const textList = id => document.getElementById(id).value.split(/[,\n]/).map(s => s.trim()).filter(Boolean);
+
+        async function loadConfig() {
+            try {
+                const cfg = await api('/api/projection/config');
+                document.getElementById('cfg-lead-time').value = cfg.lead_time_days;
+                document.getElementById('cfg-service-level').value = String(cfg.service_level);
+                document.getElementById('cfg-base-months').value = cfg.base_months;
+                document.getElementById('cfg-target-coverage').value = cfg.target_coverage_days;
+                document.getElementById('cfg-active-months').value = cfg.min_active_months;
+                document.getElementById('cfg-seasonality').checked = !!cfg.use_seasonality;
+                document.getElementById('cfg-auto').checked = !!cfg.auto_refresh_enabled;
+                document.getElementById('cfg-interval').value = cfg.refresh_interval_minutes;
+                document.getElementById('cfg-mto-categories').value = listText(cfg.make_to_order_categories);
+                document.getElementById('cfg-mto-codes').value = listText(cfg.make_to_order_codes);
+                document.getElementById('cfg-mts-codes').value = listText(cfg.make_to_stock_codes);
+            } catch (error) {
+                document.getElementById('config-status').textContent = `No se pudo cargar la configuracion: ${error.message}`;
+            }
+        }
+
+        async function saveConfig() {
+            const status = document.getElementById('config-status');
+            const int = id => parseInt(document.getElementById(id).value, 10);
+            const body = {
+                lead_time_days: int('cfg-lead-time'),
+                service_level: int('cfg-service-level'),
+                base_months: int('cfg-base-months'),
+                target_coverage_days: int('cfg-target-coverage'),
+                min_active_months: int('cfg-active-months'),
+                use_seasonality: document.getElementById('cfg-seasonality').checked,
+                auto_refresh_enabled: document.getElementById('cfg-auto').checked,
+                refresh_interval_minutes: int('cfg-interval'),
+                make_to_order_categories: textList('cfg-mto-categories'),
+                make_to_order_codes: textList('cfg-mto-codes'),
+                make_to_stock_codes: textList('cfg-mts-codes'),
+            };
+            Object.keys(body).forEach(key => Number.isNaN(body[key]) && delete body[key]);
+            try {
+                await api('/api/projection/config', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(body),
+                });
+                status.className = 'meta';
+                status.textContent = 'Guardado. Recalculando...';
+                await loadConfig();
+                await refreshReport();
+                status.textContent = 'Guardado y recalculado.';
+            } catch (error) {
+                status.className = 'meta error';
+                status.textContent = `Error guardando: ${error.message}`;
+            }
+        }
+
+        document.getElementById('filter-status').insertAdjacentHTML('beforeend',
+            STATUS_TILES.map(([value, label]) => `<option value="${value}">${label}</option>`).join(''));
+        setupSeg('seg-view', 'view');
+        setupSeg('seg-measure', 'measure');
+        renderTiles();
+        loadConfig();
+        loadReport();
+        setInterval(() => { if (!document.hidden) loadReport(); }, 10 * 60 * 1000);
+    </script>
+</body>
+</html>

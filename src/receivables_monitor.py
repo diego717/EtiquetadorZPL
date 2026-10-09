@@ -197,6 +197,9 @@ def build_invoice_rows(moves: Iterable[Dict[str, Any]], today: date, url_for: An
             {
                 "id": move.get("id"),
                 "name": move.get("name") or "",
+                "kind": "refund" if is_refund else "invoice",
+                "label": "Nota de crédito" if is_refund else "",
+                "reference": "",
                 "is_refund": is_refund,
                 "commercial_partner_id": commercial_id or partner_id,
                 "commercial_partner": commercial_name or partner_name,
@@ -214,6 +217,57 @@ def build_invoice_rows(moves: Iterable[Dict[str, Any]], today: date, url_for: An
                 "payment_term": term,
                 "salesperson": salesperson,
                 "url": url_for("account.move", move.get("id")) if move.get("id") else "",
+            }
+        )
+    return rows
+
+
+def build_unapplied_rows(lines: Iterable[Dict[str, Any]], today: date, url_for: Any) -> List[Dict[str, Any]]:
+    """Cobros/creditos sin aplicar y debitos manuales abiertos en deudores.
+
+    Un credito se trata como una nota de credito (resta del saldo, sin
+    vencimiento); un debito, como una factura que vence en ``date_maturity``.
+    """
+    rows = []
+    for line in lines:
+        company_amount = _as_float(line.get("amount_residual"))
+        if not company_amount:
+            continue
+        is_credit = company_amount < 0
+        commercial_id, commercial_name = _m2o(line.get("commercial_partner_id"))
+        partner_id, partner_name = _m2o(line.get("partner_id"))
+        move_id, move_name = _m2o(line.get("move_id"))
+        due = line.get("date_maturity") or line.get("date")
+        try:
+            days_overdue = (today - date.fromisoformat(str(due)[:10])).days if due else 0
+        except ValueError:
+            days_overdue = 0
+        currency = currency_code(line.get("currency_id"))
+        residual = _as_float(line.get("amount_residual_currency")) if line.get("currency_id") else company_amount
+        _, journal = _m2o(line.get("journal_id"))
+        rows.append(
+            {
+                "id": move_id,
+                "name": line.get("move_name") or move_name,
+                "kind": "unapplied_credit" if is_credit else "unapplied_debit",
+                "label": "Crédito a favor" if is_credit else "Ajuste",
+                "reference": " · ".join(t for t in (_text(line.get("ref")) or _text(line.get("name")), journal) if t),
+                "is_refund": is_credit,
+                "commercial_partner_id": commercial_id or partner_id,
+                "commercial_partner": commercial_name or partner_name,
+                "partner_id": partner_id,
+                "invoice_date": line.get("date") or "",
+                "due_date": due or "",
+                "days_overdue": 0 if is_credit else max(0, days_overdue),
+                "bucket": "por_vencer" if is_credit else bucket_for(days_overdue),
+                "currency": currency,
+                "amount_total": round(residual, 2),
+                "residual": round(residual, 2),
+                "residual_company": round(company_amount, 2),
+                "payment_state": "",
+                "payment_term": "",
+                "salesperson": "",
+                "url": url_for("account.move", move_id) if move_id else "",
             }
         )
     return rows
@@ -458,6 +512,7 @@ class ReceivablesMonitor:
             url_for = self.odoo.record_url
 
             invoices = build_invoice_rows(data["moves"], today, url_for)
+            invoices += build_unapplied_rows(data.get("unapplied_lines") or [], today, url_for)
             clients = build_clients(
                 invoices,
                 {int(k): v for k, v in (data.get("partners") or {}).items()},

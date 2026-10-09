@@ -27,6 +27,7 @@
             <a href="config.html">Configuracion</a>
             <a href="config.html?view=pos#pos-reconciliation-section">Conciliacion de pagos</a>
             <a href="reposicion.html" class="active" aria-current="page">Reposicion</a>
+            <a href="proyeccion.html">Proyeccion</a>
             <a href="cobranzas.html">Cobranzas</a>
             <a href="index.html">Impresion</a>
         </nav>
@@ -55,7 +56,7 @@
             <p class="meta" id="report-meta" role="status" aria-live="polite">Cargando...</p>
         </div>
 
-        <div class="table-scroll">
+        <div class="table-scroll" data-sticky-head>
             <table>
                 <thead>
                     <tr>
@@ -104,7 +105,9 @@
         </details>
     </div>
 
+    <script src="panel-cache.js"></script>
     <script src="config.js"></script>
+    <script src="sticky-head.js"></script>
     <script>
         const THEME_STORAGE_KEY = 'etiquetador_ui_theme';
         const STATUS_TILES = [

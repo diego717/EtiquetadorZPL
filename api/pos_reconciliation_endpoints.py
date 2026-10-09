@@ -7,6 +7,8 @@ pago en Odoo. Nunca escribe nada sin un paso de confirmacion explicito.
 from __future__ import annotations
 
 import asyncio
+import base64
+import binascii
 import hashlib
 import re
 from datetime import date, timedelta
@@ -63,6 +65,20 @@ class ConfirmItem(BaseModel):
 class PosReconciliationConfirmRequest(BaseModel):
     operator_app_username: str
     items: List[ConfirmItem]
+
+
+class TransferPaymentRequest(BaseModel):
+    operator_app_username: str
+    invoice_id: int
+    journal_id: int
+    amount: float
+    payment_date: str
+    reference: str
+    difference_handling: str = "open"
+    difference_account_id: Optional[int] = None
+    attachment_filename: str = ""
+    attachment_mimetype: str = ""
+    attachment_base64: str = ""
 
 
 class PosReconciliationConfigRequest(BaseModel):
@@ -125,7 +141,9 @@ async def run_auto_once() -> Dict[str, Any]:
 async def get_journals() -> Dict[str, Any]:
     try:
         journals = await asyncio.to_thread(odoo_integration.get_payment_journals)
-        return {"items": journals}
+        # Los diarios sin moneda propia operan en la moneda de la compania.
+        company_currency = await asyncio.to_thread(odoo_integration.get_company_currency)
+        return {"items": journals, "company_currency": company_currency}
     except Exception as exc:
         raise HTTPException(status_code=400, detail=_friendly_error(exc))
 
@@ -327,6 +345,97 @@ async def manual_match(request: ManualPosTicketRequest) -> Dict[str, Any]:
         raise
     except Exception as exc:
         raise HTTPException(status_code=400, detail=_friendly_error(exc))
+
+
+def _resolve_operator(operator_app_username: str) -> tuple:
+    username = str(operator_app_username or "").strip().lower()
+    if not username:
+        raise HTTPException(status_code=400, detail="Selecciona el usuario que registrara el pago en Odoo")
+    auth_override = odoo_integration.resolve_operator_auth_exact(username)
+    if not auth_override:
+        raise HTTPException(status_code=400, detail=f"El operador '{username}' no tiene credenciales Odoo completas")
+    return username, auth_override
+
+
+@router.get("/difference-accounts")
+async def get_difference_accounts() -> Dict[str, Any]:
+    try:
+        accounts = await asyncio.to_thread(odoo_integration.get_difference_accounts)
+        return {"items": accounts}
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail=_friendly_error(exc))
+
+
+@router.get("/open-invoices")
+async def find_open_invoices(number: str = "") -> Dict[str, Any]:
+    """Busca facturas con saldo por numero, de cualquier plazo (no solo contado)."""
+    if len(number.strip()) < 3:
+        raise HTTPException(status_code=400, detail="Escribi al menos 3 caracteres del numero de factura")
+    try:
+        items = await asyncio.to_thread(odoo_integration.find_open_customer_invoices, number)
+        return {"items": items}
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail=_friendly_error(exc))
+
+
+@router.post("/transfer")
+async def register_transfer(request: TransferPaymentRequest) -> Dict[str, Any]:
+    """Registra el cobro de una factura recibido por transferencia bancaria (sin ticket POS)."""
+    operator_app_username, auth_override = _resolve_operator(request.operator_app_username)
+    actor_odoo_username = str(auth_override.get("username") or "").strip()
+
+    attachment = None
+    if request.attachment_base64:
+        mimetype = str(request.attachment_mimetype or "").lower()
+        if mimetype not in service.TRANSFER_ATTACHMENT_TYPES:
+            raise HTTPException(status_code=400, detail="El comprobante debe ser PDF, PNG o JPG")
+        try:
+            content = base64.b64decode(request.attachment_base64, validate=True)
+        except (binascii.Error, ValueError):
+            raise HTTPException(status_code=400, detail="No se pudo leer el comprobante adjunto")
+        if len(content) > service.TRANSFER_ATTACHMENT_MAX_BYTES:
+            raise HTTPException(status_code=400, detail="El comprobante supera los 8 MB")
+        attachment = {"mimetype": mimetype, "content": content, "filename": request.attachment_filename}
+
+    try:
+        await asyncio.to_thread(odoo_integration._authenticate, auth_override)
+    except Exception as exc:
+        raise HTTPException(
+            status_code=400,
+            detail=f"No se pudo autenticar en Odoo como {actor_odoo_username}: {_friendly_error(exc)}",
+        )
+
+    try:
+        entry = await asyncio.to_thread(
+            service.register_transfer_payment,
+            odoo_integration,
+            request.invoice_id,
+            request.journal_id,
+            request.amount,
+            request.payment_date,
+            request.reference,
+            auth_override,
+            request.difference_handling,
+            request.difference_account_id,
+            attachment,
+        )
+    except Exception as exc:
+        # Nada se escribio en Odoo: las validaciones corren antes de crear el pago.
+        raise HTTPException(status_code=400, detail=_friendly_error(exc))
+
+    entry["operator_app_username"] = operator_app_username
+    entry["actor_odoo_username"] = actor_odoo_username
+    try:
+        await asyncio.to_thread(recon.record_external_payments, [entry])
+    except Exception as exc:
+        entry["warning"] = (entry.get("warning", "") + " No se pudo guardar en el historial local: " + _friendly_error(exc)).strip()
+    try:
+        entry["invoice_url"] = odoo_integration.record_url("account.move", entry["invoice_id"])
+        if entry.get("payment_id"):
+            entry["payment_url"] = odoo_integration.record_url("account.payment", entry["payment_id"])
+    except Exception:
+        pass
+    return entry
 
 
 @router.post("/confirm")

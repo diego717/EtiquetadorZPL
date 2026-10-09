@@ -709,6 +709,15 @@ body.pos-only-view #pos-reconciliation-section { display: block !important; }
 
 .inline-toolbar { display: flex; gap: 10px; align-items: end; flex-wrap: wrap; margin: 18px 0 14px; }
 
+/* Opciones de "Confirmar seleccionados" (conciliacion POS): grilla alineada arriba,
+   asi los textos de ayuda bajo un campo no desplazan los titulos de los demas. */
+.pos-confirm-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 320px), 1fr)); gap: 14px 20px; align-items: start; margin-top: 12px; max-width: 980px; }
+.pos-confirm-grid .form-group { margin-bottom: 0; min-width: 0; }
+.pos-confirm-grid .odoo-muted { display: block; margin: 6px 0 0; font-size: 0.85rem; }
+.pos-confirm-grid .odoo-muted:empty { display: none; }
+.pos-confirm-grid .check-label { display: flex; gap: 8px; align-items: center; }
+.pos-confirm-actions { display: flex; gap: 10px; align-items: center; margin-top: 14px; }
+
 .pos-history-filters {
     display: grid;
     grid-template-columns: minmax(220px, 2fr) repeat(4, minmax(140px, 1fr)) auto;
@@ -733,6 +742,27 @@ body.pos-only-view #pos-reconciliation-section { display: block !important; }
 }
 .pay-source-badge[data-source="mercadolibre"] { border-color: var(--warn); color: var(--warn); }
 .pay-source-badge[data-source="totalnet"] { border-color: var(--accent); color: var(--accent); }
+.pay-source-badge[data-source="transferencia"] { border-color: var(--success, #34c38f); color: var(--success, #34c38f); }
+
+/* Cobro por transferencia bancaria */
+#pos-transfer-panel .pos-manual-grid { grid-template-columns: repeat(auto-fit, minmax(min(100%, 220px), 1fr)); }
+#pos-transfer-panel .form-group .odoo-muted { display: block; margin: 6px 0 0; font-size: 0.85rem; }
+#pos-transfer-panel .check-label { display: flex; gap: 8px; align-items: center; font-weight: 500; }
+.pos-transfer-all { margin: 6px 0 0; font-size: 0.85rem; color: #9cb2d1; }
+.pos-transfer-invoice { display: flex; flex-wrap: wrap; gap: 10px 12px; align-items: flex-end; margin: 4px 0 16px; }
+.pos-transfer-invoice .form-group { margin-bottom: 0; min-width: 200px; }
+/* Campo, boton y factura elegida a la misma altura, alineados por abajo. */
+.pos-transfer-invoice input,
+.pos-transfer-invoice > .btn { height: 40px; box-sizing: border-box; }
+.pos-transfer-invoice > .btn { padding-top: 0; padding-bottom: 0; }
+.pos-transfer-invoice-result { flex: 1 1 320px; min-width: 0; min-height: 40px; display: flex; flex-wrap: wrap; align-items: center; gap: 4px 6px; }
+.pos-transfer-invoice-result .chosen { flex: 1 1 auto; min-height: 40px; box-sizing: border-box; display: flex; flex-wrap: wrap; align-items: center; gap: 2px 8px; border: 1px solid var(--line); border-radius: var(--radius-sm); padding: 6px 12px; }
+.pos-transfer-invoice-result .chosen .odoo-muted { margin: 0; }
+.pos-transfer-invoice-result .chosen b { font-variant-numeric: tabular-nums; }
+.pos-transfer-invoice-result .pick { margin: 2px 6px 2px 0; }
+.pos-transfer-difference { margin-top: 14px; padding: 10px 12px; border-left: 3px solid var(--warn); background: rgba(240, 198, 116, 0.06); border-radius: var(--radius-sm); display: grid; gap: 8px; max-width: 640px; }
+.pos-transfer-difference p { margin: 0; font-weight: 600; }
+.pos-transfer-difference .form-group { margin: 0 0 0 26px; }
 
 @media (max-width: 1000px) {
     .pos-history-filters { grid-template-columns: repeat(2, minmax(0, 1fr)); }

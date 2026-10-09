@@ -9,6 +9,11 @@ envia es el operador.
 `src/receivables_monitor.py` arma un snapshot (`receivables_snapshot.json`) con:
 
 - Facturas y notas de credito de cliente publicadas con `payment_state` `not_paid`/`partial`.
+- Lineas abiertas de deudores que no son facturas (cobros, retenciones, asientos manuales sin
+  conciliar), solo en las cuentas que usan las facturas de cliente (asi queda afuera, por
+  ejemplo, "Adelantos al personal"). Un credito figura como "Credito a favor" y resta del
+  saldo; un debito figura como "Ajuste" y vence en su `date_maturity`. Con esto el saldo
+  total coincide con la cuenta deudores de Odoo aunque falte conciliar.
 - Agrupacion por entidad comercial (`commercial_partner_id`), con antiguedad por
   vencimiento: por vencer, 1-30, 31-60, 61-90, 91-180, mas de 180 dias.
 - Importes sumados en pesos con `amount_residual_signed` (convierte USD con el tipo

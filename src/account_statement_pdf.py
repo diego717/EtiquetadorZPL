@@ -110,7 +110,7 @@ def generate_statement_pdf(
             currency = invoice.get("currency") or "UYU"
             overdue = int(invoice.get("days_overdue") or 0)
             values = [
-                ("Nota de crédito " if invoice.get("is_refund") else "") + str(invoice.get("name") or ""),
+                (f"{invoice['label']} " if invoice.get("label") else "Nota de crédito " if invoice.get("is_refund") else "") + str(invoice.get("name") or ""),
                 _date(invoice.get("invoice_date")),
                 _date(invoice.get("due_date")),
                 str(overdue) if overdue > 0 else "-",

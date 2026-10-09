@@ -19,6 +19,7 @@ from receivables_monitor import (
     bucket_for,
     build_clients,
     build_invoice_rows,
+    build_unapplied_rows,
     build_uninvoiced,
     format_money,
     normalize_config,
@@ -100,6 +101,33 @@ class TestPureFunctions(unittest.TestCase):
         self.assertIn("01/01/2026", first["whatsapp_message"])
         # Sin celular no hay boton de WhatsApp.
         self.assertEqual(clients[1]["whatsapp_url"], "")
+
+    def test_unapplied_credits_and_debits_adjust_client_balance(self):
+        invoices = build_invoice_rows([_move(1, 10, "2026-09-01", 8052.0)], TODAY, url_for)
+        invoices += build_unapplied_rows(
+            [
+                {"move_id": [7, "SANT$/2025/00411"], "move_name": "SANT$/2025/00411", "journal_id": [1, "Santander M/N"],
+                 "partner_id": [11, "Cliente 10, Sucursal"], "commercial_partner_id": [10, "Cliente 10"],
+                 "date": "2026-09-26", "date_maturity": "2026-09-26", "amount_residual": -940.6,
+                 "amount_residual_currency": -940.6, "currency_id": [1, "UYU"], "ref": "adelanto de factura", "name": ""},
+                {"move_id": [8, "MISC/1"], "move_name": "MISC/1", "journal_id": [2, "Miscellaneous Operations"],
+                 "partner_id": [10, "Cliente 10"], "commercial_partner_id": [10, "Cliente 10"],
+                 "date": "2026-08-01", "date_maturity": "2026-08-01", "amount_residual": 4000.0,
+                 "amount_residual_currency": 100.0, "currency_id": [2, "USD"], "ref": False, "name": "Cheque rechazado"},
+            ],
+            TODAY,
+            url_for,
+        )
+        credit, debit = invoices[1], invoices[2]
+        self.assertEqual((credit["kind"], credit["label"], credit["bucket"]), ("unapplied_credit", "Crédito a favor", "por_vencer"))
+        self.assertEqual(credit["reference"], "adelanto de factura · Santander M/N")
+        self.assertEqual((debit["kind"], debit["bucket"], debit["residual"], debit["residual_company"]), ("unapplied_debit", "d61_90", 100.0, 4000.0))
+
+        client = build_clients(invoices, {}, {}, normalize_config({}), "Aramid", url_for)[0]
+        self.assertEqual(client["balance"], 11111.4)
+        self.assertEqual(client["credits"], -940.6)
+        self.assertEqual(client["overdue"], 12052.0)
+        self.assertEqual(client["balance_by_currency"], {"UYU": 7111.4, "USD": 100.0})
 
     def test_bad_template_falls_back_to_default(self):
         invoices = build_invoice_rows([_move(1, 10, "2026-09-01", 10.0)], TODAY, url_for)

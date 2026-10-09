@@ -159,3 +159,28 @@ td.overdue-strong { color: var(--danger); font-weight: 700; }
     .tile .value { font-size: 1.25rem; }
     .card .big { font-size: 1.6rem; }
 }
+
+/* ---- Proyeccion de ventas ---- */
+.tile[data-status="fabricar"], .tile[data-status="pedido_pendiente"] { border-left-color: var(--orange); }
+.tile[data-status="atento"] { border-left-color: var(--warn); }
+.badge[data-status="fabricar"]::before, .badge[data-status="pedido_pendiente"]::before { background: var(--orange); }
+.badge[data-status="atento"]::before { background: var(--warn); }
+.badge[data-status="a_pedido"]::before { background: var(--accent); }
+th.fc, td.fc { background: rgba(240, 198, 116, 0.08); }
+th.cur, td.cur { color: var(--text-1); font-style: italic; }
+tr.group > td { font-weight: 700; background: var(--row-hover); border-top: 1px solid var(--line-strong); }
+tr.group .code { font-weight: 500; }
+tr.total > td { font-weight: 700; border-top: 2px solid var(--line-strong); }
+.flag { display: inline-block; font-size: 0.72rem; font-weight: 700; padding: 1px 6px; border-radius: 999px; border: 1px solid var(--danger); color: var(--danger); margin-left: 6px; }
+.flag.soft { border-color: var(--line-strong); color: var(--text-1); }
+.seg { display: inline-flex; border: 1px solid var(--line-strong); border-radius: var(--radius-sm); overflow: hidden; }
+.seg button { background: none; border: 0; color: var(--text-1); font: inherit; font-size: 0.88rem; padding: 7px 12px; cursor: pointer; }
+.seg button + button { border-left: 1px solid var(--line-strong); }
+.seg button[aria-pressed="true"] { background: var(--accent); color: #04121c; font-weight: 700; }
+textarea { width: 100%; min-height: 60px; resize: vertical; }
+/* Encabezado fijo: copia del encabezado que queda pegada arriba de la pantalla mientras la
+   tabla esta visible (la tabla original sigue con scroll horizontal propio). */
+.head-bar { position: sticky; top: 0; z-index: 5; overflow: hidden; margin: 0 1px; border-radius: var(--radius-md) var(--radius-md) 0 0; background: linear-gradient(var(--panel), var(--panel)), var(--bg-1); box-shadow: 0 1px 0 var(--line-strong); }
+.head-bar table { table-layout: fixed; min-width: 0; }
+.head-bar th { border-bottom: 0; background: none; }
+.head-bar th.fc { background: rgba(240, 198, 116, 0.08); }
