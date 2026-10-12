@@ -748,6 +748,18 @@ body.pos-only-view #pos-reconciliation-section { display: block !important; }
 .pay-source-badge[data-source="mercadolibre"] { border-color: var(--warn); color: var(--warn); }
 .pay-source-badge[data-source="totalnet"] { border-color: var(--accent); color: var(--accent); }
 .pay-source-badge[data-source="transferencia"] { border-color: var(--success, #34c38f); color: var(--success, #34c38f); }
+.pay-source-badge[data-source="mercadopago"] { border-color: #4fb3ff; color: #4fb3ff; }
+.pay-source-badge[data-source="caja"] { border-color: #c9a7ff; color: #c9a7ff; }
+.pos-nowrap { white-space: nowrap; }
+.pos-pending-actions { gap: 6px; flex-wrap: nowrap; }
+.pos-pending-actions .btn { white-space: nowrap; }
+.pos-transfer-methods { display: flex; flex-wrap: wrap; gap: 8px; margin: 4px 0 10px; }
+.pos-transfer-method {
+    display: inline-flex; align-items: center; gap: 7px; cursor: pointer;
+    padding: 7px 14px; border: 1px solid var(--line-strong); border-radius: 999px; font-weight: 600;
+}
+.pos-transfer-method:has(input:checked) { border-color: var(--accent); color: var(--accent); background: rgba(66, 208, 199, 0.08); }
+.pos-transfer-method input { accent-color: var(--accent); }
 
 /* Cobro por transferencia bancaria */
 #pos-transfer-panel .pos-manual-grid { grid-template-columns: repeat(auto-fit, minmax(min(100%, 220px), 1fr)); }
@@ -766,6 +778,8 @@ body.pos-only-view #pos-reconciliation-section { display: block !important; }
 .pos-transfer-invoice-result .chosen b { font-variant-numeric: tabular-nums; }
 .pos-transfer-invoice-result .pick { margin: 2px 6px 2px 0; }
 .pos-transfer-difference { margin-top: 14px; padding: 10px 12px; border-left: 3px solid var(--warn); background: rgba(240, 198, 116, 0.06); border-radius: var(--radius-sm); display: grid; gap: 8px; max-width: 640px; }
+/* display: grid le gana a [hidden]: sin esto el recuadro aparece vacio sin diferencia. */
+.pos-transfer-difference[hidden] { display: none; }
 .pos-transfer-difference p { margin: 0; font-weight: 600; }
 .pos-transfer-difference .form-group { margin: 0 0 0 26px; }
 
@@ -1092,6 +1106,7 @@ body.pos-only-view #pos-reconciliation-section { display: block !important; }
 }
 
 .action-stack .btn.success { grid-column: 1 / -1; }
+.action-stack .btn.validate-out { grid-column: 1 / -1; }
 
 /* Acciones secundarias de la fila: menos peso que la principal */
 .action-stack .btn:not(.success) {

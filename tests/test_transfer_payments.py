@@ -215,5 +215,80 @@ class TestTransferEndpoint(_StateIsolation):
         self.assertEqual(recon.load_state()["history"], [])
 
 
+
+class TestMercadoPagoAndCashPayments(_StateIsolation):
+    def _register(self, odoo, **kwargs):
+        params = {
+            "invoice_id": 114296,
+            "journal_id": 91,
+            "amount": 256.20,
+            "payment_date": TODAY,
+            "reference": "",
+            "auth_override": {"username": "u"},
+        }
+        params.update(kwargs)
+        return service.register_transfer_payment(odoo, **params)
+
+    def test_mercadopago_puts_only_the_authorization_in_the_memo(self):
+        odoo = _FakeOdoo(journal_id=91, journal_name="Mercado Pago $", invoice_currency="UYU", journal_currency="UYU")
+        entry = self._register(odoo, reference=" 1234567890 ", method="mercadopago")
+        memo = odoo.payments[0][4]
+        self.assertEqual(memo, "1234567890")
+        self.assertEqual(entry["source"], "mercadopago")
+        self.assertEqual(entry["transfer"]["reference"], "1234567890")
+        self.assertEqual(odoo.attachments, [])
+
+    def test_mercadopago_requires_authorization_and_rejects_attachment(self):
+        odoo = _FakeOdoo(journal_type="bank", invoice_currency="UYU", journal_currency="UYU")
+        with self.assertRaises(ValueError) as caught:
+            self._register(odoo, method="mercadopago")
+        self.assertIn("autorizacion", str(caught.exception))
+        with self.assertRaises(ValueError):
+            self._register(odoo, reference="1", method="mercadopago", attachment={"mimetype": "application/pdf", "content": b"x"})
+        self.assertEqual(odoo.payments, [])
+
+    def test_same_mercadopago_authorization_cannot_be_registered_twice(self):
+        odoo = _FakeOdoo(invoice_currency="UYU", journal_currency="UYU")
+        recon.record_external_payments([self._register(odoo, reference="777", method="mercadopago")])
+        with self.assertRaises(ValueError) as caught:
+            self._register(odoo, reference="777", method="mercadopago")
+        self.assertIn("ya se registro", str(caught.exception))
+        # Una transferencia con el mismo numero es otro cobro.
+        self._register(odoo, reference="777", method="transferencia")
+        self.assertEqual(len(odoo.payments), 2)
+
+    def test_cash_uses_cash_journal_without_memo_or_reference(self):
+        odoo = _FakeOdoo(journal_id=15, journal_name="Caja", journal_type="cash", invoice_currency="UYU", journal_currency="UYU")
+        entry = self._register(odoo, journal_id=15, reference="ignorado", method="caja")
+        memo = odoo.payments[0][4]
+        self.assertEqual(memo, "")
+        self.assertEqual(entry["source"], "caja")
+        self.assertEqual(entry["transfer"]["reference"], "")
+        self.assertEqual(entry["transfer"]["journal_name"], "Caja")
+
+    def test_journal_type_must_match_the_method(self):
+        bank = _FakeOdoo(journal_type="bank", invoice_currency="UYU", journal_currency="UYU")
+        with self.assertRaises(ValueError) as caught:
+            self._register(bank, method="caja")
+        self.assertIn("diario de caja", str(caught.exception))
+        cash = _FakeOdoo(journal_type="cash", invoice_currency="UYU", journal_currency="UYU")
+        with self.assertRaises(ValueError):
+            self._register(cash, reference="1", method="mercadopago")
+        with self.assertRaises(ValueError):
+            self._register(cash, method="cheque")
+        self.assertEqual(bank.payments + cash.payments, [])
+
+    def test_endpoint_rejects_attachment_for_cash(self):
+        odoo = _FakeOdoo(journal_type="cash", invoice_currency="UYU", journal_currency="UYU")
+        request = endpoints.TransferPaymentRequest(
+            operator_app_username="vale", invoice_id=1, journal_id=15, amount=10, payment_date=TODAY,
+            method="caja", attachment_base64="aGVsbG8=", attachment_mimetype="application/pdf",
+        )
+        with patch.object(endpoints, "odoo_integration", odoo):
+            with self.assertRaises(endpoints.HTTPException) as caught:
+                asyncio.run(endpoints.register_transfer(request))
+        self.assertIn("no llevan comprobante", caught.exception.detail)
+        self.assertEqual(odoo.payments, [])
+
 if __name__ == "__main__":
     unittest.main()

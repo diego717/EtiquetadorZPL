@@ -73,6 +73,11 @@ class AdministradoShipmentPrintRequest(BaseModel):
     operation_id: str = Field(default="", max_length=80)
 
 
+class AdministradoDeliveryValidateRequest(BaseModel):
+    envio_id: str
+    app_username: str = ""
+
+
 class AdministradoSyncRequest(BaseModel):
     limit: int = Field(default=20, ge=1, le=50)
 
@@ -818,6 +823,34 @@ async def print_shipment(
             error=message,
         )
         administrado_integration.save_config({"last_error": message})
+        raise HTTPException(status_code=400, detail=message)
+
+
+@router.post("/shipments/validate-delivery")
+async def validate_shipment_delivery(request: AdministradoDeliveryValidateRequest) -> Dict[str, Any]:
+    """Confirma la orden y valida su entrega OUT en Odoo sin entrar a la orden."""
+    envio_id = str(request.envio_id or "").strip()
+    app_username = str(request.app_username or "").strip()
+
+    def _executor() -> Dict[str, Any]:
+        if not envio_id:
+            raise ValueError("envio_id vacio")
+        auth_override = odoo_integration.resolve_operator_auth(app_username)
+        order = odoo_integration.find_sale_order_by_envio(envio_id, auth_override)
+        if not order:
+            raise ValueError(f"No se encontro orden Odoo para envio {envio_id}.")
+        try:
+            result = odoo_integration.validate_sale_order_delivery(int(order["id"]), auth_override)
+        finally:
+            with ODOO_STOCK_CACHE_LOCK:
+                ODOO_STOCK_CACHE.pop(envio_id, None)
+        return {"success": True, "envio_id": envio_id, **result}
+
+    try:
+        return await asyncio.to_thread(_executor)
+    except Exception as exc:
+        message = _friendly_error(exc)
+        logger.warning("No se pudo validar la entrega del envio %s: %s", envio_id, message)
         raise HTTPException(status_code=400, detail=message)
 
 

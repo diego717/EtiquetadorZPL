@@ -1451,6 +1451,146 @@ class OdooIntegration:
             "actor_username": str(runtime.get("username", "")),
         }
 
+    def validate_sale_order_delivery(
+        self,
+        order_id: int,
+        auth_override: Optional[Dict[str, str]] = None,
+    ) -> Dict[str, Any]:
+        """Confirma la orden (si hace falta) y valida en orden toda su cadena de
+        traslados (PICK -> PACK -> OUT) hasta dejar la entrega hecha.
+
+        Cada paso se valida solo si queda todo reservado: una entrega parcial
+        generaria un backorder, y esa decision se deja para hacerla en Odoo.
+        """
+        if not order_id:
+            raise ValueError("order_id invalido")
+        runtime = self._build_runtime_config(auth_override)
+        uid = self._authenticate(auth_override=auth_override)
+        models = self._xmlrpc_models(runtime)
+        db = runtime.get("database", "")
+        password = runtime.get("password", "")
+
+        def call(model: str, method: str, args: List[Any], kwargs: Optional[Dict[str, Any]] = None) -> Any:
+            try:
+                return models.execute_kw(db, uid, password, model, method, args, kwargs or {})
+            except xmlrpc.client.Fault as exc:
+                # Algunos metodos de accion devuelven None y XML-RPC no lo puede
+                # serializar aunque la operacion se haya hecho: se verifica despues.
+                if "cannot marshal None" in str(getattr(exc, "faultString", "") or ""):
+                    return None
+                logger.exception("Error Odoo en %s.%s (sale.order id=%s)", model, method, order_id)
+                raise ValueError(self.humanize_exception(exc)) from exc
+
+        orders = call("sale.order", "read", [[int(order_id)]], {"fields": ["id", "name", "state"]})
+        if not orders:
+            raise ValueError(f"No existe sale.order id={order_id}")
+        order_name = str(orders[0].get("name") or "")
+        order_state_before = str(orders[0].get("state") or "")
+        if order_state_before == "cancel":
+            raise ValueError(f"La orden {order_name} esta cancelada en Odoo.")
+        if order_state_before not in {"sale", "done"}:
+            call("sale.order", "action_confirm", [[int(order_id)]])
+
+        picking_fields = ["id", "name", "state", "picking_type_code"]
+
+        def load_pickings() -> List[Dict[str, Any]]:
+            # Todas las operaciones de la orden (PICK -> PACK -> OUT en rutas de
+            # varios pasos), en orden de creacion, que es el orden de la cadena.
+            return call(
+                "stock.picking",
+                "search_read",
+                [[("sale_id", "=", int(order_id))]],
+                {"fields": picking_fields, "order": "id asc"},
+            ) or []
+
+        def is_open(picking: Dict[str, Any]) -> bool:
+            return str(picking.get("state") or "") not in {"done", "cancel"}
+
+        pickings = load_pickings()
+        outgoing = [p for p in pickings if str(p.get("picking_type_code") or "") == "outgoing"]
+        if not any(is_open(p) for p in outgoing):
+            if any(str(p.get("state") or "") == "done" for p in outgoing):
+                return {
+                    "order_id": int(order_id),
+                    "order_name": order_name,
+                    "order_state_before": order_state_before,
+                    "already_done": True,
+                    "validated_pickings": [],
+                    "actor_username": str(runtime.get("username", "")),
+                }
+            raise ValueError(f"La orden {order_name} no tiene una entrega de salida pendiente en Odoo.")
+
+        # Odoo 17+ guarda lo reservado en ``quantity``; versiones previas en ``reserved_availability``.
+        move_fields = set((call("stock.move", "fields_get", [[], ["string"]]) or {}).keys())
+        reserved_field = "quantity" if "quantity" in move_fields else "reserved_availability"
+
+        def shortages_for(picking_id: int) -> List[str]:
+            moves = call(
+                "stock.move",
+                "search_read",
+                [[("picking_id", "=", picking_id), ("state", "not in", ["done", "cancel"])]],
+                {"fields": ["id", "product_id", "product_uom_qty", "product_uom", reserved_field]},
+            ) or []
+            missing_lines = []
+            for move in moves:
+                demand = float(move.get("product_uom_qty") or 0.0)
+                reserved = float(move.get(reserved_field) or 0.0)
+                if demand - reserved > 0.00001:
+                    _product_id, product_name = self._many2one_parts(move.get("product_id"))
+                    _uom_id, uom_name = self._many2one_parts(move.get("product_uom"))
+                    missing = f"{demand - reserved:g}{f' {uom_name}' if uom_name else ''}"
+                    missing_lines.append(f"{product_name or 'Producto'}: faltan {missing}")
+            return missing_lines
+
+        validated: List[str] = []
+        # Cada vuelta valida la siguiente operacion de la cadena; al validarla,
+        # Odoo libera la que sigue (p. ej. el OUT deja de esperar al PACK).
+        for _ in range(max(1, len(pickings)) + 1):
+            open_pickings = [p for p in pickings if is_open(p)]
+            if not open_pickings:
+                break
+            picking = open_pickings[0]
+            picking_id = int(picking["id"])
+            picking_name = str(picking.get("name") or picking_id)
+            if str(picking.get("state") or "") == "draft":
+                call("stock.picking", "action_confirm", [[picking_id]])
+            call("stock.picking", "action_assign", [[picking_id]])
+            shortages = shortages_for(picking_id)
+            if shortages:
+                done_text = f"Se validaron {', '.join(validated)}. " if validated else "No se valido nada. "
+                raise ValueError(
+                    f"{picking_name} no tiene todo el stock reservado. {done_text}" + " · ".join(shortages[:3])
+                )
+            result = call(
+                "stock.picking",
+                "button_validate",
+                [[picking_id]],
+                {"context": {"skip_immediate": True, "skip_sms": True}},
+            )
+            pickings = load_pickings()
+            current = next((p for p in pickings if int(p["id"]) == picking_id), {})
+            if str(current.get("state") or "") != "done":
+                wizard = result.get("res_model") if isinstance(result, dict) else ""
+                done_text = f" Ya se validaron: {', '.join(validated)}." if validated else ""
+                step = f"un paso adicional ({wizard})" if wizard else "algo que impidio validar"
+                raise ValueError(f"Odoo pidio {step} en {picking_name}. Terminalo desde Odoo.{done_text}")
+            validated.append(picking_name)
+
+        still_open = [str(p.get("name") or p.get("id")) for p in pickings if is_open(p)]
+        if still_open:
+            raise ValueError(
+                f"Quedaron operaciones sin validar: {', '.join(still_open)}. Ya se validaron: {', '.join(validated) or '-'}."
+            )
+
+        return {
+            "order_id": int(order_id),
+            "order_name": order_name,
+            "order_state_before": order_state_before,
+            "already_done": False,
+            "validated_pickings": validated,
+            "actor_username": str(runtime.get("username", "")),
+        }
+
     def get_operator_odoo_users_public(self) -> List[Dict[str, Any]]:
         users = []
         mapping = self.config.get("operator_odoo_users") or {}

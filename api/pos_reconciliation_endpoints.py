@@ -73,7 +73,9 @@ class TransferPaymentRequest(BaseModel):
     journal_id: int
     amount: float
     payment_date: str
-    reference: str
+    reference: str = ""
+    # transferencia | mercadopago | caja
+    method: str = "transferencia"
     difference_handling: str = "open"
     difference_account_id: Optional[int] = None
     attachment_filename: str = ""
@@ -380,10 +382,17 @@ async def find_open_invoices(number: str = "") -> Dict[str, Any]:
 
 @router.post("/transfer")
 async def register_transfer(request: TransferPaymentRequest) -> Dict[str, Any]:
-    """Registra el cobro de una factura recibido por transferencia bancaria (sin ticket POS)."""
+    """Registra el cobro manual de una factura: transferencia, Mercado Pago o caja (sin ticket POS)."""
     operator_app_username, auth_override = _resolve_operator(request.operator_app_username)
     actor_odoo_username = str(auth_override.get("username") or "").strip()
 
+    method_config = service.MANUAL_PAYMENT_METHODS.get(str(request.method or "").strip().lower())
+    if method_config is None:
+        raise HTTPException(status_code=400, detail=f"Medio de cobro invalido: {request.method}")
+    if request.attachment_base64 and not method_config["allows_attachment"]:
+        raise HTTPException(
+            status_code=400, detail=f"Los cobros por {method_config['label']} no llevan comprobante adjunto"
+        )
     attachment = None
     if request.attachment_base64:
         mimetype = str(request.attachment_mimetype or "").lower()
@@ -418,6 +427,7 @@ async def register_transfer(request: TransferPaymentRequest) -> Dict[str, Any]:
             request.difference_handling,
             request.difference_account_id,
             attachment,
+            request.method,
         )
     except Exception as exc:
         # Nada se escribio en Odoo: las validaciones corren antes de crear el pago.

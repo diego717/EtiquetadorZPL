@@ -419,6 +419,10 @@ function renderAdministradoSales() {
                       `
                     : ''
                 }
+                ${canValidateAdministradoDelivery(sale)
+                    ? `<button class="btn sm validate-out" ${sale._printing ? 'disabled' : ''} onclick="validateAdministradoDelivery('${sale.envio_id}')">Validar entrega (OUT)</button>`
+                    : ''
+                }
                 <button type="button" class="btn-link-odoo" onclick="openOdooOrderForEnvio('${sale.envio_id}', this)">Abrir orden en Odoo ↗</button>
                 </div>
             </td>
@@ -694,6 +698,101 @@ async function printAdministradoShipment(envioId, mode = 'both') {
         alert(`Error de conexion: ${error.message}`);
     } finally {
         administradoPrintInFlight.delete(safeEnvioId);
+    }
+}
+
+// ---- Validar la entrega OUT en Odoo sin entrar a la orden ----
+const ADMINISTRADO_VALIDATABLE_STOCK = new Set([
+    'ready', 'partial', 'waiting', 'waiting_operation', 'draft', 'quotation', 'no_picking'
+]);
+
+function canValidateAdministradoDelivery(sale) {
+    const code = String(sale && sale.odoo_stock && sale.odoo_stock.code || '').toLowerCase();
+    return ADMINISTRADO_VALIDATABLE_STOCK.has(code);
+}
+
+async function validateAdministradoDelivery(envioId) {
+    const safeEnvioId = String(envioId || '').trim();
+    if (!safeEnvioId) return;
+    if (administradoPrintInFlight.has(safeEnvioId)) {
+        alert(`El envio ${safeEnvioId} ya se esta procesando. Espera unos segundos.`);
+        return;
+    }
+    const targetSale = administradoSales.find((sale) => String(sale.envio_id) === safeEnvioId);
+    const stock = targetSale && targetSale.odoo_stock ? targetSale.odoo_stock : {};
+    const stockCode = String(stock.code || '').toLowerCase();
+    const appUsername = (localStorage.getItem('username') || '').trim();
+    const odooActor = resolveOdooActorForPrint(appUsername);
+    const pickingNames = (Array.isArray(stock.pickings) ? stock.pickings : [])
+        .map((picking) => String(picking && picking.name || '').trim())
+        .filter(Boolean)
+        .join(', ');
+
+    const details = [
+        ['Envio', safeEnvioId],
+        ['Orden', stock.order_name || '-'],
+        ['Entrega', pickingNames || (stockCode === 'quotation' ? 'Se crea al confirmar' : '-')],
+        ['Pasos', 'PICK → PACK → OUT (en orden)'],
+        ['Stock / entrega', stock.label || 'Sin datos'],
+        ['Usuario Odoo', odooActor.username || '(sin usuario)']
+    ];
+    const warnings = [];
+    if (stockCode === 'quotation') {
+        warnings.push('La cotizacion se confirmara antes de validar la entrega.');
+    }
+    if (stockCode !== 'ready' && stockCode !== 'quotation') {
+        warnings.push(`Odoo informa: ${stock.label || 'sin datos'}. Se intentara reservar; si a un paso le falta stock se frena ahi y avisa cuales ya se validaron.`);
+    }
+    if (odooActor.source !== 'mapped') {
+        warnings.push(`La validacion quedara registrada en Odoo como ${odooActor.username || 'el usuario general'}.`);
+    }
+    const confirmed = await uiConfirm({
+        tone: 'print',
+        title: 'Validar entrega en Odoo',
+        message: 'Se validan todos los traslados de la orden y la mercaderia sale del stock (no se puede deshacer desde aca):',
+        details,
+        warnings,
+        confirmText: 'Validar entrega'
+    });
+    if (!confirmed) return;
+
+    administradoPrintInFlight.add(safeEnvioId);
+    if (targetSale) {
+        targetSale._printing = true;
+        targetSale._printing_label = 'Validando entrega en Odoo…';
+        renderAdministradoSales();
+    }
+    try {
+        const apiBase = await ensureApiPort();
+        const response = await fetch(`${apiBase}/api/administrado/shipments/validate-delivery`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ envio_id: safeEnvioId, app_username: appUsername })
+        });
+        const result = await response.json();
+        if (!response.ok) {
+            throw new Error(result.detail || `HTTP ${response.status}`);
+        }
+        const pickings = (result.validated_pickings || []).join(', ');
+        uiToast(
+            result.already_done
+                ? `La entrega de ${result.order_name || safeEnvioId} ya estaba validada.`
+                : `${result.order_name || safeEnvioId}: entrega ${pickings || ''} validada.`,
+            'success',
+            { title: 'Entrega validada', duration: 6000 }
+        );
+    } catch (error) {
+        uiToast(compactErrorText(error.message || 'Error de conexion', 260), 'error', {
+            title: `No se valido la entrega de ${safeEnvioId}`,
+            duration: 10000
+        });
+    } finally {
+        administradoPrintInFlight.delete(safeEnvioId);
+        if (targetSale) {
+            targetSale._printing = false;
+            targetSale._printing_label = '';
+        }
+        await syncAdministradoSales({ silent: true });
     }
 }
 

@@ -794,8 +794,13 @@
             </details>
 
             <details class="pos-manual-panel" id="pos-transfer-panel">
-                <summary>Registrar cobro por transferencia bancaria</summary>
-                <p class="odoo-muted">Para cobros que llegan por transferencia, sin ticket TotalNet ni Mercado Pago. Sirve para cualquier factura con saldo, tambien a credito. El pago se registra en Odoo recien al confirmar.</p>
+                <summary>Registrar cobro manual: transferencia, Mercado Pago o caja</summary>
+                <div class="pos-transfer-methods" role="radiogroup" aria-label="Medio de cobro">
+                    <label class="pos-transfer-method"><input type="radio" name="pos-transfer-method" value="transferencia" checked autocomplete="off" onchange="setTransferMethod(this.value)"> Transferencia</label>
+                    <label class="pos-transfer-method"><input type="radio" name="pos-transfer-method" value="mercadopago" autocomplete="off" onchange="setTransferMethod(this.value)"> Mercado Pago</label>
+                    <label class="pos-transfer-method"><input type="radio" name="pos-transfer-method" value="caja" autocomplete="off" onchange="setTransferMethod(this.value)"> Caja</label>
+                </div>
+                <p class="odoo-muted" id="pos-transfer-method-help">Para cobros que llegan por transferencia, sin ticket TotalNet. Sirve para cualquier factura con saldo, tambien a credito. El pago se registra en Odoo recien al confirmar.</p>
                 <div class="pos-transfer-invoice">
                     <div class="form-group">
                         <label for="pos-transfer-invoice-search">Factura:</label>
@@ -806,7 +811,7 @@
                 </div>
                 <div class="pos-manual-grid">
                     <div class="form-group">
-                        <label for="pos-transfer-date">Fecha de la transferencia:</label>
+                        <label for="pos-transfer-date" id="pos-transfer-date-label">Fecha de la transferencia:</label>
                         <input type="date" id="pos-transfer-date" required>
                     </div>
                     <div class="form-group">
@@ -814,19 +819,19 @@
                         <input type="number" id="pos-transfer-amount" min="0.01" step="0.01" required oninput="renderTransferDifference()">
                     </div>
                     <div class="form-group">
-                        <label for="pos-transfer-journal">Banco:</label>
+                        <label for="pos-transfer-journal" id="pos-transfer-journal-label">Banco:</label>
                         <select id="pos-transfer-journal"><option value="">Elegi primero la factura</option></select>
                         <label class="check-label pos-transfer-all"><input type="checkbox" id="pos-transfer-all-journals" onchange="renderTransferJournals()"> Ver todos los diarios</label>
                     </div>
-                    <div class="form-group">
-                        <label for="pos-transfer-reference">Referencia de la transferencia:</label>
+                    <div class="form-group" id="pos-transfer-reference-group">
+                        <label for="pos-transfer-reference" id="pos-transfer-reference-label">Referencia de la transferencia:</label>
                         <input type="text" id="pos-transfer-reference" placeholder="Nro. de operacion del banco" required>
                     </div>
                     <div class="form-group">
                         <label for="pos-transfer-operator">Registrar como:</label>
                         <select id="pos-transfer-operator"><option value="">Cargando usuarios...</option></select>
                     </div>
-                    <div class="form-group">
+                    <div class="form-group" id="pos-transfer-file-group">
                         <label for="pos-transfer-file">Comprobante (opcional):</label>
                         <input type="file" id="pos-transfer-file" accept="application/pdf,image/png,image/jpeg">
                         <span class="odoo-muted">PDF, PNG o JPG, hasta 8 MB. Se adjunta al pago en Odoo.</span>
@@ -996,6 +1001,8 @@
                         <option value="totalnet">TotalNet</option>
                         <option value="mercadolibre">Mercado Libre</option>
                         <option value="transferencia">Transferencia</option>
+                        <option value="mercadopago">Mercado Pago</option>
+                        <option value="caja">Caja</option>
                     </select>
                 </div>
                 <div class="form-group">

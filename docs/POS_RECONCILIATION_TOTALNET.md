@@ -354,3 +354,19 @@ Si por algún motivo no se puede conseguir/usar el acceso a la API (esta guía a
 - **Registro automático opcional** (`auto_register_deterministic` + `auto_register_operator`): registra solo las coincidencias que pasan `pos_reconciliation.find_deterministic_matches`. Las condiciones son: número de factura informado por TotalNet, importe exacto sin redondeo, misma moneda, factura `not_paid` con saldo igual al total, diario resuelto por el mapeo por sello y ningún otro cupón del lote con ese número de factura. Todo lo demás (ambiguos, diferencias, fallback por importe/fecha y tickets manuales) sigue esperando confirmación. Los pagos automáticos quedan en el historial con `mode = automatico_deterministico` y el operador elegido, y `register_invoice_payment` vuelve a validar estado e importe en Odoo antes de crear cada pago.
 
 Endpoints: `GET /api/pos-reconciliation/auto/status`, `GET /api/pos-reconciliation/auto/proposal`, `POST /api/pos-reconciliation/auto/run-once`. La configuración se guarda con el `POST /api/pos-reconciliation/config` de siempre.
+
+## Cobro manual: transferencia, Mercado Pago y caja
+
+El panel "Registrar cobro manual" de la vista POS registra el cobro de una factura elegida a
+mano (de cualquier plazo). Los tres medios comparten la busqueda de factura, el manejo de
+diferencias, el operador y el historial (`POST /api/pos-reconciliation/transfer` con `method`):
+
+| Medio | Diario | Referencia | Memo del pago | Comprobante |
+| --- | --- | --- | --- | --- |
+| `transferencia` | banco (BROU, Santander, ...) | nro. de operacion, obligatorio | `Transferencia {ref} - {factura}` | opcional (PDF/PNG/JPG) |
+| `mercadopago` | banco "Mercado Pago" (sin Retenciones) | nro. de autorizacion, obligatorio | solo el nro. de autorizacion | no |
+| `caja` | caja (sin Canje) | no | vacio | no |
+
+El backend valida el tipo de diario de cada medio y rechaza una referencia ya usada en el mismo
+diario y medio (una transferencia y un cobro de Mercado Pago con el mismo numero son cobros
+distintos). Si hay un unico diario del medio en la moneda de la factura, se preselecciona.

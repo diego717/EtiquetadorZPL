@@ -143,13 +143,45 @@ TRANSFER_MAX_WRITEOFF_RATIO = 0.05
 TRANSFER_ATTACHMENT_TYPES = {"application/pdf": ".pdf", "image/png": ".png", "image/jpeg": ".jpg"}
 TRANSFER_ATTACHMENT_MAX_BYTES = 8 * 1024 * 1024
 
+# Cobros manuales que comparten el flujo de transferencia (factura elegida a mano).
+# - mercadopago: el numero de autorizacion va solo en el memo; sin comprobante.
+# - caja: efectivo en un diario de caja; sin referencia, memo ni comprobante.
+MANUAL_PAYMENT_METHODS: Dict[str, Dict[str, Any]] = {
+    "transferencia": {
+        "label": "transferencia",
+        "journal_type": "bank",
+        "journal_label": "un diario de banco",
+        "reference_required": "Falta la referencia o numero de la transferencia",
+        "allows_attachment": True,
+    },
+    "mercadopago": {
+        "label": "Mercado Pago",
+        "journal_type": "bank",
+        "journal_label": "un diario de banco (Mercado Pago)",
+        "reference_required": "Falta el numero de autorizacion de Mercado Pago",
+        "allows_attachment": False,
+    },
+    "caja": {
+        "label": "caja",
+        "journal_type": "cash",
+        "journal_label": "un diario de caja",
+        "reference_required": "",
+        "allows_attachment": False,
+    },
+}
+
 
 def normalize_transfer_reference(value: Any) -> str:
     return re.sub(r"[^0-9A-Z]", "", str(value or "").upper())
 
 
-def find_registered_transfer(reference: str, journal_id: int, history: List[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
-    """Pago por transferencia ya registrado con la misma referencia en el mismo banco."""
+def find_registered_transfer(
+    reference: str,
+    journal_id: int,
+    history: List[Dict[str, Any]],
+    source: str = "transferencia",
+) -> Optional[Dict[str, Any]]:
+    """Cobro manual ya registrado con la misma referencia en el mismo diario."""
     wanted = normalize_transfer_reference(reference)
     if not wanted:
         return None
@@ -157,7 +189,7 @@ def find_registered_transfer(reference: str, journal_id: int, history: List[Dict
         for payment in batch.get("payments", []) or []:
             transfer = payment.get("transfer") or {}
             if (
-                payment.get("source") == "transferencia"
+                payment.get("source") == source
                 and payment.get("ok") is True
                 and int(transfer.get("journal_id") or 0) == int(journal_id)
                 and normalize_transfer_reference(transfer.get("reference")) == wanted
@@ -177,17 +209,24 @@ def register_transfer_payment(
     difference_handling: str = "open",
     difference_account_id: Optional[int] = None,
     attachment: Optional[Dict[str, Any]] = None,
+    method: str = "transferencia",
 ) -> Dict[str, Any]:
-    """Registra en Odoo el cobro de una factura recibido por transferencia bancaria.
+    """Registra en Odoo el cobro de una factura recibido por transferencia, Mercado Pago o caja.
 
     Valida todo antes de escribir: moneda del banco igual a la de la factura, factura con
     saldo, referencia no usada y diferencia razonable si se da la factura por pagada.
     Como el resto de los cobros, si el pago se creo pero el adjunto fallo devuelve una
     advertencia y no un error: reintentar duplicaria el cobro.
     """
-    reference = str(reference or "").strip()
-    if not reference:
-        raise ValueError("Falta la referencia o numero de la transferencia")
+    method = str(method or "").strip().lower()
+    config = MANUAL_PAYMENT_METHODS.get(method)
+    if config is None:
+        raise ValueError(f"Medio de cobro invalido: {method}")
+    reference = str(reference or "").strip() if config["reference_required"] else ""
+    if config["reference_required"] and not reference:
+        raise ValueError(config["reference_required"])
+    if attachment and not config["allows_attachment"]:
+        raise ValueError(f"Los cobros por {config['label']} no llevan comprobante adjunto")
     try:
         amount_value = round(float(amount), 2)
     except (TypeError, ValueError):
@@ -196,14 +235,19 @@ def register_transfer_payment(
         raise ValueError("El importe debe ser mayor a 0")
     payment_date = recon.normalize_date_iso(payment_date)
     if payment_date > date.today().isoformat():
-        raise ValueError("La fecha de la transferencia no puede ser futura")
+        raise ValueError("La fecha del cobro no puede ser futura")
     if difference_handling not in {"open", "reconcile"}:
         raise ValueError("Opcion de diferencia invalida")
 
-    previous = find_registered_transfer(reference, journal_id, recon.load_state().get("history", []))
+    previous = (
+        find_registered_transfer(reference, journal_id, recon.load_state().get("history", []), method)
+        if reference
+        else None
+    )
     if previous:
+        what = "La transferencia" if method == "transferencia" else "La autorizacion de Mercado Pago"
         raise ValueError(
-            f"La transferencia {reference} ya se registro en este banco "
+            f"{what} {reference} ya se registro en este diario "
             f"({previous.get('invoice_name') or 'factura ' + str(previous.get('invoice_id'))})."
         )
 
@@ -212,12 +256,12 @@ def register_transfer_payment(
         raise ValueError(f"{context['invoice_name'] or 'El documento'} no es una factura de cliente publicada")
     if context["payment_state"] not in {"not_paid", "partial"}:
         raise ValueError(f"{context['invoice_name']} ya figura como pagada en Odoo")
-    if context["journal_type"] != "bank":
-        raise ValueError(f"{context['journal_name']} no es un diario de banco")
+    if context["journal_type"] != config["journal_type"]:
+        raise ValueError(f"{context['journal_name']} no es {config['journal_label']}")
     if context["journal_currency"] != context["invoice_currency"]:
         raise ValueError(
             f"La factura esta en {context['invoice_currency']} y {context['journal_name']} "
-            f"opera en {context['journal_currency']}. Elegi la cuenta del banco en la misma moneda."
+            f"opera en {context['journal_currency']}. Elegi un diario en la misma moneda."
         )
 
     due = round(context["amount_residual"], 2)
@@ -234,7 +278,11 @@ def register_transfer_payment(
             )
         writeoff_account = int(difference_account_id)
 
-    memo = f"Transferencia {reference} - {context['invoice_name']}"
+    if method == "transferencia":
+        memo = f"Transferencia {reference} - {context['invoice_name']}"
+    else:
+        # Mercado Pago: solo el numero de autorizacion. Caja: sin memo.
+        memo = reference
     payment_result = odoo.register_invoice_payment(
         int(invoice_id),
         amount_value,
@@ -246,11 +294,11 @@ def register_transfer_payment(
         writeoff_account,
         None,
         # Centesimos: mismo concepto que el redondeo de los cobros POS.
-        "Redondeo cobro por transferencia" if abs(difference) < 1 else "Diferencia cobro por transferencia",
+        f"Redondeo cobro por {config['label']}" if abs(difference) < 1 else f"Diferencia cobro por {config['label']}",
     )
     entry: Dict[str, Any] = {
         "ok": True,
-        "source": "transferencia",
+        "source": method,
         "invoice_id": int(invoice_id),
         "invoice_name": context["invoice_name"],
         "payment_id": payment_result.get("payment_id"),

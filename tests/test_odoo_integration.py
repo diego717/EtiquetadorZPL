@@ -71,6 +71,55 @@ class _FakeOdooModels:
         raise AssertionError(f"Llamada Odoo inesperada: {model}.{method}")
 
 
+class _ThreeStepDeliveryModels:
+    """Simula una orden con ruta PICK -> PACK -> OUT (Odoo 17, reserva en ``quantity``)."""
+
+    def __init__(self, pick_stock: float = 1.0, order_state: str = "sale"):
+        self.order_state = order_state
+        self.pick_stock = pick_stock
+        self.calls = []
+        self.pickings = {
+            1: {"id": 1, "name": "CC/PICK/1", "state": "assigned", "picking_type_code": "internal"},
+            2: {"id": 2, "name": "CC/PACK/1", "state": "waiting", "picking_type_code": "internal"},
+            3: {"id": 3, "name": "CC/OUT/1", "state": "waiting", "picking_type_code": "outgoing"},
+        }
+        self.reserved = {1: min(pick_stock, 1.0), 2: 0.0, 3: 0.0}
+
+    def execute_kw(self, _db, _uid, _password, model, method, args, kwargs=None):
+        self.calls.append((model, method, args))
+        if model == "sale.order" and method == "read":
+            return [{"id": 10, "name": "ML 481", "state": self.order_state}]
+        if model == "sale.order" and method == "action_confirm":
+            self.order_state = "sale"
+            return True
+        if model == "stock.picking" and method == "search_read":
+            return [dict(p) for p in self.pickings.values()]
+        if model == "stock.picking" and method == "action_assign":
+            for pid in args[0]:
+                previous = self.pickings.get(pid - 1)
+                if previous is None or previous["state"] == "done":
+                    self.reserved[pid] = self.reserved[pid] if pid == 1 else 1.0
+                    if self.reserved[pid] >= 1.0:
+                        self.pickings[pid]["state"] = "assigned"
+            return True
+        if model == "stock.move" and method == "fields_get":
+            return {"quantity": {}, "picked": {}}
+        if model == "stock.move" and method == "search_read":
+            pid = args[0][0][2]
+            return [{
+                "id": pid * 10,
+                "product_id": [5, "POUCH A4"],
+                "product_uom_qty": 1.0,
+                "product_uom": [1, "Units"],
+                "quantity": self.reserved[pid],
+            }]
+        if model == "stock.picking" and method == "button_validate":
+            for pid in args[0]:
+                self.pickings[pid]["state"] = "done"
+            return True
+        raise AssertionError(f"Llamada Odoo inesperada: {model}.{method}")
+
+
 class _PaidInvoiceModels:
     def execute_kw(self, _db, _uid, _password, model, method, _args, kwargs=None):
         if model == "account.move" and method == "fields_get":
@@ -812,6 +861,40 @@ class TestOdooIntegration(unittest.TestCase):
         self.assertEqual(models.calls.count(("sale.order", "message_post")), 2)
         self.assertNotIn("ref", models.note_kwargs["body"].lower())
         self.assertEqual(models.note_kwargs["body"], "Orden impresa")
+
+    def _delivery_integration(self, models):
+        integration = OdooIntegration()
+        integration._build_runtime_config = lambda auth_override=None: {"database": "test", "password": "test"}
+        integration._authenticate = lambda auth_override=None: 7
+        integration._xmlrpc_models = lambda runtime=None: models
+        return integration
+
+    def test_validate_delivery_walks_pick_pack_out_in_order(self):
+        models = _ThreeStepDeliveryModels(order_state="draft")
+        result = self._delivery_integration(models).validate_sale_order_delivery(10)
+
+        self.assertEqual(result["validated_pickings"], ["CC/PICK/1", "CC/PACK/1", "CC/OUT/1"])
+        self.assertIn(("sale.order", "action_confirm", [[10]]), models.calls)
+        validated = [args[0][0] for model, method, args in models.calls if method == "button_validate"]
+        self.assertEqual(validated, [1, 2, 3])
+
+    def test_validate_delivery_stops_without_validating_when_stock_is_missing(self):
+        models = _ThreeStepDeliveryModels(pick_stock=0.0)
+        with self.assertRaises(ValueError) as ctx:
+            self._delivery_integration(models).validate_sale_order_delivery(10)
+
+        self.assertIn("CC/PICK/1", str(ctx.exception))
+        self.assertIn("faltan 1 Units", str(ctx.exception))
+        self.assertFalse(any(method == "button_validate" for _m, method, _a in models.calls))
+
+    def test_validate_delivery_reports_already_done(self):
+        models = _ThreeStepDeliveryModels()
+        for picking in models.pickings.values():
+            picking["state"] = "done"
+        result = self._delivery_integration(models).validate_sale_order_delivery(10)
+
+        self.assertTrue(result["already_done"])
+        self.assertFalse(any(method == "button_validate" for _m, method, _a in models.calls))
 
 
 if __name__ == "__main__":

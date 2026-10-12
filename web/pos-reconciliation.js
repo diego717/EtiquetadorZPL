@@ -9,7 +9,11 @@ let posPendingInvoices = [];
 let posPaymentHistory = [];
 let mercadoLibrePaymentOptionsLoaded = false;
 const PAYMENT_SOURCE_STORAGE_KEY = 'etiquetador_payment_source';
-const PAYMENT_SOURCE_LABELS = { totalnet: 'TotalNet', mercadolibre: 'Mercado Libre', transferencia: 'Transferencia' };
+const PAYMENT_SOURCE_LABELS = {
+    totalnet: 'TotalNet', mercadolibre: 'Mercado Libre', transferencia: 'Transferencia', mercadopago: 'Mercado Pago', caja: 'Caja',
+};
+// Cobros registrados a mano desde el panel de cobro manual (comparten historial y columnas).
+const MANUAL_PAYMENT_SOURCES = new Set(['transferencia', 'mercadopago', 'caja']);
 
 function setPaymentSource(source, persist = true) {
     const selected = source === 'mercadolibre' ? 'mercadolibre' : 'totalnet';
@@ -650,7 +654,7 @@ function renderPosHistory() {
         return `<tr>
             <td class="pos-money">${escapePosHtml(formatPosHistoryDateTime(item.registered_at))}</td>
             <td><span class="pay-source-badge" data-source="${source}">${escapePosHtml(PAYMENT_SOURCE_LABELS[source])}</span></td>
-            ${source === 'transferencia' ? `
+            ${MANUAL_PAYMENT_SOURCES.has(source) ? `
             <td class="pos-money">${escapePosHtml(item.transfer?.date || '-')}</td>
             <td>${escapePosHtml(item.transfer?.reference || '-')}${item.transfer?.journal_name ? `<br><span class="odoo-muted">${escapePosHtml(item.transfer.journal_name)}</span>` : ''}</td>
             <td class="pos-money">${item.transfer?.amount !== undefined ? escapePosHtml(formatPosAmountWithCurrency(item.transfer.amount, item.transfer.currency)) : '-'}</td>` : source === 'mercadolibre' ? `
@@ -703,13 +707,13 @@ function renderPosPendingInvoices() {
     if (!body) return;
     body.innerHTML = posPendingInvoices.length ? posPendingInvoices.map((invoice, idx) => `
         <tr>
-            <td>${escapePosHtml(invoice.invoice_date || '-')}</td>
+            <td class="pos-nowrap">${escapePosHtml(invoice.invoice_date || '-')}</td>
             <td>${escapePosHtml(invoice.name || invoice.invoice_id || '-')}</td>
             <td>${escapePosHtml(invoice.partner || '-')}</td>
             <td class="pos-money">${formatPosAmount(invoice.amount_residual ?? invoice.amount_total)}</td>
             <td>${escapePosHtml(formatPosCurrency(invoice.currency))}</td>
             <td>${escapePosHtml(invoice.invoice_origin || '-')}</td>
-            <td><div class="pos-history-actions"><button class="btn secondary" onclick="prefillManualPosTicket(${idx})">Cargar ticket</button><button class="btn secondary" onclick="prefillTransferFromPending(${idx})">Transferencia</button></div></td>
+            <td><div class="pos-history-actions pos-pending-actions"><button class="btn secondary sm" onclick="prefillManualPosTicket(${idx})">Cargar ticket</button><button class="btn secondary sm" onclick="prefillTransferFromPending(${idx}, 'transferencia')">Transferencia</button><button class="btn secondary sm" onclick="prefillTransferFromPending(${idx}, 'mercadopago')">Mercado Pago</button><button class="btn secondary sm" onclick="prefillTransferFromPending(${idx}, 'caja')">Caja</button></div></td>
         </tr>`).join('') :
         '<tr><td colspan="7" class="empty-cell">No hay facturas a contado pendientes en el rango</td></tr>';
 }
@@ -1288,6 +1292,72 @@ const TRANSFER_ROUNDING_LIMIT = 1;
 // Diarios de tipo banco que son cuentas bancarias (no tarjetas, cheques ni retenciones).
 const TRANSFER_BANK_RE = /(BROU|Santander|Ita[uú]|Scotia|HSBC|BBVA|Heritage|Bandes|Bank|Banco)/i;
 const TRANSFER_NOT_BANK_RE = /(Master|Visa|Maestro|OCA|American|Tarjeta|Cheque|Retenc|Redondeo|Canje|RedPagos|Mercado ?Pago)/i;
+const MERCADOPAGO_JOURNAL_RE = /Mercado ?Pago/i;
+const NOT_MERCADOPAGO_RE = /Retenc/i;
+const NOT_CASH_RE = /Canje/i;
+
+// Lo que cambia entre medios de cobro manual. El backend valida lo mismo.
+const TRANSFER_METHODS = {
+    transferencia: {
+        help: 'Para cobros que llegan por transferencia, sin ticket TotalNet. Sirve para cualquier factura con saldo, tambien a credito. El pago se registra en Odoo recien al confirmar.',
+        dateLabel: 'Fecha de la transferencia:',
+        journalLabel: 'Banco:',
+        journalPrompt: 'el banco',
+        referenceLabel: 'Referencia de la transferencia:',
+        referencePlaceholder: 'Nro. de operacion del banco',
+        referenceMissing: 'la referencia de la transferencia',
+        hasReference: true,
+        hasFile: true,
+        submit: 'Registrar transferencia en Odoo',
+        journalFilter: (journal, showAll) => journal.type === 'bank'
+            && (showAll || (TRANSFER_BANK_RE.test(journal.name) && !TRANSFER_NOT_BANK_RE.test(journal.name))),
+    },
+    mercadopago: {
+        help: 'Para cobros por Mercado Pago (link de pago, QR o transferencia a la cuenta). El numero de autorizacion queda en el memo del pago. No se adjunta comprobante.',
+        dateLabel: 'Fecha del cobro:',
+        journalLabel: 'Cuenta de Mercado Pago:',
+        journalPrompt: 'la cuenta de Mercado Pago',
+        referenceLabel: 'Numero de autorizacion:',
+        referencePlaceholder: 'Nro. de operacion de Mercado Pago',
+        referenceMissing: 'el numero de autorizacion',
+        hasReference: true,
+        hasFile: false,
+        submit: 'Registrar cobro de Mercado Pago en Odoo',
+        journalFilter: (journal, showAll) => journal.type === 'bank'
+            && (showAll || (MERCADOPAGO_JOURNAL_RE.test(journal.name) && !NOT_MERCADOPAGO_RE.test(journal.name))),
+    },
+    caja: {
+        help: 'Para cobros en efectivo. El pago se registra en el diario de caja, sin referencia ni comprobante.',
+        dateLabel: 'Fecha del cobro:',
+        journalLabel: 'Caja:',
+        journalPrompt: 'la caja',
+        hasReference: false,
+        hasFile: false,
+        submit: 'Registrar cobro en caja en Odoo',
+        journalFilter: (journal, showAll) => journal.type === 'cash' && (showAll || !NOT_CASH_RE.test(journal.name)),
+    },
+};
+let transferMethod = 'transferencia';
+
+function setTransferMethod(method) {
+    transferMethod = TRANSFER_METHODS[method] ? method : 'transferencia';
+    const config = TRANSFER_METHODS[transferMethod];
+    const radio = document.querySelector(`input[name="pos-transfer-method"][value="${transferMethod}"]`);
+    if (radio) radio.checked = true;
+    document.getElementById('pos-transfer-method-help').textContent = config.help;
+    document.getElementById('pos-transfer-date-label').textContent = config.dateLabel;
+    document.getElementById('pos-transfer-journal-label').textContent = config.journalLabel;
+    document.getElementById('pos-transfer-reference-group').hidden = !config.hasReference;
+    if (config.hasReference) {
+        document.getElementById('pos-transfer-reference-label').textContent = config.referenceLabel;
+        document.getElementById('pos-transfer-reference').placeholder = config.referencePlaceholder;
+    }
+    document.getElementById('pos-transfer-file-group').hidden = !config.hasFile;
+    if (!config.hasFile) document.getElementById('pos-transfer-file').value = '';
+    document.getElementById('pos-transfer-submit').textContent = config.submit;
+    setTransferStatus('');
+    renderTransferJournals();
+}
 
 function transferJournalCurrency(journal) {
     return (Array.isArray(journal.currency_id) ? journal.currency_id[1] : '') || posCompanyCurrency;
@@ -1342,10 +1412,11 @@ function setTransferInvoice(invoice) {
     renderTransferDifference();
 }
 
-function prefillTransferFromPending(index) {
+function prefillTransferFromPending(index, method = 'transferencia') {
     const invoice = posPendingInvoices[index];
     if (!invoice) return;
     openTransferPanel();
+    setTransferMethod(method);
     setTransferInvoice({
         invoice_id: invoice.invoice_id,
         name: invoice.name || `Factura #${invoice.invoice_id}`,
@@ -1355,7 +1426,8 @@ function prefillTransferFromPending(index) {
         payment_term: '',
     });
     document.getElementById('pos-transfer-panel').scrollIntoView({ block: 'start' });
-    document.getElementById('pos-transfer-reference').focus();
+    const focusTarget = TRANSFER_METHODS[transferMethod].hasReference ? 'pos-transfer-reference' : 'pos-transfer-amount';
+    document.getElementById(focusTarget).focus();
 }
 
 async function searchTransferInvoice() {
@@ -1394,18 +1466,21 @@ function renderTransferJournals() {
     const previous = select.value;
     const showAll = document.getElementById('pos-transfer-all-journals')?.checked;
     const currency = transferInvoice?.currency || '';
+    const config = TRANSFER_METHODS[transferMethod];
     const options = posJournals.filter(journal =>
-        journal.type === 'bank'
-        && (!currency || transferJournalCurrency(journal) === currency)
-        && (showAll || (TRANSFER_BANK_RE.test(journal.name) && !TRANSFER_NOT_BANK_RE.test(journal.name))));
+        (!currency || transferJournalCurrency(journal) === currency) && config.journalFilter(journal, showAll));
     select.innerHTML = '';
     if (!transferInvoice) {
         select.add(new Option('Elegi primero la factura', ''));
     } else {
-        select.add(new Option(options.length ? `Elegi el banco (${currency})` : `No hay bancos en ${currency}`, ''));
+        select.add(new Option(options.length ? `Elegi ${config.journalPrompt} (${currency})` : `No hay diarios en ${currency}`, ''));
         options.forEach(journal => select.add(new Option(`${journal.name} · ${transferJournalCurrency(journal)}`, journal.id)));
     }
     if ([...select.options].some(option => option.value === previous)) select.value = previous;
+    // Mercado Pago y Caja suelen tener un unico diario por moneda: preseleccionarlo.
+    if (!select.value && transferInvoice && options.length === 1 && transferMethod !== 'transferencia') {
+        select.value = String(options[0].id);
+    }
 }
 
 async function loadTransferDiffAccounts() {
@@ -1486,18 +1561,20 @@ async function registerTransferPayment() {
     const journalSelect = document.getElementById('pos-transfer-journal');
     const amount = Number(document.getElementById('pos-transfer-amount').value);
     const paymentDate = document.getElementById('pos-transfer-date').value;
-    const reference = document.getElementById('pos-transfer-reference').value.trim();
-    const file = document.getElementById('pos-transfer-file').files[0];
+    const method = transferMethod;
+    const config = TRANSFER_METHODS[method];
+    const reference = config.hasReference ? document.getElementById('pos-transfer-reference').value.trim() : '';
+    const file = config.hasFile ? document.getElementById('pos-transfer-file').files[0] : null;
     const difference = transferDifference();
     const handling = difference
         ? document.querySelector('input[name="pos-transfer-diff"]:checked').value
         : 'open';
     const missing = [
         [!operator, 'quien registra el pago'],
-        [!journalSelect.value, 'el banco'],
+        [!journalSelect.value, config.journalPrompt],
         [!(amount > 0), 'el importe'],
         [!paymentDate, 'la fecha'],
-        [!reference, 'la referencia de la transferencia'],
+        [config.hasReference && !reference, config.referenceMissing],
     ].filter(([isMissing]) => isMissing).map(([, label]) => label);
     if (missing.length) {
         setTransferStatus(`Falta completar: ${missing.join(', ')}.`, 'error');
@@ -1513,11 +1590,14 @@ async function registerTransferPayment() {
     const lines = [
         `Registrar en Odoo el cobro de ${transferInvoice.name} (${transferInvoice.partner || 'sin cliente'}):`,
         '',
+        `Medio: ${PAYMENT_SOURCE_LABELS[method]}`,
         `Importe: ${formatPosAmountWithCurrency(amount, currency)}`,
-        `Banco: ${journalSelect.selectedOptions[0].textContent}`,
+        `${config.journalLabel.replace(':', '')}: ${journalSelect.selectedOptions[0].textContent}`,
         `Fecha: ${paymentDate.split('-').reverse().join('/')}`,
-        `Referencia: ${reference}`,
     ];
+    if (method === 'transferencia') lines.push(`Referencia: ${reference}`);
+    if (method === 'mercadopago') lines.push(`Memo: ${reference} (numero de autorizacion)`);
+    if (method === 'caja') lines.push('Sin memo ni comprobante');
     if (difference) {
         lines.push(handling === 'reconcile'
             ? `Diferencia de ${formatPosAmountWithCurrency(Math.abs(difference), currency)} a ${accountSelect.selectedOptions[0]?.textContent || '-'} (la factura queda pagada)`
@@ -1539,6 +1619,7 @@ async function registerTransferPayment() {
             amount,
             payment_date: paymentDate,
             reference,
+            method,
             difference_handling: handling,
             difference_account_id: handling === 'reconcile' ? Number(accountSelect.value) || null : null,
         };
@@ -1566,7 +1647,7 @@ async function registerTransferPayment() {
         setTransferInvoice(null);
         const status = document.getElementById('pos-transfer-status');
         status.className = `pos-inline-message ${result.warning ? 'error' : 'success'}`;
-        status.innerHTML = `Cobro de ${escapePosHtml(result.invoice_name)} registrado en Odoo. ${links}${result.warning ? `<br>${escapePosHtml(result.warning)}` : ''}`;
+        status.innerHTML = `Cobro de ${escapePosHtml(result.invoice_name)} por ${escapePosHtml(PAYMENT_SOURCE_LABELS[method])} registrado en Odoo. ${links}${result.warning ? `<br>${escapePosHtml(result.warning)}` : ''}`;
         loadPosPendingInvoicesFromRange();
         loadPosHistory();
     } catch (error) {
