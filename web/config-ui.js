@@ -180,11 +180,10 @@ function initTheme() {
     applyTheme(stored === 'light' ? 'light' : 'dark', false);
 }
 
-function initThemeFxControls() {
-    const select = document.getElementById('theme-fx-effect');
-    if (!select || !window.ThemeFx) return;
+// Llena un <select> con la lista de efectos, agrupados en <optgroup> por `group`.
+function fillFxSelect(select, list) {
     const groups = new Map();
-    ThemeFx.EFFECT_LIST.forEach((fx) => {
+    list.forEach((fx) => {
         const option = new Option(fx.label, fx.id);
         if (!fx.group) {
             select.appendChild(option);
@@ -198,6 +197,12 @@ function initThemeFxControls() {
         }
         groups.get(fx.group).appendChild(option);
     });
+}
+
+function initThemeFxControls() {
+    const select = document.getElementById('theme-fx-effect');
+    if (!select || !window.ThemeFx) return;
+    fillFxSelect(select, ThemeFx.EFFECT_LIST);
     const settings = ThemeFx.getSettings();
     select.value = settings.effect;
     document.getElementById('theme-fx-duration').value = settings.duration;
@@ -210,6 +215,45 @@ function initThemeFxControls() {
             : 'Este navegador no soporta la animacion: el tema cambia al instante.';
         note.hidden = false;
     }
+}
+
+const BG_FX_HINTS = {
+    linterna: 'Move el mouse por la pagina: la grilla se ilumina alrededor del puntero.',
+    'linterna-laser': 'Move el mouse para la linterna; el laser pasa cada unos 24 segundos.',
+    laser: 'El laser pasa cada unos 24 segundos (el primero a los 2-3 segundos).',
+    impresora: 'Cada unos 18 segundos sale una etiqueta desde el borde de arriba.',
+    ondas: 'Hace click en cualquier lugar; ademas cada tanto cae una gota sola.',
+    constelacion: 'Acerca el mouse: los puntos se conectan con el puntero.',
+};
+
+function initBgFxControls() {
+    const select = document.getElementById('bg-fx-effect');
+    if (!select || !window.BgFx) return;
+    fillFxSelect(select, BgFx.EFFECT_LIST);
+    const settings = BgFx.getSettings();
+    select.value = settings.effect;
+    document.getElementById('bg-fx-intensity').value = settings.intensity;
+    updateBgFxLabels(settings);
+}
+
+function updateBgFxLabels(settings) {
+    document.getElementById('bg-fx-intensity-label').textContent = `${Math.round(settings.intensity * 100)}%`;
+    document.getElementById('bg-fx-intensity').disabled = settings.effect === 'ninguno';
+    const hint = document.getElementById('bg-fx-hint');
+    const text = !BgFx.isSupported() && settings.effect !== 'ninguno'
+        ? 'El sistema tiene "reducir movimiento" activado: el fondo queda quieto.'
+        : BG_FX_HINTS[settings.effect] || '';
+    hint.textContent = text;
+    hint.hidden = !text;
+}
+
+function saveBgFxSettings() {
+    if (!window.BgFx) return;
+    const settings = BgFx.saveSettings({
+        effect: document.getElementById('bg-fx-effect').value,
+        intensity: Number(document.getElementById('bg-fx-intensity').value),
+    });
+    updateBgFxLabels(settings);
 }
 
 function updateThemeFxLabels(settings) {

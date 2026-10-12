@@ -1158,6 +1158,20 @@
                     <button type="button" class="btn secondary" onclick="toggleTheme(this)">Probar cambiando el tema</button>
                 </div>
                 <p class="form-hint" id="theme-fx-note" hidden></p>
+
+                <p class="card-sub fx-sub">Animacion de fondo detras de la pagina.</p>
+                <div class="form-row fx-row">
+                    <div class="form-group">
+                        <label for="bg-fx-effect">Fondo animado</label>
+                        <select id="bg-fx-effect" onchange="saveBgFxSettings()"></select>
+                    </div>
+                    <div class="form-group">
+                        <label for="bg-fx-intensity">Intensidad: <span id="bg-fx-intensity-label">100%</span></label>
+                        <input type="range" id="bg-fx-intensity" class="fx-range" min="0.3" max="2" step="0.1" value="1"
+                               oninput="saveBgFxSettings()">
+                    </div>
+                </div>
+                <p class="form-hint" id="bg-fx-hint" hidden></p>
             </div>
 
             <!-- Sistema -->
@@ -1208,6 +1222,7 @@
     <script src="panel-cache.js"></script>
     <script src="config.js"></script>
     <script src="theme-fx.js"></script>
+    <script src="bg-fx.js"></script>
     <script src="config-ui.js"></script>
     <script src="system-config.js"></script>
     <script src="administrado.js"></script>

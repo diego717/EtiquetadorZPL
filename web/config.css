@@ -525,6 +525,7 @@ body.admin-only .group-index { display: none; }
 .form-group input.fx-range { padding: 0; border: 0; background: none; accent-color: var(--accent, #42d0c7); height: 38px; }
 .form-group input.fx-range:disabled { opacity: 0.45; }
 .fx-row { max-width: 640px; margin-top: 12px; }
+.fx-sub { margin-top: 22px; }
 
 .form-group input:focus-visible,
 .form-group select:focus-visible,

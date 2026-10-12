@@ -295,6 +295,7 @@ updateAdministradoFilterTabs();
 
 initTheme();
 initThemeFxControls();
+initBgFxControls();
 initViewMode();
 if (POS_ONLY_VIEW) {
     initPaymentSource();
