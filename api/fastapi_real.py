@@ -63,6 +63,21 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+
+@app.middleware("http")
+async def revalidate_web_assets(request, call_next):
+    """Los archivos de /web se revalidan siempre (ETag): un F5 toma los cambios nuevos.
+
+    Sin Cache-Control el navegador decide solo cuanto guardarlos y puede seguir usando
+    un JS viejo despues de actualizar la app. Con no-cache sigue usando su copia, pero
+    pregunta antes; si no cambio, el servidor responde 304 sin reenviar el archivo.
+    """
+    response = await call_next(request)
+    path = request.url.path
+    if (path == "/web" or path.startswith("/web/")) and "cache-control" not in response.headers:
+        response.headers["Cache-Control"] = "no-cache"
+    return response
+
 # Incluir endpoints de Electron
 try:
     from electron_endpoints import router as electron_router
@@ -167,6 +182,13 @@ try:
     app.include_router(dispatch_router)
 except ImportError as e:
     print(f"ADVERTENCIA: Endpoints de Dispatch no disponibles: {e}")
+
+# Incluir el recortador web local de fotografias
+try:
+    from photo_crop_endpoints import router as photo_crop_router
+    app.include_router(photo_crop_router)
+except ImportError as e:
+    print(f"ADVERTENCIA: Endpoints del recortador de fotos no disponibles: {e}")
 
 # Montar archivos estáticos
 try:

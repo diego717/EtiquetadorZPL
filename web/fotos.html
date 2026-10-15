@@ -1,0 +1,508 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>EtiquetadorZPL - Recortador de fotos</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Manrope:wght@400;500;600;700&display=swap">
+    <link rel="stylesheet" href="panel.css">
+    <link rel="stylesheet" href="fotos.css">
+</head>
+<body>
+    <div class="photo-app">
+        <header class="photo-header">
+            <div>
+                <div class="eyebrow">ESTUDIO LOCAL</div>
+                <h1>Recortador de fotos</h1>
+                <p class="sub">Encuadrá, revisá y exportá credenciales sin enviar imágenes a servicios de terceros.</p>
+            </div>
+            <div class="toolbar header-actions">
+                <button class="btn secondary" id="theme-btn" type="button">Tema claro</button>
+                <button class="btn secondary danger-outline" id="new-batch-btn" type="button">Nuevo lote</button>
+                <button class="btn export-main" id="export-top-btn" type="button" disabled>Exportar lote</button>
+            </div>
+        </header>
+
+        <nav aria-label="Paginas">
+            <a href="hoy.html">Hoy</a>
+            <a href="config.html?view=administrado#administrado">Envios Administrado</a>
+            <a href="config.html">Configuracion</a>
+            <a href="config.html?view=pos#pos-reconciliation-section">Conciliacion de pagos</a>
+            <a href="reposicion.html">Reposicion</a>
+            <a href="proyeccion.html">Proyeccion</a>
+            <a href="cobranzas.html">Cobranzas</a>
+            <a href="fotos.html" class="active" aria-current="page">Fotos</a>
+            <a href="index.html">Impresion</a>
+        </nav>
+
+        <section class="action-strip" aria-label="Acciones del lote">
+            <input id="file-input" type="file" accept="image/jpeg,image/png,image/webp,image/bmp,image/tiff" multiple hidden>
+            <input id="folder-input" type="file" accept="image/jpeg,image/png,image/webp,image/bmp,image/tiff" webkitdirectory multiple hidden>
+            <input id="pdf-input" type="file" accept="application/pdf" hidden>
+            <input id="data-input" type="file" accept=".csv,.xlsx,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" hidden>
+            <input id="project-input" type="file" accept=".zip,.recortador" hidden>
+            <button class="btn" id="add-files-btn" type="button">＋ Agregar fotos</button>
+            <button class="btn secondary" id="add-folder-btn" type="button">Agregar carpeta</button>
+            <button class="btn secondary" id="add-pdf-btn" type="button">Importar PDF</button>
+            <button class="btn secondary" id="import-data-btn" type="button">Importar planilla</button>
+            <span class="strip-divider"></span>
+            <button class="btn magic" id="detect-all-btn" type="button" disabled>✦ Detectar y encuadrar todo</button>
+            <div class="privacy-note"><span class="privacy-dot"></span> Procesamiento en el servidor local</div>
+        </section>
+
+        <main class="workspace">
+            <aside class="workspace-panel batch-panel">
+                <div class="panel-heading">
+                    <div>
+                        <h2>Lote</h2>
+                        <p id="batch-summary">0 fotos</p>
+                    </div>
+                    <span class="count-badge" id="review-count">0</span>
+                </div>
+                <label class="search-field">
+                    <span aria-hidden="true">⌕</span>
+                    <input id="photo-search" type="search" placeholder="Buscar por nombre">
+                </label>
+                <label class="review-toggle">
+                    <input id="review-only" type="checkbox">
+                    <span>Mostrar sólo las que requieren revisión</span>
+                </label>
+                <div class="photo-list" id="photo-list">
+                    <div class="list-empty">
+                        <div class="empty-icon">▧</div>
+                        <strong>El lote está vacío</strong>
+                        <span>Agregá fotos o una carpeta para comenzar.</span>
+                    </div>
+                </div>
+            </aside>
+
+            <section class="workspace-panel editor-panel">
+                <div class="editor-heading">
+                    <div>
+                        <h2 id="photo-title">Vista previa</h2>
+                        <p id="photo-meta">Seleccioná una foto para editarla.</p>
+                    </div>
+                    <div class="editor-badges" id="editor-badges"></div>
+                </div>
+                <div class="canvas-shell" id="canvas-shell">
+                    <canvas id="photo-canvas" aria-label="Editor de recorte" tabindex="0"></canvas>
+                    <div class="canvas-empty" id="canvas-empty">
+                        <div class="canvas-empty-icon">◎</div>
+                        <strong>Tu foto aparecerá acá</strong>
+                        <span>Podrás arrastrar el marco y ajustar el encuadre.</span>
+                    </div>
+                    <div class="canvas-loading" id="canvas-loading" hidden><span class="spinner"></span>Cargando imagen…</div>
+                </div>
+                <div class="canvas-help">
+                    <span>Arrastrá el marco para mover el recorte</span>
+                    <span>Rueda del mouse: acercar o alejar</span>
+                    <span>Lista: ↑/↓ cambia de foto</span>
+                    <span>Editor: flechas ajustan el recorte</span>
+                </div>
+            </section>
+
+            <aside class="workspace-panel controls-panel">
+                <div class="control-tabs" role="tablist">
+                    <button class="control-tab active" data-tab="edit" type="button">Editar</button>
+                    <button class="control-tab" data-tab="data" type="button">Datos</button>
+                    <button class="control-tab" data-tab="card" type="button">Tarjeta</button>
+                    <button class="control-tab" data-tab="output" type="button">Salida</button>
+                </div>
+
+                <div class="control-page active" id="tab-edit">
+                    <section class="control-section">
+                        <div class="section-label"><span>Encuadre</span><span class="step-chip">1</span></div>
+                        <label class="field wide">Proporción
+                            <select id="aspect-select">
+                                <option value="0.75" data-size="600x800">3:4 · Identificación</option>
+                                <option value="0.8" data-size="640x800">4:5 · Retrato</option>
+                                <option value="1" data-size="800x800">1:1 · Cuadrada</option>
+                                <option value="0.6666667" data-size="533x800">2:3 · Foto carné</option>
+                                <option value="0.7777778" data-size="600x771">35 × 45 mm</option>
+                            </select>
+                        </label>
+                        <div class="button-grid">
+                            <button class="btn secondary compact" id="zoom-out-btn" type="button">− Alejar</button>
+                            <button class="btn secondary compact" id="zoom-in-btn" type="button">＋ Acercar</button>
+                            <button class="btn secondary compact" id="rotate-left-btn" type="button">↶ Izquierda</button>
+                            <button class="btn secondary compact" id="rotate-right-btn" type="button">Derecha ↷</button>
+                        </div>
+                        <button class="btn magic wide" id="detect-current-btn" type="button">✦ Detectar esta foto</button>
+                    </section>
+
+                    <section class="control-section">
+                        <div class="section-label"><span>Imagen</span><span class="step-chip">2</span></div>
+                        <label class="range-field">
+                            <span>Brillo <output id="brightness-value">100%</output></span>
+                            <input id="brightness-range" type="range" min="50" max="150" value="100">
+                        </label>
+                        <label class="range-field">
+                            <span>Contraste <output id="contrast-value">100%</output></span>
+                            <input id="contrast-range" type="range" min="50" max="150" value="100">
+                        </label>
+                        <div class="button-grid">
+                            <button class="btn secondary compact" id="reset-current-btn" type="button">Restablecer</button>
+                            <button class="btn approve compact" id="approve-current-btn" type="button">✓ Marcar revisada</button>
+                        </div>
+                    </section>
+
+                    <section class="control-section">
+                        <div class="section-label"><span>Fondo</span><span class="step-chip">3</span></div>
+                        <label class="field wide">Tratamiento
+                            <select id="background-mode">
+                                <option value="original">Conservar original</option>
+                                <option value="blur">Desenfocar fondo</option>
+                                <option value="light">Fondo claro</option>
+                            </select>
+                        </label>
+                        <label class="range-field">
+                            <span>Intensidad <output id="background-strength-value">55%</output></span>
+                            <input id="background-strength" type="range" min="0" max="100" value="55">
+                        </label>
+                        <p class="field-note">El resultado final se calcula en alta calidad al exportar.</p>
+                    </section>
+
+                    <section class="control-section status-section">
+                        <div class="section-label"><span>Control de calidad</span><span class="step-chip">4</span></div>
+                        <div id="quality-content" class="quality-empty">Todavía no se analizó esta foto.</div>
+                    </section>
+                </div>
+
+                <div class="control-page" id="tab-data">
+                    <section class="control-section">
+                        <div class="section-label"><span>Planilla de personas</span><span class="step-chip">1</span></div>
+                        <button class="btn secondary wide" id="choose-data-btn" type="button">Elegir CSV o Excel</button>
+                        <p class="field-note" id="data-file-note">Todavía no se importó una planilla.</p>
+                    </section>
+                    <section class="control-section">
+                        <div class="section-label"><span>Coincidencia por nombre</span><span class="step-chip">2</span></div>
+                        <label class="field wide">Nombre o campo principal
+                            <select id="match-field-primary"><option value="">Seleccionar columna</option></select>
+                        </label>
+                        <label class="field wide">Apellido o campo adicional
+                            <select id="match-field-secondary"><option value="">Ninguno</option></select>
+                        </label>
+                        <button class="btn magic wide" id="match-data-btn" type="button" disabled>Vincular fotos y datos</button>
+                    </section>
+                    <section class="match-report" id="match-report">
+                        <strong>Sin coincidencias calculadas</strong>
+                        <p>Importá una planilla y elegí las columnas que forman el nombre.</p>
+                    </section>
+                </div>
+
+                <div class="control-page" id="tab-card">
+                    <section class="designer-launch-card">
+                        <span class="designer-launch-icon">✦</span>
+                        <strong>Editor de credenciales</strong>
+                        <p>Textos, campos de la planilla, fotos, logos, QR, códigos de barras y formas libres. Frente y dorso.</p>
+                        <button class="btn magic wide" id="open-card-designer-btn" type="button">Abrir editor de credencial</button>
+                    </section>
+                    <div class="card-mini-stack">
+                        <div class="card-mini" id="card-mini-front" aria-label="Vista previa del frente"></div>
+                        <div class="card-mini" id="card-mini-back" aria-label="Vista previa del dorso" hidden></div>
+                    </div>
+                    <section class="control-section">
+                        <div class="section-label"><span>Imprimir y exportar</span><span class="step-chip">⎙</span></div>
+                        <div class="button-grid">
+                            <button class="btn export-main compact" id="card-print-current-btn" type="button" data-requires-photos="true">Imprimir esta</button>
+                            <button class="btn export-main compact" id="card-print-batch-btn" type="button" data-requires-photos="true">Imprimir lote</button>
+                            <button class="btn secondary compact" id="card-export-current-btn" type="button" data-requires-photos="true">Exportar esta</button>
+                            <button class="btn secondary compact" id="card-export-batch-btn" type="button" data-requires-photos="true">Exportar lote</button>
+                        </div>
+                        <p class="field-note">Impresión directa en Zebra, Magicard, Entrust, Swiftpro y otras impresoras de tarjetas, o archivos PDF (tamaño real o pliegos con marcas de corte) y PNG/JPG a 300 o 600 dpi. Antes de cada envío se revisa el lote.</p>
+                    </section>
+                    <section class="control-section">
+                        <label class="switch-row"><span><strong>Usar la credencial en “Descargar lote”</strong><small>El ZIP de la pestaña Salida y la hoja de revisión incluirán el frente de la credencial en lugar de la foto.</small></span><input id="card-enabled" type="checkbox"></label>
+                    </section>
+                </div>
+
+                <div class="control-page" id="tab-output">
+                    <section class="control-section">
+                        <div class="section-label"><span>Archivo final</span><span class="step-chip">1</span></div>
+                        <label class="field wide">Formato
+                            <select id="output-format">
+                                <option value="JPG">JPG · recomendado</option>
+                                <option value="PNG">PNG</option>
+                                <option value="WEBP">WEBP</option>
+                            </select>
+                        </label>
+                        <div class="dimension-grid">
+                            <label class="field">Ancho<input id="output-width" type="number" min="64" max="6000" value="600"></label>
+                            <span>×</span>
+                            <label class="field">Alto<input id="output-height" type="number" min="64" max="6000" value="800"></label>
+                        </div>
+                        <label class="field wide">Sufijo opcional
+                            <input id="output-suffix" type="text" maxlength="60" placeholder="Ej.: _credencial">
+                        </label>
+                    </section>
+                    <section class="export-card">
+                        <div class="export-icon">ZIP</div>
+                        <div>
+                            <strong>Exportación por lote</strong>
+                            <p>Incluye todas las fotos y un registro CSV.</p>
+                        </div>
+                        <button class="btn export-main wide" id="export-btn" type="button" disabled>Descargar lote recortado</button>
+                        <button class="btn secondary wide" id="review-pdf-btn" type="button" disabled>Generar hoja PDF de revisión</button>
+                    </section>
+                    <section class="control-section">
+                        <div class="section-label"><span>Credenciales</span><span class="step-chip">PDF</span></div>
+                        <p class="field-note">Exportá el diseño de la pestaña Tarjeta, individual o por lote, en PDF o imagen.</p>
+                        <button class="btn secondary wide" id="output-card-export-btn" type="button" data-requires-photos="true">Exportar credenciales…</button>
+                    </section>
+                    <section class="control-section">
+                        <div class="section-label"><span>Proyecto</span><span class="step-chip">2</span></div>
+                        <p class="field-note">Guardá originales, ajustes, datos y diseño en un único archivo portable.</p>
+                        <div class="button-grid">
+                            <button class="btn secondary compact" id="save-project-btn" type="button" disabled>Guardar proyecto</button>
+                            <button class="btn secondary compact" id="open-project-btn" type="button">Abrir proyecto</button>
+                        </div>
+                    </section>
+                </div>
+            </aside>
+        </main>
+
+        <div class="designer-modal" id="card-designer-modal" hidden>
+            <div class="designer-window" role="dialog" aria-modal="true" aria-labelledby="designer-title">
+                <input id="cd-asset-input" type="file" accept="image/jpeg,image/png,image/webp,image/bmp" hidden>
+                <input id="cd-design-input" type="file" accept=".json,application/json" hidden>
+                <header class="designer-toolbar">
+                    <div class="cd-title-block">
+                        <span class="designer-kicker">EDITOR DE CREDENCIALES</span>
+                        <h2 id="designer-title">Diseño libre</h2>
+                    </div>
+                    <div class="cd-record-nav" title="Credencial que se muestra en el editor">
+                        <button class="cd-icon-btn" id="cd-record-prev" type="button" aria-label="Credencial anterior">‹</button>
+                        <select id="cd-record" aria-label="Credencial"></select>
+                        <button class="cd-icon-btn" id="cd-record-next" type="button" aria-label="Credencial siguiente">›</button>
+                    </div>
+                    <div class="designer-toolbar-actions">
+                        <button class="btn secondary compact" id="cd-undo" type="button" title="Deshacer (Ctrl+Z)">↶</button>
+                        <button class="btn secondary compact" id="cd-redo" type="button" title="Rehacer (Ctrl+Y)">↷</button>
+                        <button class="btn secondary compact" id="cd-open-design" type="button" title="Abrir un diseño guardado">Abrir diseño</button>
+                        <button class="btn secondary compact" id="cd-save-design" type="button" title="Guardar el diseño para reutilizarlo en otros lotes">Guardar diseño</button>
+                        <button class="btn secondary compact" id="cd-exact-btn" type="button" title="Render real, igual al archivo exportado">Vista exacta</button>
+                        <button class="btn secondary compact" id="cd-export-btn" type="button">Exportar…</button>
+                        <button class="btn export-main compact" id="cd-print-btn" type="button" title="Imprimir en la impresora de tarjetas">Imprimir…</button>
+                        <button class="btn secondary compact" id="cd-done" type="button">Listo</button>
+                        <button class="designer-close" id="cd-close" type="button" aria-label="Cerrar editor">×</button>
+                    </div>
+                </header>
+
+                <div class="cd-insertbar" role="toolbar" aria-label="Insertar y ordenar">
+                    <div class="cd-group">
+                        <span class="cd-group-label">Insertar</span>
+                        <button type="button" data-cd-insert="text" title="Texto libre"><b>T</b> Texto</button>
+                        <select id="cd-insert-field" title="Texto con un campo de la planilla"><option value="">Campo…</option></select>
+                        <button type="button" data-cd-insert="photo" title="Foto de la persona">◪ Foto</button>
+                        <button type="button" data-cd-insert="image" title="Logo, firma, sello…">▣ Imagen</button>
+                        <button type="button" data-cd-insert="qr" title="Código QR">▦ QR</button>
+                        <button type="button" data-cd-insert="barcode" title="Código de barras">┃┃ Barras</button>
+                        <button type="button" data-cd-insert="rect" title="Rectángulo">□</button>
+                        <button type="button" data-cd-insert="ellipse" title="Elipse">○</button>
+                        <button type="button" data-cd-insert="line" title="Línea">─</button>
+                    </div>
+                    <div class="cd-group">
+                        <span class="cd-group-label">Alinear</span>
+                        <button type="button" data-cd-align="left" data-cd-needs-selection title="Alinear a la izquierda (a la tarjeta si hay un solo objeto)">⇤</button>
+                        <button type="button" data-cd-align="hcenter" data-cd-needs-selection title="Centrar horizontalmente">↔</button>
+                        <button type="button" data-cd-align="right" data-cd-needs-selection title="Alinear a la derecha">⇥</button>
+                        <button type="button" data-cd-align="top" data-cd-needs-selection title="Alinear arriba">⤒</button>
+                        <button type="button" data-cd-align="vcenter" data-cd-needs-selection title="Centrar verticalmente">↕</button>
+                        <button type="button" data-cd-align="bottom" data-cd-needs-selection title="Alinear abajo">⤓</button>
+                        <button type="button" data-cd-distribute="x" data-cd-needs-multi="3" title="Distribuir horizontalmente">⋯</button>
+                        <button type="button" data-cd-distribute="y" data-cd-needs-multi="3" title="Distribuir verticalmente">⋮</button>
+                    </div>
+                    <div class="cd-group">
+                        <span class="cd-group-label">Orden</span>
+                        <button type="button" data-cd-order="front" data-cd-needs-selection title="Traer al frente (Ctrl+Mayús+])">⇈</button>
+                        <button type="button" data-cd-order="forward" data-cd-needs-selection title="Traer adelante (Ctrl+])">↑</button>
+                        <button type="button" data-cd-order="backward" data-cd-needs-selection title="Enviar atrás (Ctrl+[)">↓</button>
+                        <button type="button" data-cd-order="back" data-cd-needs-selection title="Enviar al fondo (Ctrl+Mayús+[)">⇊</button>
+                        <button type="button" id="cd-duplicate" data-cd-needs-selection title="Duplicar (Ctrl+D)">⧉</button>
+                        <button type="button" id="cd-delete" data-cd-needs-selection title="Eliminar (Supr)">🗑</button>
+                    </div>
+                    <div class="cd-side-tabs" role="tablist" aria-label="Cara">
+                        <button type="button" data-cd-side="front" class="active">Frente</button>
+                        <button type="button" data-cd-side="back">Dorso</button>
+                    </div>
+                </div>
+
+                <div class="designer-body">
+                    <aside class="designer-sidebar designer-library">
+                        <section>
+                            <div class="designer-section-title"><span>Plantillas</span><input id="cd-template-color" type="color" value="#176b87" title="Color principal de la plantilla"></div>
+                            <div class="cd-templates" id="cd-templates"></div>
+                            <p class="field-note">Se aplica sobre la cara activa. Los campos se eligen según las columnas de la planilla.</p>
+                        </section>
+                        <section>
+                            <div class="designer-section-title">Documento</div>
+                            <label class="field wide">Tamaño
+                                <select id="cd-size-preset">
+                                    <option value="cr80">CR80 · tarjeta estándar</option>
+                                    <option value="cr79">CR79 · adhesiva</option>
+                                    <option value="cr100">CR100 · grande</option>
+                                    <option value="a7">Gafete A7</option>
+                                    <option value="a6">Gafete A6 · eventos</option>
+                                    <option value="custom">Personalizado</option>
+                                </select>
+                            </label>
+                            <div class="dimension-grid">
+                                <label class="field">Ancho mm<input id="cd-width-mm" type="number" min="20" max="320" step="0.1"></label>
+                                <span>×</span>
+                                <label class="field">Alto mm<input id="cd-height-mm" type="number" min="20" max="320" step="0.1"></label>
+                            </div>
+                            <div class="cd-segmented">
+                                <button type="button" id="cd-orient-landscape">▭ Horizontal</button>
+                                <button type="button" id="cd-orient-portrait">▯ Vertical</button>
+                            </div>
+                            <label class="designer-check"><input id="cd-double-sided" type="checkbox"><span>Doble faz (frente y dorso)</span></label>
+                            <button class="btn secondary compact wide" id="cd-copy-front" type="button">Copiar esta cara a la otra</button>
+                        </section>
+                        <section>
+                            <div class="designer-section-title">Ayudas</div>
+                            <label class="designer-check"><input id="cd-snap" type="checkbox" checked><span>Imán a grilla de 1 mm</span></label>
+                            <label class="designer-check"><input id="cd-guides" type="checkbox" checked><span>Guías inteligentes</span></label>
+                            <label class="designer-check"><input id="cd-safe" type="checkbox" checked><span>Zona segura (3 mm)</span></label>
+                        </section>
+                        <section>
+                            <div class="designer-section-title"><span>Imágenes</span><button class="cd-link-btn" id="cd-upload-asset" type="button">＋ Cargar</button></div>
+                            <div class="cd-assets" id="cd-assets"></div>
+                        </section>
+                        <section class="cd-layers-section">
+                            <div class="designer-section-title">Capas</div>
+                            <div class="cd-layers" id="cd-layers"></div>
+                        </section>
+                    </aside>
+
+                    <section class="designer-workspace">
+                        <div class="designer-ruler">
+                            <span>Arrastrá para mover · esquinas para escalar · círculo para girar</span>
+                            <div class="designer-zoom">
+                                <button id="cd-zoom-out" type="button" aria-label="Alejar">−</button>
+                                <output id="cd-zoom-value">Ajustar</output>
+                                <button id="cd-zoom-in" type="button" aria-label="Acercar">＋</button>
+                                <button id="cd-zoom-fit" type="button">Encajar</button>
+                                <button id="cd-zoom-real" type="button" title="Tamaño aproximado real en pantalla">1:1</button>
+                            </div>
+                            <span id="cd-size-note"></span>
+                        </div>
+                        <div class="designer-stage-shell" id="cd-stage-shell">
+                            <div class="cd-stage" id="cd-stage" tabindex="0" aria-label="Credencial">
+                                <div class="cd-objects"></div>
+                                <div class="cd-safe" aria-hidden="true"></div>
+                                <div class="cd-selection"></div>
+                            </div>
+                        </div>
+                        <div class="cd-exact" id="cd-exact" hidden title="Clic para cerrar"><img alt="Vista exacta de la credencial"><span>Vista exacta · clic para volver al editor</span></div>
+                    </section>
+
+                    <aside class="designer-sidebar designer-properties">
+                        <div class="designer-section-title cd-properties-head"><span id="cd-properties-title">Frente</span></div>
+                        <div id="cd-properties"></div>
+                        <section class="cd-record-section">
+                            <div class="designer-section-title">Datos de esta credencial</div>
+                            <div id="cd-record-data"></div>
+                        </section>
+                    </aside>
+                </div>
+            </div>
+        </div>
+
+        <div class="designer-modal export-modal" id="card-export-modal" hidden>
+            <div class="export-dialog" role="dialog" aria-modal="true" aria-labelledby="cx-title">
+                <header>
+                    <div>
+                        <span class="designer-kicker">EXPORTAR O IMPRIMIR</span>
+                        <h2 id="cx-title">Credenciales</h2>
+                    </div>
+                    <button class="designer-close" id="cx-close" type="button" aria-label="Cerrar">×</button>
+                </header>
+                <div class="cx-body">
+                    <fieldset class="cx-scope">
+                        <legend>Qué credenciales</legend>
+                        <label><input type="radio" name="cx-scope" value="current"><span>Credencial actual</span></label>
+                        <label><input type="radio" name="cx-scope" value="visible"><span>Las del listado filtrado</span></label>
+                        <label><input type="radio" name="cx-scope" value="approved"><span>Sólo las revisadas</span></label>
+                        <label><input type="radio" name="cx-scope" value="unprinted"><span>Las que no se imprimieron</span></label>
+                        <label class="cx-scope-wide"><input type="radio" name="cx-scope" value="all" checked><span>Todo el lote</span></label>
+                    </fieldset>
+                    <div class="cx-grid">
+                        <label class="field">Destino
+                            <select id="cx-format">
+                                <option value="PRINT">Impresora de tarjetas</option>
+                                <option value="PDF">Archivo PDF</option>
+                                <option value="PNG">Imágenes PNG · sin pérdida</option>
+                                <option value="JPG">Imágenes JPG · livianas</option>
+                            </select>
+                        </label>
+                        <label class="field">Caras
+                            <select id="cx-sides"><option value="front">Frente</option><option value="back">Dorso</option><option value="both">Frente y dorso</option></select>
+                        </label>
+                    </div>
+                    <div id="cx-printer-options">
+                        <div class="cx-printer-row">
+                            <label class="field">Impresora
+                                <select id="cx-printer"></select>
+                            </label>
+                            <button class="btn secondary compact" id="cx-printer-refresh" type="button" title="Volver a leer las impresoras instaladas">↻</button>
+                        </div>
+                        <p class="cx-printer-status" id="cx-printer-status"></p>
+                        <div class="cx-grid">
+                            <label class="field">Copias por credencial<input id="cx-copies" type="number" min="1" max="10" step="1" value="1"></label>
+                            <div class="cx-checks">
+                                <label class="designer-check"><input id="cx-rotate-back" type="checkbox"><span>Girar el dorso 180°</span></label>
+                                <label class="designer-check"><input id="cx-show-all-printers" type="checkbox"><span>Mostrar todas las impresoras</span></label>
+                            </div>
+                        </div>
+                        <p class="field-note">Ribbon, panel negro (K), overlay y calidad se toman de las preferencias del controlador en Windows. Para que textos y códigos salgan en resina negra, dejalos en negro puro (#000000) y activá la extracción de negro en el controlador.</p>
+                    </div>
+                    <div class="cx-grid" id="cx-file-options">
+                        <label class="field">Resolución
+                            <select id="cx-dpi"><option value="300">300 dpi · impresoras de tarjetas</option><option value="600">600 dpi · máxima</option></select>
+                        </label>
+                        <label class="field">Nombre de archivo
+                            <input id="cx-pattern" type="text" value="{Archivo}" maxlength="160" title="Podés usar campos, por ejemplo {Apellido}_{Nombre}">
+                        </label>
+                    </div>
+                    <div id="cx-pdf-options">
+                        <label class="field wide">Distribución del PDF
+                            <select id="cx-layout"><option value="card">Una credencial por página · tamaño real</option><option value="sheet">Varias por hoja · para imprimir y cortar</option></select>
+                        </label>
+                        <div class="cx-grid" id="cx-sheet-options" hidden>
+                            <label class="field">Hoja<select id="cx-sheet"><option value="A4">A4</option><option value="LETTER">Carta</option><option value="LEGAL">Oficio</option></select></label>
+                            <label class="field">Margen mm<input id="cx-margin" type="number" min="0" max="60" step="1" value="10"></label>
+                            <label class="field">Separación mm<input id="cx-gap" type="number" min="0" max="40" step="0.5" value="4"></label>
+                            <div class="cx-checks">
+                                <label class="designer-check"><input id="cx-marks" type="checkbox" checked><span>Marcas de corte</span></label>
+                                <label class="designer-check"><input id="cx-mirror" type="checkbox" checked><span>Dorso espejado para dúplex</span></label>
+                            </div>
+                        </div>
+                    </div>
+                    <section class="cx-check" id="cx-check">
+                        <div class="cx-check-head"><strong id="cx-check-title">Revisión previa</strong><button class="cd-link-btn" id="cx-check-run" type="button">Volver a revisar</button></div>
+                        <div class="cx-check-list" id="cx-check-list"></div>
+                    </section>
+                    <p class="cx-summary" id="cx-summary"></p>
+                </div>
+                <footer>
+                    <button class="btn secondary" id="cx-cancel" type="button">Cancelar</button>
+                    <button class="btn export-main" id="cx-run" type="button">Exportar</button>
+                </footer>
+            </div>
+        </div>
+
+        <footer class="status-bar">
+            <div class="status-message"><span class="status-led" id="status-led"></span><span id="status-text" role="status">Listo para comenzar.</span></div>
+            <div class="progress-track" aria-hidden="true"><span id="progress-bar"></span></div>
+            <span id="session-note">Sesión temporal local</span>
+        </footer>
+    </div>
+
+    <script src="theme-fx.js"></script>
+    <script src="bg-fx.js"></script>
+    <script src="panel.js"></script>
+    <script src="card-designer.js"></script>
+    <script src="fotos.js"></script>
+</body>
+</html>

@@ -383,6 +383,302 @@ async function syncMercadoLibrePayments() {
     }
 }
 
+// ---- Broma al registrar pagos ----
+// Tras la confirmacion real aparecen reconfirmaciones graciosas y una carga falsa, y recien
+// despues se registra el pago. Cualquier "cancelar" corta todo sin registrar nada.
+// Configuracion > Sistema: activar/desactivar y frecuencia (en cada pago o una vez por dia)
+// se guardan en el servidor y valen para todos los equipos; "No mostrarla en este equipo"
+// es local. Si no se puede consultar el servidor, la broma no se muestra.
+const MELI_PRANK_STORAGE_KEY = 'etiquetador_meli_prank_day';
+const MELI_PRANK_EXCLUDED_KEY = 'etiquetador_meli_prank_excluded';
+const MELI_PRANK_CONFIRMATIONS = [
+    {
+        title: '¿Lo confirmás de verdad?',
+        message: 'Mirá que esta es plata de verdad, no del Estanciero.',
+        confirmText: 'Sí, confirmo',
+        cancelText: 'Mejor no'
+    },
+    {
+        title: 'Nivel de confianza insuficiente',
+        message: 'El sistema detectó un 87 % de seguridad en tu clic. Para registrar pagos necesitamos llegar al 100 %.',
+        confirmText: 'Subir al 100 %',
+        cancelText: 'Me quedo en 87'
+    },
+    {
+        title: 'Un momento...',
+        message: 'Por culpa de la ruedita pasa esto.. que lastima..',
+        confirmText: 'Seguir igual',
+        cancelText: 'Pobre ruedita'
+    },
+    {
+        title: 'Ahora sí, la posta',
+        message: 'Prometemos que esta es la última pregunta. Palabra de sistema.',
+        confirmText: 'Registrar de una vez',
+        cancelText: 'Ya no confío en vos'
+    }
+];
+const MELI_PRANK_LOADING_STEPS = [
+    'Consultando con el contador...',
+    'Pidiendo permiso a Mercado Libre...',
+    'Contando los billetes...',
+    'Despertando a Odoo...'
+];
+
+function meliPrankToday() {
+    return new Date().toLocaleDateString('en-CA');
+}
+
+// Config global (servidor): { enabled, frequency: 'always' | 'daily' }.
+async function fetchMercadoLibrePrankConfig() {
+    try {
+        const apiBase = await ensureApiPort();
+        const response = await fetch(`${apiBase}/api/mercadolibre/pranks`);
+        if (!response.ok) return { enabled: false, frequency: 'always', kind: 'confirmations' };
+        const data = await response.json();
+        return {
+            enabled: data.enabled === true,
+            frequency: data.frequency === 'daily' ? 'daily' : 'always',
+            kind: ['dodge', 'both'].includes(data.kind) ? data.kind : 'confirmations',
+        };
+    } catch (e) {
+        return { enabled: false, frequency: 'always', kind: 'confirmations' };
+    }
+}
+
+function meliPrankStorageGet(key) {
+    try {
+        return localStorage.getItem(key);
+    } catch (e) {
+        return null;
+    }
+}
+
+function meliPrankStorageSet(key, value) {
+    try {
+        if (value === null) localStorage.removeItem(key);
+        else localStorage.setItem(key, value);
+    } catch (e) {
+        // Sin localStorage: el equipo no puede excluirse ni llevar la cuenta diaria.
+    }
+}
+
+// Exclusion por equipo (este navegador): para que no le salga a quien la configura.
+function mercadoLibrePrankExcludedHere() {
+    return meliPrankStorageGet(MELI_PRANK_EXCLUDED_KEY) === '1';
+}
+
+function mercadoLibrePrankUsedToday() {
+    return meliPrankStorageGet(MELI_PRANK_STORAGE_KEY) === meliPrankToday();
+}
+
+async function shouldRunMercadoLibrePrank() {
+    if (mercadoLibrePrankExcludedHere()) return null;
+    const config = await fetchMercadoLibrePrankConfig();
+    if (!config.enabled) return null;
+    if (config.frequency === 'daily' && mercadoLibrePrankUsedToday()) return null;
+    return config;
+}
+
+// Estado visible bajo la casilla. La exclusion y la cuenta diaria son de ESTE navegador.
+function renderMercadoLibrePrankStatus(config) {
+    const status = document.getElementById('meli-prank-status');
+    const reset = document.getElementById('meli-prank-reset');
+    if (!status) return;
+    const excluded = mercadoLibrePrankExcludedHere();
+    const usedToday = config.frequency === 'daily' && mercadoLibrePrankUsedToday();
+    if (!config.enabled) {
+        status.textContent = 'Desactivada: los pagos se registran normal en todos los equipos.';
+    } else if (excluded) {
+        status.textContent = 'Activa en los demas equipos. En este no sale.';
+    } else if (usedToday) {
+        status.textContent = 'Activa, pero en este equipo ya salio hoy: vuelve a salir manana.';
+    } else {
+        status.textContent = config.frequency === 'daily'
+            ? 'Activa: sale en el primer pago del dia de cada equipo.'
+            : 'Activa: sale en cada pago, en todos los equipos no excluidos.';
+    }
+    if (reset) reset.hidden = !(config.enabled && !excluded && usedToday);
+}
+
+function currentMercadoLibrePrankConfigFromForm() {
+    return {
+        enabled: document.getElementById('meli-prank-enabled')?.checked === true,
+        frequency: document.getElementById('meli-prank-frequency')?.value === 'daily' ? 'daily' : 'always',
+        kind: document.getElementById('meli-prank-kind')?.value || 'confirmations',
+    };
+}
+
+async function loadMercadoLibrePrankSetting() {
+    const config = await fetchMercadoLibrePrankConfig();
+    const checkbox = document.getElementById('meli-prank-enabled');
+    const frequency = document.getElementById('meli-prank-frequency');
+    const kind = document.getElementById('meli-prank-kind');
+    const excluded = document.getElementById('meli-prank-excluded');
+    if (checkbox) checkbox.checked = config.enabled;
+    if (frequency) frequency.value = config.frequency;
+    if (kind) kind.value = config.kind;
+    if (excluded) excluded.checked = mercadoLibrePrankExcludedHere();
+    renderMercadoLibrePrankStatus(config);
+}
+
+function resetMercadoLibrePrankToday() {
+    meliPrankStorageSet(MELI_PRANK_STORAGE_KEY, null);
+    renderMercadoLibrePrankStatus(currentMercadoLibrePrankConfigFromForm());
+    uiToast('Listo: en este equipo la broma sale en el proximo pago.', 'success');
+}
+
+function setMercadoLibrePrankExcluded(excluded) {
+    meliPrankStorageSet(MELI_PRANK_EXCLUDED_KEY, excluded ? '1' : null);
+    renderMercadoLibrePrankStatus(currentMercadoLibrePrankConfigFromForm());
+    uiToast(excluded ? 'En este equipo la broma no va a salir.' : 'Este equipo vuelve a recibir la broma.', 'success');
+}
+
+async function postMercadoLibrePrankConfig(body) {
+    const apiBase = await ensureApiPort();
+    const response = await fetch(`${apiBase}/api/mercadolibre/pranks`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body)
+    });
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    return response.json();
+}
+
+async function saveMercadoLibrePrankSetting(checkbox) {
+    const enabled = checkbox.checked;
+    try {
+        const config = await postMercadoLibrePrankConfig({ enabled });
+        uiToast(enabled ? 'Bromas activadas. Que la fuerza te acompañe.' : 'Bromas desactivadas.', 'success');
+        renderMercadoLibrePrankStatus(config);
+    } catch (error) {
+        checkbox.checked = !enabled;
+        uiToast(`No se pudo guardar: ${error.message}`, 'error');
+    }
+}
+
+async function saveMercadoLibrePrankFrequency(select) {
+    try {
+        const config = await postMercadoLibrePrankConfig({ frequency: select.value });
+        renderMercadoLibrePrankStatus(config);
+        uiToast(select.value === 'daily' ? 'La broma sale una vez por dia por equipo.' : 'La broma sale en cada pago.', 'success');
+    } catch (error) {
+        uiToast(`No se pudo guardar: ${error.message}`, 'error');
+        loadMercadoLibrePrankSetting();
+    }
+}
+
+async function saveMercadoLibrePrankKind(select) {
+    const labels = {
+        confirmations: 'reconfirmaciones y carga falsa',
+        dodge: 'el modal que se escapa',
+        both: 'las dos bromas',
+    };
+    try {
+        const config = await postMercadoLibrePrankConfig({ kind: select.value });
+        renderMercadoLibrePrankStatus(config);
+        uiToast(`Broma elegida: ${labels[select.value] || select.value}.`, 'success');
+    } catch (error) {
+        uiToast(`No se pudo guardar: ${error.message}`, 'error');
+        loadMercadoLibrePrankSetting();
+    }
+}
+
+function mercadoLibrePrankHas(prank, kind) {
+    return Boolean(prank) && (prank.kind === kind || prank.kind === 'both');
+}
+
+// ---- Broma: el modal se escapa del puntero ----
+// Solo mientras esta abierta la confirmacion real del pago. Se escapa MELI_PRANK_DODGE_MAX
+// veces y despues se queda quieto; con teclado (Enter) siempre se puede confirmar.
+const MELI_PRANK_DODGE_MAX = 4;
+const MELI_PRANK_DODGE_LABELS = ['Registrar pago', 'Casi...', '¡Uy!', 'Por poco', 'Ok, ganaste'];
+
+function startMercadoLibreModalDodge() {
+    const modal = document.querySelector('#ui-modal .ui-modal');
+    const okButton = document.getElementById('ui-modal-ok');
+    if (!modal || !okButton) return () => {};
+    let escapes = 0;
+    let offsetX = 0;
+    let offsetY = 0;
+    const margin = 12;
+
+    const dodge = () => {
+        if (escapes >= MELI_PRANK_DODGE_MAX) return;
+        escapes += 1;
+        const rect = modal.getBoundingClientRect();
+        // Posicion sin el desplazamiento actual, para calcular el rango que entra en pantalla.
+        const baseLeft = rect.left - offsetX;
+        const baseTop = rect.top - offsetY;
+        const minX = margin - baseLeft;
+        const maxX = window.innerWidth - margin - rect.width - baseLeft;
+        const minY = margin - baseTop;
+        const maxY = window.innerHeight - margin - rect.height - baseTop;
+        let nextX = offsetX;
+        let nextY = offsetY;
+        // Elegir un destino que se aleje de donde esta (si la pantalla lo permite).
+        for (let attempt = 0; attempt < 12; attempt += 1) {
+            nextX = minX + Math.random() * Math.max(0, maxX - minX);
+            nextY = minY + Math.random() * Math.max(0, maxY - minY);
+            if (Math.hypot(nextX - offsetX, nextY - offsetY) > Math.min(220, rect.width / 2)) break;
+        }
+        offsetX = nextX;
+        offsetY = nextY;
+        modal.style.transition = 'transform .28s cubic-bezier(.2, .9, .3, 1.2)';
+        modal.style.transform = `translate(${Math.round(offsetX)}px, ${Math.round(offsetY)}px)`;
+        okButton.textContent = MELI_PRANK_DODGE_LABELS[Math.min(escapes, MELI_PRANK_DODGE_LABELS.length - 1)];
+    };
+
+    okButton.addEventListener('pointerenter', dodge);
+    return () => {
+        okButton.removeEventListener('pointerenter', dodge);
+        // Esperar a que termine la animacion de cierre antes de devolverlo al centro.
+        setTimeout(() => {
+            modal.style.transform = '';
+            modal.style.transition = '';
+        }, 220);
+    };
+}
+
+function markMercadoLibrePrankShown() {
+    meliPrankStorageSet(MELI_PRANK_STORAGE_KEY, meliPrankToday());
+}
+
+const meliPrankPause = (ms) => new Promise(resolve => setTimeout(resolve, ms));
+
+async function runMercadoLibrePrankConfirmations() {
+    for (const step of MELI_PRANK_CONFIRMATIONS) {
+        // El modal se oculta 180 ms despues de cerrarse: esperar para no pisar el siguiente.
+        await meliPrankPause(260);
+        const ok = await uiConfirm({ tone: 'info', ...step });
+        if (!ok) return false;
+    }
+    await meliPrankPause(260);
+    return true;
+}
+
+async function runMercadoLibrePrankLoading() {
+    const backdrop = document.createElement('div');
+    backdrop.className = 'ui-modal-backdrop meli-prank-backdrop';
+    backdrop.innerHTML = `
+        <div class="ui-modal meli-prank" role="status" aria-live="polite">
+            <h2>Procesando pago</h2>
+            <p class="ui-modal-message" id="meli-prank-step"></p>
+            <div class="meli-prank-bar"><span id="meli-prank-progress"></span></div>
+        </div>`;
+    document.body.appendChild(backdrop);
+    requestAnimationFrame(() => backdrop.classList.add('is-open'));
+    const stepEl = backdrop.querySelector('#meli-prank-step');
+    const progressEl = backdrop.querySelector('#meli-prank-progress');
+    for (let i = 0; i < MELI_PRANK_LOADING_STEPS.length; i += 1) {
+        stepEl.textContent = MELI_PRANK_LOADING_STEPS[i];
+        progressEl.style.width = `${Math.round(((i + 1) / MELI_PRANK_LOADING_STEPS.length) * 100)}%`;
+        await meliPrankPause(1100);
+    }
+    backdrop.classList.remove('is-open');
+    await meliPrankPause(200);
+    backdrop.remove();
+}
+
 async function registerMercadoLibrePayment(orderId, button) {
     const item = mercadoLibrePayments.find(row => String(row.order_id) === String(orderId));
     if (!item || !item.can_register) return;
@@ -407,6 +703,9 @@ async function registerMercadoLibrePayment(orderId, button) {
         return;
     }
 
+    const prank = await shouldRunMercadoLibrePrank();
+    if (prank) markMercadoLibrePrankShown();
+    const stopDodge = mercadoLibrePrankHas(prank, 'dodge') ? startMercadoLibreModalDodge() : null;
     const confirmed = await uiConfirm({
         tone: 'danger',
         title: 'Registrar pago de Mercado Libre',
@@ -427,12 +726,17 @@ async function registerMercadoLibrePayment(orderId, button) {
         ],
         confirmText: 'Registrar pago'
     });
+    if (stopDodge) stopDodge();
     if (!confirmed) return;
+
+    const withConfirmations = mercadoLibrePrankHas(prank, 'confirmations');
+    if (withConfirmations && !(await runMercadoLibrePrankConfirmations())) return;
 
     button.disabled = true;
     const originalText = button.textContent;
     button.textContent = 'Registrando...';
     try {
+        if (withConfirmations) await runMercadoLibrePrankLoading();
         const apiBase = await ensureApiPort();
         const response = await fetch(`${apiBase}/api/mercadolibre/payments/register`, {
             method: 'POST',
@@ -459,6 +763,14 @@ async function registerMercadoLibrePayment(orderId, button) {
             uiToast(result.warning, 'info', { title: 'Pago registrado con advertencia', duration: 9000 });
         } else {
             uiToast('Pago registrado en Odoo con el PDF adjunto.', 'success');
+        }
+        if (prank) {
+            const prankMessage = prank.frequency === 'daily'
+                ? 'Tranqui, era una broma. Por hoy los pagos se registran sin tanta pregunta.'
+                : 'Tranqui, era una broma. El pago quedo registrado bien.';
+            uiToast(prankMessage, 'info', {
+                title: 'Te la creíste', duration: 9000
+            });
         }
     } catch (error) {
         button.disabled = false;

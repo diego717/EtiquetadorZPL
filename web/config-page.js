@@ -312,6 +312,7 @@ if (POS_ONLY_VIEW) {
     initAdministradoAutoRefreshSetting();
     focusSectionFromHash();
     loadConfigs();
+    loadMercadoLibrePrankSetting();
     updateAdministradoAutoRefreshToggle();
     odooStatusTimer = setInterval(() => {
         loadOdooAutomationStatus();

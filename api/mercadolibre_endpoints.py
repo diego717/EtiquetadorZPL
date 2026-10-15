@@ -8,7 +8,7 @@ import asyncio
 import json
 import logging
 from pathlib import Path
-from typing import Any, Dict, Optional
+from typing import Any, Dict, Literal, Optional
 
 from fastapi import APIRouter, HTTPException, Query, Request
 from pydantic import BaseModel, Field
@@ -40,6 +40,14 @@ class MercadoLibreConfigRequest(BaseModel):
     default_copies: int = Field(default=1, ge=1, le=10)
     auto_print: bool = False
     response_type: str = "zpl2"
+
+
+class PranksConfigRequest(BaseModel):
+    enabled: Optional[bool] = None
+    # always: en cada pago. daily: una vez por dia y por equipo.
+    frequency: Optional[Literal["always", "daily"]] = None
+    # confirmations: reconfirmaciones + carga falsa. dodge: el modal se escapa. both: las dos.
+    kind: Optional[Literal["confirmations", "dodge", "both"]] = None
 
 
 class PrintShipmentRequest(BaseModel):
@@ -208,6 +216,39 @@ async def get_status() -> Dict[str, Any]:
 @router.get("/config")
 async def get_config() -> Dict[str, Any]:
     return mercadolibre_integration.get_public_config()
+
+
+@router.get("/pranks")
+async def get_pranks() -> Dict[str, Any]:
+    """Bromas al registrar pagos (reconfirmaciones graciosas y carga falsa)."""
+    return _pranks_state()
+
+
+def _pranks_state() -> Dict[str, Any]:
+    config = mercadolibre_integration.config
+    frequency = config.get("payment_prank_frequency")
+    kind = config.get("payment_prank_kind")
+    return {
+        "enabled": bool(config.get("payment_prank_enabled", False)),
+        "frequency": frequency if frequency in ("always", "daily") else "always",
+        "kind": kind if kind in ("confirmations", "dodge", "both") else "confirmations",
+    }
+
+
+@router.post("/pranks")
+async def save_pranks(request: PranksConfigRequest) -> Dict[str, Any]:
+    # Endpoint propio: el formulario de credenciales guarda todos sus campos con defaults
+    # y, si este flag viviera ahi, cada guardado lo apagaria sin querer.
+    updates: Dict[str, Any] = {}
+    if request.enabled is not None:
+        updates["payment_prank_enabled"] = bool(request.enabled)
+    if request.frequency is not None:
+        updates["payment_prank_frequency"] = request.frequency
+    if request.kind is not None:
+        updates["payment_prank_kind"] = request.kind
+    if updates:
+        mercadolibre_integration.save_config(updates)
+    return _pranks_state()
 
 
 @router.post("/config")

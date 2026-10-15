@@ -31,6 +31,7 @@
                 <a href="reposicion.html" id="nav-stock-link">Reposicion</a>
                 <a href="proyeccion.html">Proyeccion</a>
                 <a href="cobranzas.html" id="nav-receivables-link">Cobranzas</a>
+                <a href="fotos.html">Fotos</a>
             </div>
             <div class="nav-jump" aria-label="Ir a una seccion">
                 <span class="nav-jump-label">Ir a</span>
@@ -1197,6 +1198,34 @@
                         <div class="btn-row">
                             <button class="btn secondary" onclick="testNotification()">Probar Notificacion</button>
                             <button class="btn secondary" onclick="exportLogs()">Exportar Logs</button>
+                        </div>
+                        <div class="form-group" style="margin-top:14px;">
+                            <label>
+                                <input type="checkbox" id="meli-prank-enabled" onchange="saveMercadoLibrePrankSetting(this)"> Bromas al registrar pagos de Mercado Libre
+                            </label>
+                            <span class="odoo-muted">Cancelar en cualquier paso no registra nada. El modal que se escapa se rinde despues de 4 intentos.</span>
+                            <div class="btn-row" style="margin-top:8px; align-items:center;">
+                                <label for="meli-prank-kind" class="odoo-muted">Broma:</label>
+                                <select id="meli-prank-kind" onchange="saveMercadoLibrePrankKind(this)" style="width:auto;">
+                                    <option value="confirmations">Reconfirmaciones y carga falsa</option>
+                                    <option value="dodge">El modal se escapa del puntero</option>
+                                    <option value="both">Las dos</option>
+                                </select>
+                            </div>
+                            <div class="btn-row" style="margin-top:8px; align-items:center;">
+                                <label for="meli-prank-frequency" class="odoo-muted">Frecuencia:</label>
+                                <select id="meli-prank-frequency" onchange="saveMercadoLibrePrankFrequency(this)" style="width:auto;">
+                                    <option value="always">En cada pago</option>
+                                    <option value="daily">Una vez por dia por equipo</option>
+                                </select>
+                            </div>
+                            <label style="margin-top:8px;">
+                                <input type="checkbox" id="meli-prank-excluded" onchange="setMercadoLibrePrankExcluded(this.checked)"> No mostrarla en este equipo
+                            </label>
+                            <div class="btn-row" style="margin-top:6px; align-items:center;">
+                                <span class="odoo-muted" id="meli-prank-status" role="status"></span>
+                                <button type="button" class="btn secondary sm" id="meli-prank-reset" onclick="resetMercadoLibrePrankToday()" hidden>Volver a mostrarla hoy en este equipo</button>
+                            </div>
                         </div>
                         <div class="danger-zone">
                             <div>

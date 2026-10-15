@@ -1,0 +1,1199 @@
+/**
+ * ============================================================================
+ * NOTIFICACIONES DE ODOO (COLA PERSISTENTE + MODAL)
+ * ============================================================================
+ *
+ * Dependencias ya existentes en este proyecto:
+ * - getOdooCfg_()
+ * - isOdooConfigReady_()
+ * - getOdooUid_()
+ * - executeKw_()
+ * - buildRecordUrl_() (tiene un fallback local)
+ *
+ * El estado de lectura es local a cada usuario de Google. Este modulo no
+ * escribe ni marca mensajes como leidos en Odoo.
+ */
+
+const ODOO_NOTIFICATION_CFG = Object.freeze({
+  LAST_SCANNED_ID_PROPERTY: "ODOO_NOTIFICATION_LAST_SCANNED_ID",
+  PENDING_IDS_PROPERTY: "ODOO_NOTIFICATION_PENDING_IDS",
+  CELL_LAST_SCANNED_ID_PROPERTY: "ODOO_CELL_LAST_SCANNED_ID",
+  MAX_PENDING: 30,
+  SEARCH_BATCH_SIZE: 100,
+  // Frecuencia de consulta del mini-widget. 60000 ms = 1 minuto.
+  POLL_INTERVAL_MS: 60000,
+  SHEET_NAME: "TRABAJOS",
+  CELL_RANGE: "F1:N1",
+});
+
+/**
+ * Abre el mini-widget que consulta Odoo periodicamente.
+ *
+ * El boton "Ver" permite reabrir manualmente las notificaciones pendientes.
+ * Cerrar el modal no hace que vuelva a abrirse en cada consulta: solo se abre
+ * automaticamente cuando checkOdooMentions() encuentra mensajes nuevos.
+ */
+function openOdooListenerMini() {
+  const htmlOutput = HtmlService
+    .createHtmlOutput(buildOdooListenerHtml_())
+    .setWidth(230)
+    .setHeight(58);
+
+  SpreadsheetApp.getUi().showModelessDialog(htmlOutput, " ");
+}
+
+/**
+ * Variante fija: Google Sheets ancla esta barra al lateral derecho y no
+ * permite moverla accidentalmente fuera de lugar.
+ */
+function openOdooListenerSidebar() {
+  const htmlOutput = HtmlService
+    .createHtmlOutput(buildOdooListenerHtml_())
+    .setTitle("Odoo Notifier");
+
+  SpreadsheetApp.getUi().showSidebar(htmlOutput);
+}
+
+function buildOdooListenerHtml_() {
+  const htmlContent = [
+    "<!DOCTYPE html>",
+    "<html>",
+    "<head>",
+    '<base target="_top">',
+    "<style>",
+    "html {",
+    "  width: 100%;",
+    "  height: 100%;",
+    "  margin: 0;",
+    "  overflow: hidden !important;",
+    "}",
+    "body {",
+    "  box-sizing: border-box;",
+    "  position: fixed;",
+    "  top: 0;",
+    "  right: 0;",
+    "  left: 0;",
+    "  width: auto;",
+    "  height: 58px;",
+    "  font-family: system-ui, -apple-system, sans-serif;",
+    "  margin: 0;",
+    "  padding: 7px 9px;",
+    "  background: #202124;",
+    "  color: #fff;",
+    "  font-size: 11px;",
+    "  display: flex;",
+    "  align-items: center;",
+    "  justify-content: space-between;",
+    "  gap: 8px;",
+    "  overflow: hidden !important;",
+    "  overscroll-behavior: none;",
+    "}",
+    ".label { display: flex; align-items: center; min-width: 0; }",
+    ".text { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }",
+    ".dot {",
+    "  flex: 0 0 auto;",
+    "  height: 8px;",
+    "  width: 8px;",
+    "  margin-right: 6px;",
+    "  background: #34a853;",
+    "  border-radius: 50%;",
+    "  box-shadow: 0 0 6px #34a853;",
+    "  animation: pulse 2s infinite;",
+    "}",
+    ".dot.error { background: #ea4335; box-shadow: 0 0 6px #ea4335; }",
+    ".dot.busy { background: #fbbc04; box-shadow: 0 0 6px #fbbc04; }",
+    ".open-button {",
+    "  border: 1px solid #8f6b86;",
+    "  border-radius: 4px;",
+    "  background: #714b67;",
+    "  color: #fff;",
+    "  padding: 4px 9px;",
+    "  font-size: 11px;",
+    "  font-weight: 600;",
+    "  cursor: pointer;",
+    "}",
+    ".open-button:disabled { opacity: .55; cursor: default; }",
+    "@keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: .35; } }",
+    "</style>",
+    "</head>",
+    "<body>",
+    '  <div class="label">',
+    '    <span id="status-dot" class="dot"></span>',
+    '    <strong id="status-text" class="text">Odoo Notifier</strong>',
+    "  </div>",
+    '  <button id="open-button" class="open-button" onclick="openPending()">Ver</button>',
+    "<script>",
+    "var checking = false;",
+    "function setStatus(text, state) {",
+    '  var dot = document.getElementById("status-dot");',
+    '  document.getElementById("status-text").textContent = text;',
+    '  dot.className = "dot" + (state ? " " + state : "");',
+    "}",
+    "function pollOdoo() {",
+    "  if (checking) return;",
+    "  checking = true;",
+    '  setStatus("Consultando...", "busy");',
+    "  google.script.run",
+    "    .withSuccessHandler(function(response) {",
+    "      checking = false;",
+    "      if (response && response.error) {",
+    '        setStatus("Error de configuracion", "error");',
+    "        return;",
+    "      }",
+    '      setStatus("Odoo Notifier", "");',
+    "      if (response && response.found) {",
+    "        google.script.run",
+    "          .withFailureHandler(function() {",
+    '            setStatus("Error al abrir", "error");',
+    "          })",
+    "          .showOdooMentionModal(response);",
+    "      }",
+    "    })",
+    "    .withFailureHandler(function() {",
+    "      checking = false;",
+    '      setStatus("Error de conexion", "error");',
+    "    })",
+    "    .checkOdooMentions();",
+    "}",
+    "function openPending() {",
+    '  var button = document.getElementById("open-button");',
+    "  button.disabled = true;",
+    "  google.script.run",
+    "    .withSuccessHandler(function() {",
+    "      button.disabled = false;",
+    "    })",
+    "    .withFailureHandler(function() {",
+    "      button.disabled = false;",
+    '      setStatus("Error al abrir", "error");',
+    "    })",
+    "    .showPendingOdooNotifications();",
+    "}",
+    "setTimeout(pollOdoo, 400);",
+    "setInterval(pollOdoo, " + ODOO_NOTIFICATION_CFG.POLL_INTERVAL_MS + ");",
+    "</script>",
+    "</body>",
+    "</html>",
+  ].join("");
+
+  return htmlContent;
+}
+
+/**
+ * Busca mensajes nuevos, actualiza la cola y devuelve todas las notificaciones
+ * pendientes para que el cliente abra el modal una sola vez.
+ */
+function checkOdooMentions() {
+  const cfg = getOdooCfg_();
+
+  if (!isOdooConfigReady_(cfg)) {
+    return {
+      found: false,
+      hasNew: false,
+      error: "La configuracion de Odoo esta incompleta.",
+    };
+  }
+
+  const uid = getOdooUid_(cfg);
+  const partnerId = getOdooNotificationPartnerId_(cfg, uid);
+
+  if (!partnerId) {
+    return {
+      found: false,
+      hasNew: false,
+      error: "El usuario de Odoo no tiene partner asociado.",
+    };
+  }
+
+  const lock = LockService.getUserLock();
+
+  if (!lock.tryLock(5000)) {
+    return {
+      found: false,
+      hasNew: false,
+      busy: true,
+    };
+  }
+
+  try {
+    const userProps = PropertiesService.getUserProperties();
+    const lastScannedId =
+      Number(
+        userProps.getProperty(
+          ODOO_NOTIFICATION_CFG.LAST_SCANNED_ID_PROPERTY
+        )
+      ) || 0;
+
+    if (lastScannedId <= 0) {
+      const latestId = getLatestOdooNotificationMessageId_(
+        cfg,
+        uid,
+        partnerId
+      );
+
+      userProps.setProperty(
+        ODOO_NOTIFICATION_CFG.LAST_SCANNED_ID_PROPERTY,
+        String(latestId)
+      );
+
+      return {
+        found: false,
+        hasNew: false,
+        pendingCount: readOdooNotificationPendingIds_(userProps).length,
+      };
+    }
+
+    const newIds = fetchNewOdooNotificationIds_(
+      cfg,
+      uid,
+      partnerId,
+      lastScannedId
+    );
+
+    if (!newIds.length) {
+      return {
+        found: false,
+        hasNew: false,
+        pendingCount: readOdooNotificationPendingIds_(userProps).length,
+      };
+    }
+
+    const previousPendingIds =
+      readOdooNotificationPendingIds_(userProps);
+    const mergedIds = uniquePositiveIntegerIds_(
+      previousPendingIds.concat(newIds)
+    );
+    const discardedCount = Math.max(
+      0,
+      mergedIds.length - ODOO_NOTIFICATION_CFG.MAX_PENDING
+    );
+    const cappedIds = mergedIds.slice(
+      -ODOO_NOTIFICATION_CFG.MAX_PENDING
+    );
+    const notifications = fetchOdooNotificationDetails_(
+      cfg,
+      uid,
+      cappedIds
+    );
+    const validIds = notifications
+      .map(function(notification) {
+        return notification.id;
+      })
+      .sort(function(a, b) {
+        return a - b;
+      });
+    const newLastScannedId = newIds[newIds.length - 1];
+
+    userProps.setProperties({
+      [ODOO_NOTIFICATION_CFG.LAST_SCANNED_ID_PROPERTY]:
+        String(newLastScannedId),
+      [ODOO_NOTIFICATION_CFG.PENDING_IDS_PROPERTY]:
+        JSON.stringify(validIds),
+    });
+
+    return {
+      found: true,
+      hasNew: true,
+      discardedCount: discardedCount,
+      pendingCount: notifications.length,
+      notifications: notifications,
+    };
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+/**
+ * Abre manualmente la cola pendiente desde el boton del mini-widget.
+ */
+function showPendingOdooNotifications() {
+  const snapshot = getPendingOdooNotificationSnapshot_();
+
+  if (!snapshot.notifications.length) {
+    SpreadsheetApp.getActiveSpreadsheet().toast(
+      "No hay notificaciones pendientes.",
+      "Odoo Notifier",
+      3
+    );
+    return {
+      opened: false,
+      pendingCount: 0,
+    };
+  }
+
+  showOdooMentionModal(snapshot);
+
+  return {
+    opened: true,
+    pendingCount: snapshot.notifications.length,
+  };
+}
+
+/**
+ * Construye y muestra el modal con todas las tarjetas pendientes.
+ *
+ * Todos los datos de Odoo se escapan en el servidor antes de incorporarlos al
+ * HTML. Los unicos valores insertados en handlers son IDs enteros validados.
+ */
+function showOdooMentionModal(data) {
+  const userProps = PropertiesService.getUserProperties();
+  const currentPendingSet = new Set(
+    readOdooNotificationPendingIds_(userProps)
+  );
+  const suppliedNotifications =
+    data && Array.isArray(data.notifications)
+      ? data.notifications
+      : [];
+  const notifications = suppliedNotifications.filter(
+    function(notification) {
+      return (
+        notification &&
+        currentPendingSet.has(Number(notification.id))
+      );
+    }
+  );
+
+  if (!notifications.length) {
+    return;
+  }
+
+  const visibleIds = notifications.map(function(notification) {
+    return Number(notification.id);
+  });
+  const cardsHtml = notifications
+    .map(renderOdooNotificationCard_)
+    .join("");
+  const discardedCount =
+    Math.max(0, Number(data && data.discardedCount) || 0);
+  const warningHtml = discardedCount
+    ? (
+      '<div class="warning">' +
+      "Se descartaron " +
+      discardedCount +
+      " avisos antiguos porque la cola alcanzo el limite de " +
+      ODOO_NOTIFICATION_CFG.MAX_PENDING +
+      ".</div>"
+    )
+    : "";
+
+  const htmlContent = [
+    "<!DOCTYPE html>",
+    "<html>",
+    "<head>",
+    '<base target="_top">',
+    "<style>",
+    "* { box-sizing: border-box; }",
+    "body {",
+    "  font-family: system-ui, -apple-system, sans-serif;",
+    "  margin: 0;",
+    "  padding: 18px;",
+    "  color: #2f2930;",
+    "  background: #f6f3f5;",
+    "}",
+    ".header {",
+    "  display: flex;",
+    "  align-items: center;",
+    "  justify-content: space-between;",
+    "  gap: 12px;",
+    "  padding-bottom: 12px;",
+    "  border-bottom: 2px solid #714b67;",
+    "}",
+    ".header-title { display: flex; align-items: center; gap: 8px; }",
+    ".badge {",
+    "  background: #714b67;",
+    "  color: #fff;",
+    "  font-size: 10px;",
+    "  font-weight: 800;",
+    "  padding: 4px 7px;",
+    "  border-radius: 4px;",
+    "}",
+    "h2 { margin: 0; font-size: 18px; }",
+    ".count { color: #6b6268; font-size: 12px; white-space: nowrap; }",
+    ".warning {",
+    "  margin-top: 12px;",
+    "  padding: 9px 11px;",
+    "  border: 1px solid #f0c36d;",
+    "  border-radius: 6px;",
+    "  background: #fff8e5;",
+    "  color: #795500;",
+    "  font-size: 12px;",
+    "}",
+    ".list {",
+    "  display: flex;",
+    "  flex-direction: column;",
+    "  gap: 10px;",
+    "  max-height: 420px;",
+    "  margin-top: 12px;",
+    "  padding-right: 3px;",
+    "  overflow-y: auto;",
+    "}",
+    ".notification-card {",
+    "  padding: 12px;",
+    "  border: 1px solid #ddd5da;",
+    "  border-left: 4px solid #714b67;",
+    "  border-radius: 7px;",
+    "  background: #fff;",
+    "  box-shadow: 0 1px 2px rgba(0, 0, 0, .05);",
+    "}",
+    ".card-head {",
+    "  display: flex;",
+    "  justify-content: space-between;",
+    "  align-items: flex-start;",
+    "  gap: 12px;",
+    "  margin-bottom: 8px;",
+    "}",
+    ".record { font-size: 14px; font-weight: 750; }",
+    ".record-link { color: #714b67; text-decoration: none; }",
+    ".record-link:hover { text-decoration: underline; }",
+    ".author { margin-top: 2px; color: #746b71; font-size: 12px; }",
+    ".body-box {",
+    "  padding: 9px 10px;",
+    "  border: 1px solid #ece7ea;",
+    "  border-radius: 5px;",
+    "  background: #faf9fa;",
+    "  font-size: 13px;",
+    "  line-height: 1.4;",
+    "  white-space: pre-wrap;",
+    "  overflow-wrap: anywhere;",
+    "}",
+    ".card-actions {",
+    "  display: flex;",
+    "  justify-content: flex-end;",
+    "  gap: 8px;",
+    "  margin-top: 10px;",
+    "}",
+    ".button {",
+    "  display: inline-flex;",
+    "  align-items: center;",
+    "  justify-content: center;",
+    "  border: 0;",
+    "  border-radius: 5px;",
+    "  padding: 7px 11px;",
+    "  font: inherit;",
+    "  font-size: 12px;",
+    "  font-weight: 650;",
+    "  text-decoration: none;",
+    "  cursor: pointer;",
+    "}",
+    ".button:disabled { opacity: .55; cursor: default; }",
+    ".primary { background: #714b67; color: #fff; }",
+    ".primary:hover { background: #5a3c52; }",
+    ".secondary { background: #ece5e9; color: #4d3547; }",
+    ".secondary:hover { background: #dfd3da; }",
+    ".muted { color: #8a8187; font-size: 12px; padding: 7px 0; }",
+    ".footer {",
+    "  display: flex;",
+    "  align-items: center;",
+    "  justify-content: space-between;",
+    "  gap: 12px;",
+    "  margin-top: 14px;",
+    "  padding-top: 12px;",
+    "  border-top: 1px solid #ddd5da;",
+    "}",
+    ".footer-actions { display: flex; gap: 8px; }",
+    ".status { min-height: 18px; color: #b3261e; font-size: 12px; }",
+    ".empty {",
+    "  padding: 35px 15px;",
+    "  color: #6f666c;",
+    "  text-align: center;",
+    "}",
+    "</style>",
+    "</head>",
+    "<body>",
+    '  <div class="header">',
+    '    <div class="header-title">',
+    '      <span class="badge">ODOO</span>',
+    "      <h2>Notificaciones pendientes</h2>",
+    "    </div>",
+    '    <span id="count" class="count">' +
+      notifications.length +
+      (notifications.length === 1 ? " pendiente" : " pendientes") +
+      "</span>",
+    "  </div>",
+    warningHtml,
+    '  <div id="notification-list" class="list">',
+    cardsHtml,
+    "  </div>",
+    '  <div class="footer">',
+    '    <div id="status" class="status" role="status"></div>',
+    '    <div class="footer-actions">',
+    '      <button class="button secondary" onclick="google.script.host.close()">Cerrar</button>',
+    '      <button id="mark-all" class="button primary action-button" onclick="markAll()">Marcar todas como vistas</button>',
+    "    </div>",
+    "  </div>",
+    "<script>",
+    "var visibleIds = [" + visibleIds.join(",") + "];",
+    "function setBusy(isBusy) {",
+    '  var buttons = document.querySelectorAll(".action-button");',
+    "  for (var i = 0; i < buttons.length; i++) {",
+    "    buttons[i].disabled = isBusy;",
+    "  }",
+    "}",
+    "function setError(message) {",
+    '  document.getElementById("status").textContent = message || "";',
+    "}",
+    "function updateCount() {",
+    '  var count = document.getElementById("count");',
+    '  count.textContent = visibleIds.length + (visibleIds.length === 1 ? " pendiente" : " pendientes");',
+    "}",
+    "function removeCard(id) {",
+    '  var card = document.getElementById("notification-" + id);',
+    "  if (card) card.remove();",
+    "  visibleIds = visibleIds.filter(function(value) { return value !== id; });",
+    "  updateCount();",
+    "}",
+    "function finishIfEmpty(remainingCount) {",
+    "  if (remainingCount === 0 || visibleIds.length === 0) {",
+    '    document.getElementById("notification-list").innerHTML = \'<div class="empty">No quedan notificaciones pendientes.</div>\';',
+    '    document.getElementById("mark-all").disabled = true;',
+    "    setTimeout(function() { google.script.host.close(); }, 450);",
+    "  }",
+    "}",
+    "function markOne(id, button) {",
+    "  setError(\"\");",
+    "  setBusy(true);",
+    '  var previousLabel = button.textContent;',
+    '  button.textContent = "Marcando...";',
+    "  google.script.run",
+    "    .withSuccessHandler(function(result) {",
+    "      removeCard(id);",
+    "      setBusy(false);",
+    "      finishIfEmpty(result ? result.remainingCount : visibleIds.length);",
+    "    })",
+    "    .withFailureHandler(function(error) {",
+    "      button.textContent = previousLabel;",
+    "      setBusy(false);",
+    '      setError(error && error.message ? error.message : "No se pudo marcar la notificacion.");',
+    "    })",
+    "    .markOdooNotificationAsSeen(id);",
+    "}",
+    "function markAll() {",
+    "  if (!visibleIds.length) return;",
+    "  setError(\"\");",
+    "  setBusy(true);",
+    "  var idsToMark = visibleIds.slice();",
+    "  google.script.run",
+    "    .withSuccessHandler(function(result) {",
+    "      for (var i = 0; i < idsToMark.length; i++) removeCard(idsToMark[i]);",
+    "      setBusy(false);",
+    "      finishIfEmpty(result ? result.remainingCount : visibleIds.length);",
+    "    })",
+    "    .withFailureHandler(function(error) {",
+    "      setBusy(false);",
+    '      setError(error && error.message ? error.message : "No se pudieron marcar las notificaciones.");',
+    "    })",
+    "    .markAllOdooNotificationsAsSeen(idsToMark);",
+    "}",
+    "</script>",
+    "</body>",
+    "</html>",
+  ].join("");
+
+  const htmlOutput = HtmlService.createHtmlOutput(htmlContent)
+    .setWidth(660)
+    .setHeight(620);
+
+  SpreadsheetApp.getUi().showModalDialog(
+    htmlOutput,
+    "Notificaciones de Odoo"
+  );
+}
+
+/**
+ * Quita una notificacion de la cola local del usuario.
+ */
+function markOdooNotificationAsSeen(messageId) {
+  return removeOdooNotificationIds_([messageId]);
+}
+
+/**
+ * Quita de la cola solamente los IDs que estaban visibles en ese modal.
+ * Asi no se marca accidentalmente un aviso que haya llegado al mismo tiempo.
+ */
+function markAllOdooNotificationsAsSeen(messageIds) {
+  return removeOdooNotificationIds_(messageIds);
+}
+
+/**
+ * Recupera todas las notificaciones pendientes actuales sin buscar novedades.
+ */
+function getPendingOdooNotificationSnapshot_() {
+  const cfg = getOdooCfg_();
+
+  if (!isOdooConfigReady_(cfg)) {
+    throw new Error("La configuracion de Odoo esta incompleta.");
+  }
+
+  const lock = LockService.getUserLock();
+
+  if (!lock.tryLock(5000)) {
+    throw new Error(
+      "El notificador esta ocupado. Intenta nuevamente en unos segundos."
+    );
+  }
+
+  try {
+    const userProps = PropertiesService.getUserProperties();
+    const pendingIds = readOdooNotificationPendingIds_(userProps);
+
+    if (!pendingIds.length) {
+      return {
+        notifications: [],
+        pendingCount: 0,
+        discardedCount: 0,
+      };
+    }
+
+    const uid = getOdooUid_(cfg);
+    const notifications = fetchOdooNotificationDetails_(
+      cfg,
+      uid,
+      pendingIds
+    );
+    const validIds = notifications
+      .map(function(notification) {
+        return notification.id;
+      })
+      .sort(function(a, b) {
+        return a - b;
+      });
+
+    userProps.setProperty(
+      ODOO_NOTIFICATION_CFG.PENDING_IDS_PROPERTY,
+      JSON.stringify(validIds)
+    );
+
+    return {
+      notifications: notifications,
+      pendingCount: notifications.length,
+      discardedCount: 0,
+    };
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+/**
+ * Elimina IDs concretos de la cola bajo un bloqueo por usuario.
+ */
+function removeOdooNotificationIds_(messageIds) {
+  const idsToRemove = new Set(
+    uniquePositiveIntegerIds_(
+      Array.isArray(messageIds) ? messageIds : []
+    )
+  );
+
+  if (!idsToRemove.size) {
+    throw new Error("No se recibieron notificaciones validas para marcar.");
+  }
+
+  const lock = LockService.getUserLock();
+
+  if (!lock.tryLock(5000)) {
+    throw new Error(
+      "El notificador esta ocupado. Intenta nuevamente en unos segundos."
+    );
+  }
+
+  try {
+    const userProps = PropertiesService.getUserProperties();
+    const pendingIds = readOdooNotificationPendingIds_(userProps);
+    const remainingIds = pendingIds.filter(function(id) {
+      return !idsToRemove.has(id);
+    });
+
+    userProps.setProperty(
+      ODOO_NOTIFICATION_CFG.PENDING_IDS_PROPERTY,
+      JSON.stringify(remainingIds)
+    );
+
+    return {
+      removedCount: pendingIds.length - remainingIds.length,
+      remainingCount: remainingIds.length,
+    };
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+/**
+ * Obtiene el partner asociado al usuario autenticado en Odoo.
+ */
+function getOdooNotificationPartnerId_(cfg, uid) {
+  const userRecords =
+    executeKw_(
+      cfg,
+      uid,
+      "res.users",
+      "read",
+      [[uid]],
+      {
+        fields: ["partner_id"],
+      }
+    ) || [];
+
+  if (
+    !userRecords.length ||
+    !Array.isArray(userRecords[0].partner_id)
+  ) {
+    return 0;
+  }
+
+  return Number(userRecords[0].partner_id[0]) || 0;
+}
+
+/**
+ * Devuelve el ID mas reciente para inicializar el cursor sin traer historial.
+ */
+function getLatestOdooNotificationMessageId_(
+  cfg,
+  uid,
+  partnerId
+) {
+  const latest =
+    executeKw_(
+      cfg,
+      uid,
+      "mail.message",
+      "search_read",
+      [[["partner_ids", "in", [partnerId]]]],
+      {
+        fields: ["id"],
+        order: "id desc",
+        limit: 1,
+      }
+    ) || [];
+
+  return latest.length ? Number(latest[0].id) || 0 : 0;
+}
+
+/**
+ * Recorre por lotes todos los IDs posteriores al cursor.
+ *
+ * Usa el ultimo ID del lote como nuevo limite inferior; esto evita problemas
+ * de paginacion si llegan mensajes mientras se realiza la consulta.
+ */
+function fetchNewOdooNotificationIds_(
+  cfg,
+  uid,
+  partnerId,
+  lastScannedId
+) {
+  const ids = [];
+  let batchCursor = Number(lastScannedId) || 0;
+
+  while (true) {
+    const batch =
+      executeKw_(
+        cfg,
+        uid,
+        "mail.message",
+        "search_read",
+        [[
+          ["partner_ids", "in", [partnerId]],
+          ["id", ">", batchCursor],
+        ]],
+        {
+          fields: ["id"],
+          order: "id asc",
+          limit: ODOO_NOTIFICATION_CFG.SEARCH_BATCH_SIZE,
+        }
+      ) || [];
+
+    if (!batch.length) {
+      break;
+    }
+
+    for (const message of batch) {
+      const id = Number(message.id) || 0;
+
+      if (id > batchCursor) {
+        ids.push(id);
+        batchCursor = id;
+      }
+    }
+
+    if (batch.length < ODOO_NOTIFICATION_CFG.SEARCH_BATCH_SIZE) {
+      break;
+    }
+  }
+
+  return uniquePositiveIntegerIds_(ids);
+}
+
+/**
+ * Lee los detalles actuales de los mensajes y los devuelve del mas nuevo al
+ * mas antiguo. Los registros eliminados o inaccesibles quedan fuera.
+ */
+function fetchOdooNotificationDetails_(cfg, uid, messageIds) {
+  const ids = uniquePositiveIntegerIds_(messageIds);
+
+  if (!ids.length) {
+    return [];
+  }
+
+  const messages =
+    executeKw_(
+      cfg,
+      uid,
+      "mail.message",
+      "search_read",
+      [[["id", "in", ids]]],
+      {
+        fields: [
+          "id",
+          "author_id",
+          "body",
+          "record_name",
+          "model",
+          "res_id",
+        ],
+        order: "id desc",
+        limit: ids.length,
+      }
+    ) || [];
+
+  return messages
+    .map(function(message) {
+      const id = Number(message.id) || 0;
+      const model = cleanOdooNotificationString_(message.model);
+      const resId = Number(message.res_id) || 0;
+      const author =
+        Array.isArray(message.author_id) && message.author_id[1]
+          ? cleanOdooNotificationString_(message.author_id[1])
+          : "Odoo";
+      const record =
+        cleanOdooNotificationString_(message.record_name) ||
+        "Documento";
+      const body =
+        normalizeOdooNotificationBody_(message.body) ||
+        "(Sin contenido)";
+      const url =
+        model && resId > 0
+          ? buildOdooNotificationRecordUrl_(cfg, resId, model)
+          : "";
+
+      return {
+        id: id,
+        author: author,
+        record: record,
+        body: body,
+        model: model,
+        resId: resId,
+        url: url,
+      };
+    })
+    .filter(function(notification) {
+      return notification.id > 0;
+    });
+}
+
+/**
+ * Renderiza una tarjeta utilizando exclusivamente valores escapados.
+ */
+function renderOdooNotificationCard_(notification) {
+  const id = Number(notification.id);
+  const author = escapeOdooNotificationHtml_(notification.author);
+  const record = escapeOdooNotificationHtml_(notification.record);
+  const body = escapeOdooNotificationHtml_(notification.body);
+  const url = escapeOdooNotificationHtml_(notification.url);
+  const recordHtml = url
+    ? (
+      '<a class="record-link" href="' +
+      url +
+      '" target="_blank" rel="noopener noreferrer">' +
+      record +
+      "</a>"
+    )
+    : record;
+  const openActionHtml = url
+    ? (
+      '<a class="button secondary" href="' +
+      url +
+      '" target="_blank" rel="noopener noreferrer">Abrir en Odoo</a>'
+    )
+    : '<span class="muted">Sin registro asociado</span>';
+
+  return [
+    '<article id="notification-' + id + '" class="notification-card">',
+    '  <div class="card-head">',
+    "    <div>",
+    '      <div class="record">' + recordHtml + "</div>",
+    '      <div class="author">De: ' + author + "</div>",
+    "    </div>",
+    "  </div>",
+    '  <div class="body-box">' + body + "</div>",
+    '  <div class="card-actions">',
+    openActionHtml,
+    '    <button class="button primary action-button" onclick="markOne(' +
+      id +
+      ', this)">Marcar como vista</button>',
+    "  </div>",
+    "</article>",
+  ].join("");
+}
+
+/**
+ * Construye el enlace con el helper comun del proyecto. El fallback permite
+ * usar este archivo aunque todavia no se haya copiado 03_Enlaces.
+ */
+function buildOdooNotificationRecordUrl_(cfg, resId, model) {
+  if (typeof buildRecordUrl_ === "function") {
+    return buildRecordUrl_(cfg, resId, model);
+  }
+
+  return (
+    cfg.url +
+    "/web#id=" +
+    encodeURIComponent(resId) +
+    "&model=" +
+    encodeURIComponent(model) +
+    "&view_type=form&cids=" +
+    encodeURIComponent(cfg.cids || "1")
+  );
+}
+
+/**
+ * Convierte el HTML del chatter en texto sencillo conservando saltos de linea.
+ */
+function normalizeOdooNotificationBody_(body) {
+  let text = String(body || "");
+
+  if (!text) {
+    return "";
+  }
+
+  text = text
+    .replace(/<br\s*\/?>/gi, "\n")
+    .replace(/<\/p>|<\/div>|<\/li>|<\/tr>/gi, "\n")
+    .replace(/<p[^>]*>/gi, "")
+    .replace(/<div[^>]*>/gi, "")
+    .replace(/<li[^>]*>/gi, "")
+    .replace(/<tr[^>]*>/gi, "")
+    .replace(/<td[^>]*>/gi, " ")
+    .replace(/<[^>]+>/g, " ");
+
+  text = decodeOdooNotificationHtmlEntities_(text);
+
+  return text
+    .replace(/\r\n?/g, "\n")
+    .replace(/[ \t]{2,}/g, " ")
+    .replace(/[ \t]+\n/g, "\n")
+    .replace(/\n[ \t]+/g, "\n")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+}
+
+function decodeOdooNotificationHtmlEntities_(value) {
+  return String(value || "")
+    .replace(/&nbsp;/gi, " ")
+    .replace(/&amp;/gi, "&")
+    .replace(/&lt;/gi, "<")
+    .replace(/&gt;/gi, ">")
+    .replace(/&quot;/gi, '"')
+    .replace(/&#39;|&apos;/gi, "'")
+    .replace(/&#(\d+);/g, function(match, decimalValue) {
+      const codePoint = Number(decimalValue);
+      return isValidOdooNotificationCodePoint_(codePoint)
+        ? String.fromCodePoint(codePoint)
+        : match;
+    })
+    .replace(/&#x([0-9a-f]+);/gi, function(match, hexValue) {
+      const codePoint = parseInt(hexValue, 16);
+      return isValidOdooNotificationCodePoint_(codePoint)
+        ? String.fromCodePoint(codePoint)
+        : match;
+    });
+}
+
+function isValidOdooNotificationCodePoint_(codePoint) {
+  return (
+    Number.isInteger(codePoint) &&
+    codePoint >= 0 &&
+    codePoint <= 0x10ffff &&
+    !(codePoint >= 0xd800 && codePoint <= 0xdfff)
+  );
+}
+
+function escapeOdooNotificationHtml_(value) {
+  return String(value === null || value === undefined ? "" : value)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
+function cleanOdooNotificationString_(value) {
+  if (value === null || value === undefined || value === false) {
+    return "";
+  }
+
+  return String(value).trim();
+}
+
+function uniquePositiveIntegerIds_(values) {
+  const result = [];
+  const seen = new Set();
+
+  for (const value of values || []) {
+    const id = Number(value);
+
+    if (
+      !Number.isInteger(id) ||
+      id <= 0 ||
+      seen.has(id)
+    ) {
+      continue;
+    }
+
+    seen.add(id);
+    result.push(id);
+  }
+
+  return result.sort(function(a, b) {
+    return a - b;
+  });
+}
+
+function readOdooNotificationPendingIds_(userProps) {
+  const rawValue = userProps.getProperty(
+    ODOO_NOTIFICATION_CFG.PENDING_IDS_PROPERTY
+  );
+
+  if (!rawValue) {
+    return [];
+  }
+
+  try {
+    const parsed = JSON.parse(rawValue);
+
+    if (!Array.isArray(parsed)) {
+      return [];
+    }
+
+    return uniquePositiveIntegerIds_(parsed).slice(
+      -ODOO_NOTIFICATION_CFG.MAX_PENDING
+    );
+  } catch (err) {
+    return [];
+  }
+}
+
+/**
+ * ============================================================================
+ * NOTIFICACION ACUMULADA EN CELDA (OPCIONAL)
+ * ============================================================================
+ *
+ * Conserva la variante del script original, pero usa un cursor independiente
+ * para no consumir mensajes de la cola del modal.
+ */
+
+function checkOdooMentionsToCell() {
+  const cfg = getOdooCfg_();
+
+  if (!isOdooConfigReady_(cfg)) {
+    return;
+  }
+
+  const uid = getOdooUid_(cfg);
+  const partnerId = getOdooNotificationPartnerId_(cfg, uid);
+
+  if (!partnerId) {
+    return;
+  }
+
+  const lock = LockService.getUserLock();
+
+  if (!lock.tryLock(5000)) {
+    return;
+  }
+
+  try {
+    const userProps = PropertiesService.getUserProperties();
+    const lastScannedId =
+      Number(
+        userProps.getProperty(
+          ODOO_NOTIFICATION_CFG.CELL_LAST_SCANNED_ID_PROPERTY
+        )
+      ) || 0;
+
+    if (lastScannedId <= 0) {
+      const latestId = getLatestOdooNotificationMessageId_(
+        cfg,
+        uid,
+        partnerId
+      );
+
+      userProps.setProperty(
+        ODOO_NOTIFICATION_CFG.CELL_LAST_SCANNED_ID_PROPERTY,
+        String(latestId)
+      );
+      return;
+    }
+
+    const newIds = fetchNewOdooNotificationIds_(
+      cfg,
+      uid,
+      partnerId,
+      lastScannedId
+    );
+
+    if (!newIds.length) {
+      return;
+    }
+
+    const notifications = fetchOdooNotificationDetails_(
+      cfg,
+      uid,
+      newIds
+    );
+    const newLines = notifications.map(function(notification) {
+      return (
+        "🔔 [" +
+        notification.author +
+        " - " +
+        notification.record +
+        "]: " +
+        notification.body
+      );
+    });
+
+    if (newLines.length) {
+      const spreadsheet = SpreadsheetApp.getActiveSpreadsheet();
+      const sheet =
+        spreadsheet.getSheetByName(
+          ODOO_NOTIFICATION_CFG.SHEET_NAME
+        ) || spreadsheet.getActiveSheet();
+      const range = sheet.getRange(
+        ODOO_NOTIFICATION_CFG.CELL_RANGE
+      );
+      const previousText = String(range.getValue() || "").trim();
+      const newBlock = newLines.join("\n");
+
+      range.setValue(
+        previousText
+          ? newBlock + "\n" + previousText
+          : newBlock
+      );
+    }
+
+    userProps.setProperty(
+      ODOO_NOTIFICATION_CFG.CELL_LAST_SCANNED_ID_PROPERTY,
+      String(newIds[newIds.length - 1])
+    );
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+function limpiarNotificacionCelda() {
+  const spreadsheet = SpreadsheetApp.getActiveSpreadsheet();
+  const sheet =
+    spreadsheet.getSheetByName(
+      ODOO_NOTIFICATION_CFG.SHEET_NAME
+    ) || spreadsheet.getActiveSheet();
+
+  sheet
+    .getRange(ODOO_NOTIFICATION_CFG.CELL_RANGE)
+    .clearContent();
+}

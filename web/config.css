@@ -2249,3 +2249,15 @@ html[data-theme="light"] .pos-warn-text { color: #a5520f; }
         transition-duration: 1ms !important;
     }
 }
+
+/* Broma de registro de pagos ML (web/mercadolibre.js): carga falsa. */
+.meli-prank-backdrop { z-index: 1200; }
+.meli-prank { text-align: left; min-width: min(420px, calc(100vw - 32px)); }
+.meli-prank .ui-modal-message { min-height: 1.5em; margin-bottom: 14px; }
+.meli-prank-bar { height: 10px; border-radius: 999px; background: rgba(124, 148, 182, 0.22); overflow: hidden; }
+.meli-prank-bar span {
+    display: block; height: 100%; width: 0;
+    border-radius: inherit; background: linear-gradient(90deg, #42d0c7, #1fb8cf);
+    transition: width 1s ease;
+}
+html[data-theme="light"] .meli-prank-bar { background: #dfe9f5; }
