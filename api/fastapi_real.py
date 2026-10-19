@@ -78,6 +78,25 @@ async def revalidate_web_assets(request, call_next):
         response.headers["Cache-Control"] = "no-cache"
     return response
 
+
+try:
+    import remote_access
+except Exception as e:  # sin el modulo no se puede validar: se cierra el tunel, no se abre
+    remote_access = None
+    print(f"ADVERTENCIA: control de acceso remoto no disponible, se bloquea el tunel: {e}")
+
+
+@app.middleware("http")
+async def require_login_through_tunnel(request, call_next):
+    """Por el tunel de Cloudflare la API pide login; desde la PC o la red local, no."""
+    if remote_access is None:
+        if any(request.headers.get(h) for h in ("cf-connecting-ip", "cf-ray")) and request.url.path.startswith("/api"):
+            from fastapi.responses import JSONResponse
+            return JSONResponse(status_code=503, content={"detail": "Acceso remoto no disponible"})
+    elif remote_access.needs_login(request.url.path, request.method, request.headers):
+        return remote_access.login_required_response()
+    return await call_next(request)
+
 # Incluir endpoints de Electron
 try:
     from electron_endpoints import router as electron_router

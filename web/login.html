@@ -2,179 +2,160 @@
 <html lang="es">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>EtiquetadorZPL - Login</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <meta name="theme-color" content="#050c16">
+    <link rel="manifest" href="manifest.json">
+    <link rel="apple-touch-icon" href="icons/icon-192.png">
+    <title>EtiquetadorZPL - Iniciar sesion</title>
     <style>
+        :root {
+            color-scheme: dark;
+            --bg-0: #050c16;
+            --bg-1: #0b1728;
+            --panel: rgba(10, 21, 37, 0.86);
+            --line: rgba(124, 148, 182, 0.28);
+            --text-0: #e6edf8;
+            --text-1: #bdd0ea;
+            --accent: #42d0c7;
+            --accent-strong: #1fb8cf;
+            --danger: #ef6a6a;
+            --field: rgba(5, 12, 22, 0.7);
+        }
+        @media (prefers-color-scheme: light) {
+            :root {
+                color-scheme: light;
+                --bg-0: #eef3f9;
+                --bg-1: #dfe8f3;
+                --panel: rgba(255, 255, 255, 0.92);
+                --line: rgba(60, 84, 120, 0.22);
+                --text-0: #0f1d30;
+                --text-1: #3d5372;
+                --accent: #0f9e96;
+                --accent-strong: #0b8aa0;
+                --danger: #c93c3c;
+                --field: #ffffff;
+            }
+        }
         * { margin: 0; padding: 0; box-sizing: border-box; }
-        body { 
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; 
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            height: 100vh;
+        body {
+            font-family: 'Manrope', 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            color: var(--text-0);
+            background:
+                radial-gradient(900px 600px at 80% -10%, rgba(66, 208, 199, 0.16), transparent 60%),
+                linear-gradient(160deg, var(--bg-0) 0%, var(--bg-1) 100%);
+            min-height: 100dvh;
             display: flex;
             align-items: center;
             justify-content: center;
+            padding: 16px;
         }
-        .login-container {
-            background: white;
-            padding: 40px;
+        .login-card {
+            width: 100%;
+            max-width: 380px;
+            background: var(--panel);
+            border: 1px solid var(--line);
+            border-radius: 16px;
+            padding: 28px 22px;
+            box-shadow: 0 20px 60px rgba(1, 6, 14, 0.35);
+        }
+        .kicker {
+            font-size: 12px;
+            letter-spacing: 0.08em;
+            text-transform: uppercase;
+            color: var(--accent);
+            font-weight: 700;
+        }
+        h1 { font-size: 22px; margin: 6px 0 4px; }
+        .sub { color: var(--text-1); font-size: 14px; margin-bottom: 22px; }
+        label { display: block; font-size: 13px; font-weight: 600; color: var(--text-1); margin-bottom: 6px; }
+        input {
+            width: 100%;
+            padding: 12px;
             border-radius: 10px;
-            box-shadow: 0 15px 35px rgba(0,0,0,0.1);
+            border: 1px solid var(--line);
+            background: var(--field);
+            color: var(--text-0);
+            font-size: 16px; /* 16px evita el zoom automatico en iPhone */
+            margin-bottom: 16px;
+        }
+        input:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
+        button {
             width: 100%;
-            max-width: 400px;
-        }
-        .logo {
-            text-align: center;
-            margin-bottom: 30px;
-        }
-        .logo h1 {
-            color: #2c3e50;
-            font-size: 2em;
-            margin-bottom: 10px;
-        }
-        .form-group {
-            margin-bottom: 20px;
-        }
-        .form-group label {
-            display: block;
-            margin-bottom: 5px;
-            color: #555;
-            font-weight: 500;
-        }
-        .form-group input {
-            width: 100%;
-            padding: 12px;
-            border: 2px solid #ddd;
-            border-radius: 5px;
-            font-size: 16px;
-            transition: border-color 0.3s;
-        }
-        .form-group input:focus {
-            outline: none;
-            border-color: #667eea;
-        }
-        .btn {
-            width: 100%;
-            padding: 12px;
-            background: #667eea;
-            color: white;
+            padding: 13px;
             border: none;
-            border-radius: 5px;
+            border-radius: 10px;
+            background: linear-gradient(135deg, var(--accent), var(--accent-strong));
+            color: #04121a;
             font-size: 16px;
+            font-weight: 700;
             cursor: pointer;
-            transition: background 0.3s;
         }
-        .btn:hover {
-            background: #5a6fd8;
-        }
-        .error {
-            color: #e74c3c;
-            text-align: center;
-            margin-top: 15px;
-            display: none;
-        }
-        .info {
-            background: #f8f9fa;
-            padding: 15px;
-            border-radius: 5px;
-            margin-top: 20px;
-            font-size: 14px;
-            color: #666;
-        }
+        button:disabled { opacity: 0.6; cursor: wait; }
+        .error { color: var(--danger); font-size: 14px; margin-top: 14px; min-height: 1.2em; text-align: center; }
     </style>
 </head>
 <body>
-    <div class="login-container">
-        <div class="logo">
-            <h1>🏷️ EtiquetadorZPL</h1>
-            <p>Sistema de Gestión de Etiquetas</p>
-        </div>
-        
-        <form id="loginForm">
-            <div class="form-group">
-                <label for="username">Usuario:</label>
-                <input type="text" id="username" name="username" required>
-            </div>
-            
-            <div class="form-group">
-                <label for="password">Contraseña:</label>
-                <input type="password" id="password" name="password" required>
-            </div>
-            
-            <button type="submit" class="btn">Iniciar Sesión</button>
-            
-            <div id="error" class="error">
-                Usuario o contraseña incorrectos
-            </div>
+    <main class="login-card">
+        <p class="kicker">EtiquetadorZPL</p>
+        <h1>Iniciar sesion</h1>
+        <p class="sub">Para usar la app desde fuera de la oficina.</p>
+        <form id="login-form">
+            <label for="username">Usuario</label>
+            <input type="text" id="username" name="username" autocomplete="username" autocapitalize="none" required>
+            <label for="password">Contrasena</label>
+            <input type="password" id="password" name="password" autocomplete="current-password" required>
+            <button type="submit" id="login-submit">Entrar</button>
+            <p id="login-error" class="error" role="alert"></p>
         </form>
-        
-        <div class="info">
-            <strong>Usuario por defecto:</strong><br>
-            Usuario: admin<br>
-            Contraseña: admin123
-        </div>
-    </div>
+    </main>
 
     <script>
-        // Detectar puerto de la API
-        async function getApiPort() {
-            const ports = [8080, 8002, 8003, 8001];
-            
-            for (const port of ports) {
-                try {
-                    const response = await fetch(`http://localhost:${port}/api/status`, { 
-                        method: 'GET',
-                        timeout: 1000 
-                    });
-                    if (response.ok) {
-                        return port;
-                    }
-                } catch (e) {
-                    continue;
-                }
-            }
-            return 8080;
+        // Mismas claves que cloud.html: una sola sesion para toda la app.
+        const TOKEN_KEY = 'cloud_access_token';
+        const USER_KEY = 'cloud_username';
+        const ROLE_KEY = 'cloud_role';
+        const DEFAULT_NEXT = 'config.html?view=administrado#administrado';
+
+        // Solo se vuelve a paginas de esta misma app (nada de "//otro-sitio" ni "https:").
+        function safeNext() {
+            const next = new URLSearchParams(window.location.search).get('next') || '';
+            return /^[a-z0-9_-]+\.html([?#].*)?$/i.test(next) ? next : DEFAULT_NEXT;
         }
 
-        document.getElementById('loginForm').addEventListener('submit', async function(e) {
-            e.preventDefault();
-            
-            const username = document.getElementById('username').value;
-            const password = document.getElementById('password').value;
-            const errorDiv = document.getElementById('error');
-            
+        document.getElementById('login-form').addEventListener('submit', async (event) => {
+            event.preventDefault();
+            const submit = document.getElementById('login-submit');
+            const errorEl = document.getElementById('login-error');
+            errorEl.textContent = '';
+            submit.disabled = true;
             try {
-                const port = await getApiPort();
-                const response = await fetch(`http://localhost:${port}/api/auth/login`, {
+                const response = await fetch('/api/auth/login', {
                     method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                    },
-                    body: JSON.stringify({ username, password })
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        username: document.getElementById('username').value.trim(),
+                        password: document.getElementById('password').value
+                    })
                 });
-                
-                if (response.ok) {
-                    const data = await response.json();
-                    
-                    // Guardar sesión
-                    localStorage.setItem('username', data.username || username);
-                    localStorage.setItem('role', data.role || '');
-                    
-                    // Redirigir al dashboard
-                    window.location.href = 'config.html#administrado';
-                } else {
-                    const errorData = await response.json().catch(() => ({}));
-                    errorDiv.textContent = errorData.detail || 'Usuario o contrasena incorrectos';
-                    errorDiv.style.display = 'block';
+                const data = await response.json().catch(() => ({}));
+                if (!response.ok || !data.access_token) {
+                    throw new Error(data.detail || 'Usuario o contrasena incorrectos');
                 }
+                try {
+                    localStorage.setItem(TOKEN_KEY, data.access_token);
+                    localStorage.setItem(USER_KEY, data.username || '');
+                    localStorage.setItem(ROLE_KEY, data.role || '');
+                } catch (e) {
+                    throw new Error('El navegador no permite guardar la sesion (modo privado?)');
+                }
+                window.location.replace(safeNext());
             } catch (error) {
-                errorDiv.textContent = 'Error de conexión con el servidor';
-                errorDiv.style.display = 'block';
+                errorEl.textContent = error.message === 'Failed to fetch'
+                    ? 'No se pudo conectar con el servidor'
+                    : error.message;
+                submit.disabled = false;
             }
         });
-
-        // Auto-completar para demo
-        document.getElementById('username').value = 'admin';
-        document.getElementById('password').value = 'admin123';
     </script>
 </body>
 </html>

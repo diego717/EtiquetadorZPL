@@ -2261,3 +2261,198 @@ html[data-theme="light"] .pos-warn-text { color: #a5520f; }
     transition: width 1s ease;
 }
 html[data-theme="light"] .meli-prank-bar { background: #dfe9f5; }
+
+/* ============ Celular (web/mobile.js) ============
+   Envios y Conciliacion de pagos usables en pantalla chica: cada fila de tabla pasa a ser
+   una tarjeta (mobile.js pone el nombre de la columna en data-label) y la navegacion va
+   a una barra inferior. */
+.mobile-tabbar { display: none; }
+
+@media (max-width: 720px) {
+    body { padding-bottom: calc(68px + env(safe-area-inset-bottom, 0px)); }
+
+    .container { padding: 10px 10px 24px; }
+    .header { padding: 14px 16px; padding-top: calc(14px + env(safe-area-inset-top, 0px)); }
+    .header h1 { font-size: 20px; }
+    .header p { font-size: 13px; }
+    .header-actions { gap: 8px; }
+    .header-actions .btn { padding: 8px 12px; font-size: 13px; }
+    #theme-toggle-btn { min-width: 0; }
+    /* La navegacion de escritorio y los accesos a otras pantallas se reemplazan por la barra. */
+    .nav,
+    .health-bar,
+    #toggle-admin-view-btn,
+    .header-actions a[href="cloud.html"] { display: none !important; }
+
+    .card { padding: 14px 12px; }
+    .card-head { flex-direction: column; align-items: flex-start; gap: 8px; }
+    .toolbar-primary,
+    .inline-toolbar { align-items: stretch; }
+    .toolbar-primary > .btn,
+    .inline-toolbar > .btn { flex: 1 1 100%; }
+    .toolbar-primary .form-group.compact,
+    .inline-toolbar .form-group { flex: 1 1 calc(50% - 10px); min-width: 0; }
+    .toolbar-primary .form-group select,
+    .toolbar-primary .form-group input { width: 100%; }
+    /* 16px evita que el iPhone haga zoom al tocar un campo. */
+    input, select, textarea { font-size: 16px !important; }
+
+    /* ---- Tablas como tarjetas ---- */
+    .table-scroll { overflow: visible; border: none; background: none; box-shadow: none; }
+    .table-clean,
+    #meli-sales-table,
+    .meli-payments-table,
+    .dispatch-table,
+    #administrado-section .table-clean { min-width: 0 !important; border: none; }
+    .table-clean thead,
+    #meli-sales-table thead { display: none; }
+    .table-clean,
+    .table-clean tbody,
+    .table-clean tr,
+    .table-clean td,
+    #meli-sales-table,
+    #meli-sales-table tbody,
+    #meli-sales-table tr,
+    #meli-sales-table td { display: block; width: 100%; }
+
+    .table-clean tbody tr,
+    #meli-sales-table tbody tr,
+    html[data-theme="light"] .table-clean tbody tr,
+    html[data-theme="light"] #meli-sales-table tbody tr {
+        border: 1px solid var(--line-strong);
+        border-radius: var(--radius-md);
+        background: var(--panel-strong);
+        padding: 6px 12px;
+        margin-bottom: 10px;
+    }
+    html[data-theme="light"] .table-clean tbody tr,
+    html[data-theme="light"] #meli-sales-table tbody tr { background: #ffffff; }
+    .table-clean tbody tr:hover,
+    .table-clean tbody tr:nth-child(even) { background: var(--panel-strong); }
+    html[data-theme="light"] .table-clean tbody tr:hover,
+    html[data-theme="light"] .table-clean tbody tr:nth-child(even) { background: #ffffff; }
+
+    /* Etiqueta a la izquierda y valor a la derecha; con position y no grid para que
+       textos sueltos, <br> y varios elementos dentro de la celda no se desarmen. */
+    .table-clean tbody td,
+    #meli-sales-table tbody td {
+        position: relative;
+        min-width: 0 !important;
+        padding: 7px 0 7px 36%;
+        border: none;
+        border-bottom: 1px solid rgba(122, 146, 179, 0.16);
+        background: transparent !important;
+        overflow-wrap: anywhere;
+    }
+    .table-clean tbody td:last-child,
+    #meli-sales-table tbody td:last-child { border-bottom: none; }
+    /* En escritorio las columnas de Envios tienen ancho fijo; en tarjeta, todo el ancho. */
+    #administrado-section .table-clean td:nth-child(n) { width: 100%; min-width: 0 !important; }
+    .table-clean tbody td::before,
+    #meli-sales-table tbody td::before {
+        content: attr(data-label);
+        position: absolute;
+        left: 0;
+        top: 8px;
+        width: calc(36% - 10px);
+        font-size: 11px;
+        font-weight: 700;
+        letter-spacing: .04em;
+        text-transform: uppercase;
+        color: var(--text-1);
+        opacity: .8;
+    }
+    html[data-theme="light"] .table-clean tbody td::before,
+    html[data-theme="light"] #meli-sales-table tbody td::before { color: #4a6688; }
+
+    /* Celdas de botones, casillas o sin titulo: a todo el ancho. */
+    .table-clean tbody td:not([data-label]),
+    .table-clean tbody td[data-label="Accion"],
+    .table-clean tbody td[data-label="Odoo"],
+    .table-clean tbody td.empty-cell,
+    #meli-sales-table tbody td[data-label="Accion"] { padding-left: 0; }
+    .table-clean tbody td:not([data-label])::before,
+    .table-clean tbody td[data-label="Accion"]::before,
+    .table-clean tbody td[data-label="Odoo"]::before,
+    .table-clean tbody td.empty-cell::before,
+    #meli-sales-table tbody td[data-label="Accion"]::before { display: none; }
+    .table-clean tbody td.empty-cell { text-align: center; padding: 14px 0; }
+
+    /* Botones comodos para el dedo. */
+    .table-clean tbody td .btn,
+    .meli-payment-actions-inner .btn { min-height: 44px; flex: 1 1 auto; }
+    .action-stack { grid-template-columns: 1fr 1fr; width: 100%; }
+    .meli-payment-actions-inner { width: 100%; }
+    .meli-payment-actions-inner .btn { white-space: normal; }
+    .btn-link-odoo { display: inline-block; padding: 10px 0; }
+
+    /* Envios: el numero de envio como titulo de la tarjeta. */
+    #adm-sales-body td:first-child { padding-left: 0; font-size: 15px; }
+    #adm-sales-body td:first-child::before { display: none; }
+    /* La marca de "pendiente" pasa de la primera celda al borde de la tarjeta. */
+    #adm-sales-body tr.is-pending td:first-child { box-shadow: none; }
+    #adm-sales-body tr.is-pending,
+    html[data-theme="light"] #adm-sales-body tr.is-pending { border-left: 4px solid var(--warn); }
+    .action-stack .btn { width: 100%; }
+
+    /* Que los avisos no queden tapados por la barra inferior. */
+    .ui-toasts {
+        right: 10px;
+        left: 10px;
+        width: auto;
+        bottom: calc(76px + env(safe-area-inset-bottom, 0px));
+    }
+    .ui-modal { padding: 18px 16px; }
+    .ui-modal-actions { flex-wrap: wrap; }
+    .ui-modal-actions .btn { flex: 1 1 auto; min-height: 44px; }
+
+    /* ---- Barra inferior ---- */
+    .mobile-tabbar {
+        display: flex;
+        position: fixed;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        z-index: 95;
+        padding: 6px 8px calc(6px + env(safe-area-inset-bottom, 0px));
+        background: rgba(5, 12, 22, 0.94);
+        border-top: 1px solid var(--line);
+        backdrop-filter: blur(10px);
+    }
+    .mobile-tabbar[hidden] { display: none; }
+    .mobile-tabbar > a,
+    .mobile-tabbar > button {
+        flex: 1 1 0;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 3px;
+        padding: 6px 4px;
+        border: none;
+        border-radius: var(--radius-sm);
+        background: none;
+        color: var(--text-1);
+        font: inherit;
+        font-size: 12px;
+        font-weight: 600;
+        text-decoration: none;
+        cursor: pointer;
+    }
+    .mobile-tabbar > button[hidden] { display: none; }
+    .mobile-tabbar svg {
+        width: 22px;
+        height: 22px;
+        fill: none;
+        stroke: currentColor;
+        stroke-width: 1.8;
+        stroke-linecap: round;
+        stroke-linejoin: round;
+    }
+    .mobile-tabbar .is-active { color: var(--accent); background: rgba(66, 208, 199, 0.1); }
+    .mobile-tabbar a:focus-visible,
+    .mobile-tabbar button:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+    html[data-theme="light"] .mobile-tabbar { background: rgba(255, 255, 255, 0.95); border-top-color: rgba(123, 147, 181, 0.34); }
+    html[data-theme="light"] .mobile-tabbar > a,
+    html[data-theme="light"] .mobile-tabbar > button { color: #3f5f84; }
+    html[data-theme="light"] .mobile-tabbar .is-active { color: #0f8f88; background: rgba(15, 143, 136, 0.1); }
+}

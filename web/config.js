@@ -1,4 +1,64 @@
 ﻿// API host/port resolution for local and remote clients
+
+// Sesion para usar la app desde fuera de la oficina (por el tunel de Cloudflare el servidor
+// pide login; desde la PC o la red local, no). Mismas claves que login.html y cloud.html.
+const SESSION_TOKEN_KEY = 'cloud_access_token';
+
+function getSessionToken() {
+    try {
+        return localStorage.getItem(SESSION_TOKEN_KEY) || '';
+    } catch (e) {
+        return '';
+    }
+}
+
+function clearSessionToken() {
+    try {
+        localStorage.removeItem(SESSION_TOKEN_KEY);
+    } catch (e) {
+        // Sin almacenamiento no hay nada que borrar.
+    }
+}
+
+function redirectToLogin() {
+    const page = window.location.pathname.split('/').pop() || 'config.html';
+    const next = `${page}${window.location.search}${window.location.hash}`;
+    window.location.href = `login.html?next=${encodeURIComponent(next)}`;
+}
+
+(function installSessionFetch() {
+    if (typeof window.fetch !== 'function' || window.__sessionFetchInstalled) return;
+    window.__sessionFetchInstalled = true;
+    const nativeFetch = window.fetch.bind(window);
+    let redirecting = false;
+
+    const isOwnApi = (input) => {
+        try {
+            const url = new URL(typeof input === 'string' ? input : input.url, window.location.href);
+            return url.origin === window.location.origin && url.pathname.startsWith('/api');
+        } catch (e) {
+            return false;
+        }
+    };
+
+    window.fetch = async (input, init = {}) => {
+        const ownApi = isOwnApi(input);
+        const token = ownApi ? getSessionToken() : '';
+        if (token) {
+            const headers = new Headers(init.headers || (input instanceof Request ? input.headers : undefined));
+            if (!headers.has('Authorization')) headers.set('Authorization', `Bearer ${token}`);
+            init = { ...init, headers };
+        }
+        const response = await nativeFetch(input, init);
+        if (ownApi && response.status === 401 && response.headers.get('X-Login-Required') === '1' && !redirecting) {
+            redirecting = true;
+            clearSessionToken();
+            redirectToLogin();
+        }
+        return response;
+    };
+})();
+
 const CURRENT_PROTOCOL = window.location.protocol || 'http:';
 const CURRENT_HOSTNAME = window.location.hostname || 'localhost';
 const CURRENT_ORIGIN = (window.location.origin && window.location.origin !== 'null') ? window.location.origin : '';
