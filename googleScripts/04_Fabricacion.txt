@@ -825,6 +825,13 @@ function syncOdooManufacturingOrdersUnlocked_() {
     uid,
     noteCandidateIds
   );
+  const chatterExcludedManufacturingIds =
+    fetchManufacturingIdsWithChatterMarkers_(
+      cfg,
+      uid,
+      noteCandidateIds,
+      MFG_CFG.SKIP_CHATTER_MARKERS
+    );
 
   let inserted = 0;
   let updated = 0;
@@ -871,52 +878,40 @@ function syncOdooManufacturingOrdersUnlocked_() {
       orderKeys
     );
 
-    if (currentState === "cancel") {
-      if (existingRow) {
-        const rowOdooId = cleanString_(
-          sheet.getRange(existingRow, getManufacturingIdColumn_()).getDisplayValue()
-        );
+    const isChatterExcluded = chatterExcludedManufacturingIds.has(odooId);
 
-        if (rowOdooId && rowOdooId !== odooId) {
-          // El mapa de filas (armado a partir de una nota que puede haber
-          // quedado desactualizada) apunta a una fila que en este momento
-          // pertenece a otra orden. No la tocamos: borrarla destruiría
-          // datos de esa otra orden.
-          appendSyncLog_({
-            module: "FABRICACION",
-            action: "skip_cancel",
-            order: displayOrder,
-            odooId,
-            origin: "FABRICACION",
-            details:
-              `Fila ${existingRow} mapeada por clave/nota, pero su id ` +
-              `oculto actual ("${rowOdooId}") no coincide con el id ` +
-              `cancelado ("${odooId}"); no se borra para evitar borrar ` +
-              `datos de otra orden.`,
-          });
-        } else {
-          if (
-            clearManufacturingFinalizationNotificationKeysForRows_(
-              sheet,
-              [existingRow],
-              manufacturingFinalizationNotifiedKeys
-            )
-          ) {
-            manufacturingFinalizationNotificationsChanged = true;
-          }
-          clearManufacturingRow_(sheet, existingRow);
+    if (currentState === "cancel" || isChatterExcluded) {
+      if (isChatterExcluded) {
+        appendSyncLog_({
+          module: "FABRICACION",
+          action: "skip_chatter_marker",
+          order: displayOrder,
+          odooId,
+          origin: "FABRICACION",
+          details:
+            "El chatter indica que la genero Control de Ordenes NEOCARD; " +
+            "la venta ya esta en la planilla, no se sincroniza.",
+        });
+      }
+
+      if (existingRow) {
+        const removal = removeManufacturingRowForOdooId_(sheet, existingRow, {
+          odooId,
+          displayOrder,
+          notifiedKeys: manufacturingFinalizationNotifiedKeys,
+          reason: isChatterExcluded
+            ? "Orden generada por Control de Ordenes NEOCARD eliminada de la planilla."
+            : "Orden cancelada eliminada de la planilla.",
+        });
+
+        if (removal.notificationsChanged) {
+          manufacturingFinalizationNotificationsChanged = true;
+        }
+        if (removal.removed) {
           removeManufacturingRowKeys_(existingOrderRowMap, orderKeys);
           removed++;
           needsAutoSort = true;
           nextRow = getFirstAvailableRow_(sheet);
-          appendSyncLog_({
-            module: "FABRICACION",
-            action: "delete",
-            order: displayOrder,
-            odooId,
-            origin: "FABRICACION",
-            details: "Orden cancelada eliminada de la planilla.",
-          });
         }
       }
 
@@ -1142,6 +1137,112 @@ function syncOdooManufacturingOrdersUnlocked_() {
   flushSyncLogBuffer_();
 
   return { inserted, updated, removed };
+}
+
+/**
+ * Limpia la fila de una fabricacion solo si su id oculto coincide (o esta
+ * vacio). Si el mapa por clave/nota apunta a una fila que hoy pertenece a
+ * otra orden, no se toca para no borrar datos ajenos.
+ */
+function removeManufacturingRowForOdooId_(sheet, row, options) {
+  const odooId = cleanString_(options && options.odooId);
+  const displayOrder = cleanString_(options && options.displayOrder);
+  const rowOdooId = cleanString_(
+    sheet.getRange(row, getManufacturingIdColumn_()).getDisplayValue()
+  );
+
+  if (rowOdooId && rowOdooId !== odooId) {
+    appendSyncLog_({
+      module: "FABRICACION",
+      action: "skip_delete",
+      order: displayOrder,
+      odooId,
+      origin: "FABRICACION",
+      details:
+        `Fila ${row} mapeada por clave/nota, pero su id oculto actual ` +
+        `("${rowOdooId}") no coincide con el id ("${odooId}"); no se ` +
+        "borra para evitar borrar datos de otra orden.",
+    });
+    return { removed: false, notificationsChanged: false };
+  }
+
+  const notificationsChanged = Boolean(
+    options.notifiedKeys &&
+      clearManufacturingFinalizationNotificationKeysForRows_(
+        sheet,
+        [row],
+        options.notifiedKeys
+      )
+  );
+  clearManufacturingRow_(sheet, row);
+  appendSyncLog_({
+    module: "FABRICACION",
+    action: "delete",
+    order: displayOrder,
+    odooId,
+    origin: "FABRICACION",
+    details: options.reason,
+  });
+
+  return { removed: true, notificationsChanged };
+}
+
+/**
+ * Devuelve el Set (ids como texto) de fabricaciones con algun mensaje de
+ * chatter que contiene alguno de los textos indicados (sin distinguir
+ * mayusculas).
+ */
+function fetchManufacturingIdsWithChatterMarkers_(
+  cfg,
+  uid,
+  manufacturingIds,
+  markers
+) {
+  const result = new Set();
+  const normalizedMarkers = (markers || [])
+    .map((marker) => cleanString_(marker))
+    .filter(Boolean);
+  const normalizedIds = Array.from(
+    new Set(
+      (manufacturingIds || [])
+        .map((id) => Number(id))
+        .filter((id) => Number.isInteger(id) && id > 0)
+    )
+  );
+
+  if (!normalizedMarkers.length || !normalizedIds.length) return result;
+
+  const markerDomain = [];
+  for (let index = 1; index < normalizedMarkers.length; index++) {
+    markerDomain.push("|");
+  }
+  for (const marker of normalizedMarkers) {
+    markerDomain.push(["body", "ilike", marker]);
+  }
+
+  for (const idsChunk of chunkManufacturingValues_(normalizedIds, 200)) {
+    const messages =
+      executeKw_(
+        cfg,
+        uid,
+        ODOO_MODELS.chatter,
+        "search_read",
+        [[
+          ["model", "=", ODOO_MODELS.manufacturing],
+          ["res_id", "in", idsChunk],
+        ].concat(markerDomain)],
+        { fields: ["res_id"] }
+      ) || [];
+
+    for (const message of messages) {
+      const manufacturingId = Number(message.res_id);
+      if (Number.isInteger(manufacturingId) && manufacturingId > 0) {
+        result.add(String(manufacturingId));
+      }
+    }
+  }
+
+  return result;
 }
 
 function chunkManufacturingValues_(values, chunkSize) {

@@ -33,6 +33,10 @@ const MFG_CFG = {
   DEBUG_LOGS: true,
   ALLOWED_STATES: ["confirmed", "to_close"],
   RESPONSIBLE_FILTER_SHEET_NAME: "CONFIG FABRICACION",
+  // Fabricaciones cuyo chatter contiene alguno de estos textos no se
+  // sincronizan: las genera Control de Ordenes NEOCARD a partir de una venta
+  // que ya figura en la planilla con la cantidad exacta.
+  SKIP_CHATTER_MARKERS: ["Control de Ordenes NEOCARD"],
 };
 const SALES_CFG = {
   LAST_SYNC_PROPERTY: "ODOO_SALES_LAST_SYNC_UTC",
