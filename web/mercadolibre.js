@@ -5,6 +5,9 @@ let mercadoLibreSales = [];
 let mercadoLibrePayments = [];
 let mercadoLibrePaymentJournals = [];
 let mercadoLibrePaymentOperators = [];
+// Ventas cuyo pago se esta registrando: la tabla se redibuja entera al terminar cada una,
+// asi que el estado "Registrando..." tiene que sobrevivir al redibujado.
+const mercadoLibrePaymentsInFlight = new Set();
 
 function escapeMercadoLibreHtml(value) {
     return String(value ?? '')
@@ -309,6 +312,16 @@ function renderMercadoLibrePayments() {
     const summary = document.getElementById('meli-payment-summary');
     if (!tbody || !summary) return;
 
+    const registerAllButton = document.getElementById('meli-register-all');
+    if (registerAllButton) {
+        const pendingCount = mercadoLibrePayments.filter(item =>
+            item.can_register && !mercadoLibrePaymentsInFlight.has(String(item.order_id))).length;
+        registerAllButton.disabled = pendingCount === 0;
+        registerAllButton.textContent = pendingCount
+            ? `Registrar todos los listos (${pendingCount})`
+            : 'Registrar todos los listos';
+    }
+
     if (!mercadoLibrePayments.length) {
         tbody.innerHTML = '<tr><td colspan="8" class="empty-cell">No hay pagos para mostrar</td></tr>';
         summary.textContent = 'Sin datos';
@@ -334,8 +347,12 @@ function renderMercadoLibrePayments() {
         const invoiceName = escapeMercadoLibreHtml(invoice.name || '-');
         const paymentReference = escapeMercadoLibreHtml(item.payment_reference || '-');
         const registered = item.registered === true;
-        const statusText = registered ? 'Registrado y adjuntado' : (item.can_register ? 'Listo para registrar' : (item.reason || 'No disponible'));
+        const inFlight = mercadoLibrePaymentsInFlight.has(String(item.order_id));
+        const statusText = registered ? 'Registrado y adjuntado' : (inFlight ? 'Registrando...' : (item.can_register ? 'Listo para registrar' : (item.reason || 'No disponible')));
         const statusClass = registered ? 'completed' : (item.can_register ? 'ready' : 'pending');
+        const registerButton = inFlight
+            ? '<button type="button" class="btn success sm" disabled>Registrando...</button>'
+            : (item.can_register ? `<button type="button" class="btn success sm" data-order-id="${orderId}" onclick="registerMercadoLibrePayment(this.dataset.orderId)">Registrar pago</button>` : '');
         const paymentUrl = item.registration?.payment_url;
         const invoiceUrl = item.registration?.invoice_url;
         return `
@@ -348,7 +365,7 @@ function renderMercadoLibrePayments() {
                 <td>${invoiceName}</td>
                 <td><span class="status ${statusClass}" title="${escapeMercadoLibreHtml(statusText)}">${escapeMercadoLibreHtml(statusText)}</span></td>
                 <td class="meli-payment-actions"><div class="meli-payment-actions-inner">
-                    ${item.can_register ? `<button type="button" class="btn success sm" data-order-id="${orderId}" onclick="registerMercadoLibrePayment(this.dataset.orderId, this)">Registrar pago</button>` : ''}
+                    ${registerButton}
                     ${paymentUrl ? `<a class="btn secondary sm" href="${escapeMercadoLibreHtml(paymentUrl)}" target="_blank" rel="noopener noreferrer">Abrir pago ↗</a>` : ''}
                     ${invoiceUrl ? `<a class="btn-link-odoo" href="${escapeMercadoLibreHtml(invoiceUrl)}" target="_blank" rel="noopener noreferrer">Factura ↗</a>` : ''}
                 </div></td>
@@ -679,9 +696,10 @@ async function runMercadoLibrePrankLoading() {
     backdrop.remove();
 }
 
-async function registerMercadoLibrePayment(orderId, button) {
-    const item = mercadoLibrePayments.find(row => String(row.order_id) === String(orderId));
-    if (!item || !item.can_register) return;
+async function registerMercadoLibrePayment(orderId) {
+    const key = String(orderId);
+    const item = mercadoLibrePayments.find(row => String(row.order_id) === key);
+    if (!item || !item.can_register || mercadoLibrePaymentsInFlight.has(key)) return;
     const operatorSelect = document.getElementById('meli-payment-operator');
     const journalSelect = document.getElementById('meli-payment-journal');
     if (!operatorSelect.value) {
@@ -731,33 +749,16 @@ async function registerMercadoLibrePayment(orderId, button) {
 
     const withConfirmations = mercadoLibrePrankHas(prank, 'confirmations');
     if (withConfirmations && !(await runMercadoLibrePrankConfirmations())) return;
+    // Mientras estaba abierto el modal pudo haberse lanzado el mismo pago desde otro clic.
+    if (mercadoLibrePaymentsInFlight.has(key)) return;
 
-    button.disabled = true;
-    const originalText = button.textContent;
-    button.textContent = 'Registrando...';
     try {
-        if (withConfirmations) await runMercadoLibrePrankLoading();
-        const apiBase = await ensureApiPort();
-        const response = await fetch(`${apiBase}/api/mercadolibre/payments/register`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                order_id: item.order_id,
-                journal_id: parseInt(journalSelect.value, 10),
-                operator_app_username: operatorSelect.value,
-                rounding_account_id: roundingAccountId
-            })
+        const result = await postMercadoLibrePayment(item, {
+            journalId: parseInt(journalSelect.value, 10),
+            operator: operatorSelect.value,
+            roundingAccountId,
+            beforeSend: withConfirmations ? runMercadoLibrePrankLoading : null
         });
-        const result = await response.json();
-        if (!response.ok) throw new Error(result.detail || `HTTP ${response.status}`);
-
-        item.registered = true;
-        item.can_register = false;
-        item.registration = result;
-        item.reason = result.attachment_ok
-            ? 'Pago registrado con comprobante PDF'
-            : (result.warning || 'Pago registrado sin comprobante');
-        renderMercadoLibrePayments();
         if (typeof loadPosHistory === 'function') loadPosHistory();
         if (result.warning) {
             uiToast(result.warning, 'info', { title: 'Pago registrado con advertencia', duration: 9000 });
@@ -773,8 +774,153 @@ async function registerMercadoLibrePayment(orderId, button) {
             });
         }
     } catch (error) {
-        button.disabled = false;
-        button.textContent = originalText;
         alert(`Error registrando pago de Mercado Libre: ${error.message}`);
+    }
+}
+
+// Registra un pago en el backend, marcando la fila como "Registrando..." mientras dura.
+// Devuelve la respuesta del backend o lanza el error que informo.
+async function postMercadoLibrePayment(item, { journalId, operator, roundingAccountId, beforeSend = null }) {
+    const key = String(item.order_id);
+    mercadoLibrePaymentsInFlight.add(key);
+    renderMercadoLibrePayments();
+    try {
+        if (beforeSend) await beforeSend();
+        const apiBase = await ensureApiPort();
+        const response = await fetch(`${apiBase}/api/mercadolibre/payments/register`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                order_id: item.order_id,
+                journal_id: journalId,
+                operator_app_username: operator,
+                rounding_account_id: Number(item.rounding_difference || 0) ? roundingAccountId : null
+            })
+        });
+        const result = await response.json();
+        if (!response.ok) throw new Error(result.detail || `HTTP ${response.status}`);
+
+        // Si se volvio a buscar mientras se registraba, la fila es otro objeto de la lista nueva.
+        const rows = [item, ...mercadoLibrePayments.filter(row => String(row.order_id) === key && row !== item)];
+        for (const row of rows) {
+            row.registered = true;
+            row.can_register = false;
+            row.registration = result;
+            row.reason = result.attachment_ok
+                ? 'Pago registrado con comprobante PDF'
+                : (result.warning || 'Pago registrado sin comprobante');
+        }
+        return result;
+    } finally {
+        mercadoLibrePaymentsInFlight.delete(key);
+        renderMercadoLibrePayments();
+    }
+}
+
+// El backend crea los pagos en Odoo de a uno; con 3 pedidos en vuelo la lectura de
+// Mercado Libre y la subida del PDF de uno se solapan con el pago del siguiente.
+const MELI_BULK_CONCURRENCY = 3;
+
+async function registerAllMercadoLibrePayments() {
+    const operatorSelect = document.getElementById('meli-payment-operator');
+    const journalSelect = document.getElementById('meli-payment-journal');
+    const roundingSelect = document.getElementById('meli-payment-rounding-account');
+    if (!operatorSelect.value) {
+        alert('Selecciona quien registrara el pago en Odoo');
+        operatorSelect.focus();
+        return;
+    }
+    if (!journalSelect.value) {
+        alert('Selecciona el diario contable Mercado Pago');
+        journalSelect.focus();
+        return;
+    }
+    const roundingAccountId = parseInt(roundingSelect?.value || '', 10) || null;
+
+    const ready = mercadoLibrePayments.filter(item =>
+        item.can_register && !mercadoLibrePaymentsInFlight.has(String(item.order_id)));
+    // Sin cuenta de redondeo no se pueden registrar las que difieren por centesimos.
+    const items = ready.filter(item => !Number(item.rounding_difference || 0) || roundingAccountId);
+    const skippedRounding = ready.length - items.length;
+    if (!items.length) {
+        alert(skippedRounding
+            ? 'Las ventas listas difieren por redondeo: selecciona la cuenta de redondeo'
+            : 'No hay pagos listos para registrar');
+        return;
+    }
+
+    const totals = {};
+    for (const item of items) {
+        const currency = item.currency || '';
+        totals[currency] = (totals[currency] || 0) + Number(item.amount || 0);
+    }
+    const totalText = Object.entries(totals)
+        .map(([currency, amount]) => formatMercadoLibreAmount(amount, currency))
+        .join(' + ');
+
+    const prank = await shouldRunMercadoLibrePrank();
+    if (prank) markMercadoLibrePrankShown();
+    const stopDodge = mercadoLibrePrankHas(prank, 'dodge') ? startMercadoLibreModalDodge() : null;
+    const confirmed = await uiConfirm({
+        tone: 'danger',
+        title: 'Registrar todos los pagos listos',
+        message: `Se crearan ${items.length} pagos reales en Odoo, cada uno con su comprobante PDF.`,
+        details: [
+            ['Pagos a registrar', String(items.length)],
+            ['Importe total', totalText],
+            ...(skippedRounding ? [['Se omiten', `${skippedRounding} con redondeo (falta la cuenta de redondeo)`]] : []),
+            ['Operador', operatorSelect.options[operatorSelect.selectedIndex]?.text || operatorSelect.value],
+            ['Diario', journalSelect.options[journalSelect.selectedIndex]?.text || journalSelect.value]
+        ],
+        confirmText: `Registrar ${items.length} pagos`
+    });
+    if (stopDodge) stopDodge();
+    if (!confirmed) return;
+
+    const withConfirmations = mercadoLibrePrankHas(prank, 'confirmations');
+    if (withConfirmations && !(await runMercadoLibrePrankConfirmations())) return;
+    if (withConfirmations) await runMercadoLibrePrankLoading();
+
+    const params = {
+        journalId: parseInt(journalSelect.value, 10),
+        operator: operatorSelect.value,
+        roundingAccountId
+    };
+    const pending = [...items];
+    const failures = [];
+    let okCount = 0;
+    let warningCount = 0;
+    const worker = async () => {
+        while (pending.length) {
+            const item = pending.shift();
+            // Pudo haberse registrado a mano mientras esperaba en la cola.
+            if (!item.can_register || mercadoLibrePaymentsInFlight.has(String(item.order_id))) continue;
+            try {
+                const result = await postMercadoLibrePayment(item, params);
+                okCount += 1;
+                if (result.warning) warningCount += 1;
+            } catch (error) {
+                failures.push(`${item.reference || item.order_id}: ${error.message}`);
+            }
+        }
+    };
+    await Promise.all(Array.from({ length: Math.min(MELI_BULK_CONCURRENCY, items.length) }, worker));
+
+    if (okCount && typeof loadPosHistory === 'function') loadPosHistory();
+    if (okCount) {
+        uiToast(
+            `${okCount} pago${okCount === 1 ? '' : 's'} registrado${okCount === 1 ? '' : 's'} en Odoo`
+                + (warningCount ? ` (${warningCount} con advertencia: revisa la columna Estado).` : '.'),
+            warningCount ? 'info' : 'success',
+            { duration: 9000 }
+        );
+    }
+    if (prank) {
+        uiToast('Tranqui, era una broma. Los pagos quedaron registrados bien.', 'info', {
+            title: 'Te la creíste', duration: 9000
+        });
+    }
+    if (failures.length) {
+        alert(`No se pudieron registrar ${failures.length} pago${failures.length === 1 ? '' : 's'}:\n\n${failures.join('\n')}`);
     }
 }

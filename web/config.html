@@ -934,6 +934,7 @@
                 </p>
                 <div class="toolbar-primary">
                     <button class="btn" onclick="syncMercadoLibrePayments()">Buscar pagos</button>
+                    <button type="button" class="btn success" id="meli-register-all" onclick="registerAllMercadoLibrePayments()" disabled>Registrar todos los listos</button>
                     <div class="form-group compact">
                         <label for="meli-payment-limit">Traer ultimas ventas</label>
                         <input type="number" id="meli-payment-limit" min="1" max="50" value="20">
@@ -986,6 +987,15 @@
                 <div class="form-group">
                     <label for="pos-history-search">Buscar:</label>
                     <input type="search" id="pos-history-search" placeholder="Factura, ticket, venta ML, comprador u operador" oninput="renderPosHistory()">
+                </div>
+                <div class="form-group">
+                    <label for="pos-history-period">Registrados en:</label>
+                    <select id="pos-history-period" onchange="renderPosHistory()" title="Al buscar por texto se revisa todo el historial">
+                        <option value="7">Últimos 7 días</option>
+                        <option value="30">Últimos 30 días</option>
+                        <option value="90">Últimos 90 días</option>
+                        <option value="all">Todo el historial</option>
+                    </select>
                 </div>
                 <div class="form-group">
                     <label for="pos-history-date-from">Fecha pago desde:</label>

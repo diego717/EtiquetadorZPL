@@ -623,9 +623,15 @@ function renderPosHistory() {
     const dateTo = document.getElementById('pos-history-date-to')?.value || '';
     const state = document.getElementById('pos-history-state')?.value || 'ok';
     const sourceFilter = document.getElementById('pos-history-source')?.value || 'all';
+    // El periodo acota la lista por fecha de registro; al buscar por texto se revisa todo
+    // el historial para poder encontrar pagos viejos.
+    const periodDays = parseInt(document.getElementById('pos-history-period')?.value || '', 10);
+    const registeredFrom = !search && periodDays > 0 ? posDaysAgoIso(periodDays - 1) : '';
     const filtered = posPaymentHistory.filter(item => {
+        const registeredDate = String(item.registered_at || '').slice(0, 10);
         const paymentDate = posPaymentDateIso(item.cupon?.fecha || item.mercadolibre?.payment_date || item.transfer?.date)
-            || String(item.registered_at || '').slice(0, 10);
+            || registeredDate;
+        if (registeredFrom && registeredDate && registeredDate < registeredFrom) return false;
         if (sourceFilter !== 'all' && paymentHistorySource(item) !== sourceFilter) return false;
         if (search && !posHistorySearchText(item).includes(search)) return false;
         if (dateFrom && paymentDate && paymentDate < dateFrom) return false;
@@ -670,7 +676,18 @@ function renderPosHistory() {
             <td><div class="pos-history-actions">${odooActions.join('') || '<span class="odoo-muted">Sin enlace</span>'}</div></td>
         </tr>`;
     }).join('') : '<tr><td colspan="9" class="empty-cell">No hay pagos que coincidan con los filtros</td></tr>';
-    summary.textContent = `${filtered.length} de ${posPaymentHistory.length} registro(s)`;
+    const scope = registeredFrom
+        ? ` · registrados en los ultimos ${periodDays} dias`
+        : (search && periodDays > 0 ? ' · buscando en todo el historial' : '');
+    summary.textContent = `${filtered.length} de ${posPaymentHistory.length} registro(s)${scope}`;
+}
+
+// Fecha local (AAAA-MM-DD) de hace `days` dias; 0 es hoy.
+function posDaysAgoIso(days) {
+    const date = new Date();
+    date.setDate(date.getDate() - days);
+    const pad = (value) => String(value).padStart(2, '0');
+    return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
 }
 
 async function loadPosHistory() {
@@ -695,6 +712,7 @@ async function loadPosHistory() {
 
 function clearPosHistoryFilters() {
     document.getElementById('pos-history-search').value = '';
+    document.getElementById('pos-history-period').value = '7';
     document.getElementById('pos-history-date-from').value = '';
     document.getElementById('pos-history-date-to').value = '';
     document.getElementById('pos-history-state').value = 'ok';

@@ -302,19 +302,21 @@ def register_order_payment(
     Se registra el importe cobrado por Mercado Libre; si la factura difiere por
     redondeo, el centesimo se salda contra ``rounding_account_id``.
     """
-    with _register_lock:
-        # Antes de crear un pago real se lee todo de nuevo, sin cache.
-        orders = _load_sale_orders(
-            mercadolibre, mercadolibre.get_order(str(order_id)), use_cache=False
-        )
-        summary = summarize_sale_payment(
-            orders, _buyer_shipping_cost(mercadolibre, orders, use_cache=False)
-        )
-        if not summary["all_orders_paid"]:
-            raise ValueError("La venta de Mercado Libre ya no figura como pagada")
-        if _unusable_reason(summary):
-            raise ValueError("Mercado Libre no devolvio un pago aprobado utilizable")
+    # Antes de crear un pago real se lee todo de nuevo, sin cache. La lectura de
+    # Mercado Libre va fuera del lock para que varios pagos en cola la hagan en
+    # paralelo; solo la busqueda de la factura y el pago en Odoo se serializan.
+    orders = _load_sale_orders(
+        mercadolibre, mercadolibre.get_order(str(order_id)), use_cache=False
+    )
+    summary = summarize_sale_payment(
+        orders, _buyer_shipping_cost(mercadolibre, orders, use_cache=False)
+    )
+    if not summary["all_orders_paid"]:
+        raise ValueError("La venta de Mercado Libre ya no figura como pagada")
+    if _unusable_reason(summary):
+        raise ValueError("Mercado Libre no devolvio un pago aprobado utilizable")
 
+    with _register_lock:
         match = odoo.find_sale_invoice_for_reference(
             summary["reference"],
             summary["amount"],
@@ -347,44 +349,44 @@ def register_order_payment(
             int(rounding_account_id) if rounding_difference else None,
             writeoff_label=ROUNDING_WRITEOFF_LABEL,
         )
-        result: Dict[str, Any] = {
-            "ok": True,
-            "order": summary,
-            "invoice": invoice,
-            "sale_order": match.get("sale_order"),
-            "memo": memo,
-            "payment_amount": summary["amount"],
-            "rounding_difference": rounding_difference,
-            "result": payment_result,
-            "attachment_ok": False,
-        }
+    result: Dict[str, Any] = {
+        "ok": True,
+        "order": summary,
+        "invoice": invoice,
+        "sale_order": match.get("sale_order"),
+        "memo": memo,
+        "payment_amount": summary["amount"],
+        "rounding_difference": rounding_difference,
+        "result": payment_result,
+        "attachment_ok": False,
+    }
 
-        payment_id = payment_result.get("payment_id")
-        if not payment_id:
-            result["warning"] = (
-                "El pago se registro, pero Odoo no devolvio el ID del pago creado "
-                "para adjuntar el PDF de Mercado Libre."
-            )
-            return result
-
-        try:
-            sale = _sale_document(orders, summary)
-            filename = build_mercadolibre_payment_filename(sale)
-            pdf_bytes = generate_mercadolibre_payment_pdf(sale, invoice_name, get_branding(odoo))
-            result["attachment"] = odoo.attach_pdf_to_payment(
-                int(payment_id),
-                filename,
-                pdf_bytes,
-                auth_override,
-            )
-            result["attachment_ok"] = True
-        except Exception as exc:
-            message = str(exc or "").strip() or "error desconocido"
-            result["warning"] = (
-                "El pago se registro, pero no se pudo adjuntar el PDF de Mercado Libre: "
-                f"{message}"
-            )
-
-        result["payment_url"] = odoo.record_url("account.payment", payment_id)
-        result["invoice_url"] = odoo.record_url("account.move", invoice["id"])
+    payment_id = payment_result.get("payment_id")
+    if not payment_id:
+        result["warning"] = (
+            "El pago se registro, pero Odoo no devolvio el ID del pago creado "
+            "para adjuntar el PDF de Mercado Libre."
+        )
         return result
+
+    try:
+        sale = _sale_document(orders, summary)
+        filename = build_mercadolibre_payment_filename(sale)
+        pdf_bytes = generate_mercadolibre_payment_pdf(sale, invoice_name, get_branding(odoo))
+        result["attachment"] = odoo.attach_pdf_to_payment(
+            int(payment_id),
+            filename,
+            pdf_bytes,
+            auth_override,
+        )
+        result["attachment_ok"] = True
+    except Exception as exc:
+        message = str(exc or "").strip() or "error desconocido"
+        result["warning"] = (
+            "El pago se registro, pero no se pudo adjuntar el PDF de Mercado Libre: "
+            f"{message}"
+        )
+
+    result["payment_url"] = odoo.record_url("account.payment", payment_id)
+    result["invoice_url"] = odoo.record_url("account.move", invoice["id"])
+    return result
