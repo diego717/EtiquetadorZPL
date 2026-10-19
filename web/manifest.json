@@ -15,6 +15,8 @@
         { "src": "icons/icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
     ],
     "shortcuts": [
+        { "name": "Trabajos", "url": "trabajos.html?view=trabajos" },
+        { "name": "Etiquetas precargadas", "url": "precargadas.html?view=precargadas" },
         { "name": "Envios Administrado", "url": "config.html?view=administrado#administrado" },
         { "name": "Conciliacion de pagos", "url": "config.html?view=pos#pos-reconciliation-section" }
     ]

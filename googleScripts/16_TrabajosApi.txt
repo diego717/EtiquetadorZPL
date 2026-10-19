@@ -1,0 +1,347 @@
+/**
+ * ============================================================================
+ * API DE TRABAJOS (para el panel EtiquetadorZPL / celular)
+ * ============================================================================
+ *
+ * Expone la hoja TRABAJOS como JSON por una Web App protegida con token y
+ * permite cambiar el estado (columna I) de un trabajo. Nada mas se modifica.
+ *
+ * Puesta en marcha (una sola vez):
+ * 1. Ejecutar setupTrabajosApiToken desde el editor y copiar el token del log.
+ * 2. Implementar > Nueva implementacion > Aplicacion web
+ *    - Ejecutar como: Yo
+ *    - Quien tiene acceso: Cualquiera
+ * 3. Copiar la URL que termina en /exec.
+ *
+ * Despues de cambiar este archivo: Implementar > Gestionar implementaciones >
+ * editar (lapiz) > Version: Nueva version. Asi la URL no cambia.
+ *
+ * Lectura: GET <url>/exec?token=<token>
+ * Etiquetas precargadas (carpeta FOLDER_ID de 09_EtiquetasPrecargadas):
+ *   GET <url>/exec?token=<token>&action=preloadedList
+ *   GET <url>/exec?token=<token>&action=preloadedFile&id=<fileId>
+ * Cambio de estado: POST <url>/exec con JSON
+ *   {token, action: "setState", row, order, product, state, user}
+ * Para cambiar el token, volver a ejecutar setupTrabajosApiToken.
+ *
+ * Sirve para cualquier planilla con los mismos scripts: trabaja sobre la
+ * planilla a la que esta vinculado (no tiene ningun ID escrito). Si a esa
+ * planilla le falta algo opcional (notificaciones, carpeta de precargadas),
+ * esa parte se saltea y el resto funciona.
+ */
+
+const TRABAJOS_API = {
+  TOKEN_PROPERTY: "TRABAJOS_API_TOKEN",
+  // Filas vacias seguidas que se toleran antes de dar la hoja por terminada.
+  // La hoja reutiliza filas y puede tener huecos sueltos en el medio.
+  MAX_EMPTY_GAP: 50,
+  // Columna H "Entrega". Se manda tambien como fecha completa porque el texto
+  // visible ("28-ago") no tiene año.
+  DUE_COL: 8,
+};
+
+function setupTrabajosApiToken() {
+  const token = Utilities.getUuid().replace(/-/g, "") + Utilities.getUuid().replace(/-/g, "");
+  PropertiesService.getScriptProperties().setProperty(TRABAJOS_API.TOKEN_PROPERTY, token);
+  Logger.log("Token API Trabajos: " + token);
+  return token;
+}
+
+function trabajosApiAuthorized_(token) {
+  const expected = PropertiesService.getScriptProperties().getProperty(TRABAJOS_API.TOKEN_PROPERTY);
+  if (!expected) {
+    throw new Error("Token no configurado: ejecutar setupTrabajosApiToken");
+  }
+  return String(token || "") === expected;
+}
+
+function doGet(e) {
+  const startedAt = Date.now();
+  try {
+    const params = (e && e.parameter) || {};
+    if (!trabajosApiAuthorized_(params.token)) {
+      return trabajosApiJson_({ ok: false, error: "No autorizado" });
+    }
+
+    let data;
+    if (params.action === "preloadedList") {
+      if (typeof obtenerListaPDFs !== "function") {
+        throw new Error("Esta planilla no tiene etiquetas precargadas (falta 09_EtiquetasPrecargadas)");
+      }
+      data = { files: obtenerListaPDFs() };
+    } else if (params.action === "preloadedFile") {
+      data = readPreloadedPdfForApi_(String(params.id || ""));
+    } else {
+      data = readTrabajosForApi_();
+    }
+    data.ok = true;
+    data.elapsedMs = Date.now() - startedAt;
+    return trabajosApiJson_(data);
+  } catch (err) {
+    return trabajosApiJson_({
+      ok: false,
+      error: err && err.message ? err.message : String(err),
+      elapsedMs: Date.now() - startedAt,
+    });
+  }
+}
+
+function doPost(e) {
+  const startedAt = Date.now();
+  try {
+    const request = JSON.parse((e && e.postData && e.postData.contents) || "{}");
+    if (!trabajosApiAuthorized_(request.token)) {
+      return trabajosApiJson_({ ok: false, error: "No autorizado" });
+    }
+    if (request.action !== "setState") {
+      throw new Error("Accion desconocida: " + request.action);
+    }
+
+    const result = setTrabajoStateFromApi_(request);
+    result.ok = true;
+    result.elapsedMs = Date.now() - startedAt;
+    return trabajosApiJson_(result);
+  } catch (err) {
+    return trabajosApiJson_({
+      ok: false,
+      error: err && err.message ? err.message : String(err),
+      elapsedMs: Date.now() - startedAt,
+    });
+  }
+}
+
+function getTrabajosSheetForApi_() {
+  // El script esta vinculado a la planilla: en la Web App la planilla activa es esa.
+  const spreadsheet = SpreadsheetApp.getActiveSpreadsheet();
+  if (!spreadsheet) {
+    throw new Error("Este script no esta vinculado a una planilla (pegarlo desde Extensiones > Apps Script)");
+  }
+  const sheet = spreadsheet.getSheetByName(CFG.SHEET_NAME);
+  if (!sheet) {
+    throw new Error("No existe la hoja " + CFG.SHEET_NAME);
+  }
+  return sheet;
+}
+
+/**
+ * Estados que acepta la columna I: los del desplegable de la celda y, si no
+ * tiene, los de SHEET_DIRECT_STATE_LABELS.
+ */
+function getTrabajosAllowedStates_(sheet) {
+  const validation = sheet.getRange(CFG.FIRST_DATA_ROW, CFG.STATE_COL).getDataValidation();
+  if (
+    validation &&
+    validation.getCriteriaType() === SpreadsheetApp.DataValidationCriteria.VALUE_IN_LIST
+  ) {
+    const values = (validation.getCriteriaValues()[0] || [])
+      .map(function (value) { return cleanString_(value); })
+      .filter(Boolean);
+    if (values.length) return values;
+  }
+  if (typeof SHEET_DIRECT_STATE_LABELS === "undefined") {
+    return ["Empezar", "Procesando", "Pausado", "Finalizado", "Cancelado"];
+  }
+  return Object.keys(SHEET_DIRECT_STATE_LABELS).map(function (key) {
+    return SHEET_DIRECT_STATE_LABELS[key];
+  });
+}
+
+function trabajosRowMatches_(sheet, row, order, product) {
+  if (row < CFG.FIRST_DATA_ROW || row > sheet.getLastRow()) return false;
+  const values = sheet.getRange(row, CFG.ORDER_COL, 1, CFG.PRODUCT_COL - CFG.ORDER_COL + 1).getDisplayValues()[0];
+  return (
+    cleanString_(values[0]) === order &&
+    cleanString_(values[CFG.PRODUCT_COL - CFG.ORDER_COL]) === product
+  );
+}
+
+/**
+ * La hoja se reordena sola, asi que el numero de fila que vio el celular puede
+ * haber cambiado: se confirma por orden + producto y, si no coincide, se busca.
+ */
+function findTrabajoRow_(sheet, row, order, product) {
+  if (trabajosRowMatches_(sheet, row, order, product)) return row;
+
+  const lastRow = sheet.getLastRow();
+  if (lastRow < CFG.FIRST_DATA_ROW) return 0;
+  const rowCount = lastRow - CFG.FIRST_DATA_ROW + 1;
+  const values = sheet
+    .getRange(CFG.FIRST_DATA_ROW, CFG.ORDER_COL, rowCount, CFG.PRODUCT_COL - CFG.ORDER_COL + 1)
+    .getDisplayValues();
+  const matches = [];
+  for (let i = 0; i < rowCount; i++) {
+    if (
+      cleanString_(values[i][0]) === order &&
+      cleanString_(values[i][CFG.PRODUCT_COL - CFG.ORDER_COL]) === product
+    ) {
+      matches.push(CFG.FIRST_DATA_ROW + i);
+    }
+  }
+  return matches.length === 1 ? matches[0] : 0;
+}
+
+function setTrabajoStateFromApi_(request) {
+  const order = cleanString_(request.order);
+  const product = cleanString_(request.product);
+  const user = cleanString_(request.user) || "app";
+  if (!order) throw new Error("Falta la orden");
+
+  const sheet = getTrabajosSheetForApi_();
+  const allowed = getTrabajosAllowedStates_(sheet);
+  const state = allowed.filter(function (value) {
+    return value.toLowerCase() === cleanString_(request.state).toLowerCase();
+  })[0];
+  if (!state) throw new Error("Estado no valido: " + request.state);
+
+  // Mismo lock que las sincronizaciones: mientras una corre, las filas no se
+  // pueden mover ni pisar.
+  const lock = LockService.getScriptLock();
+  if (!lock.tryLock(30000)) {
+    throw new Error("La planilla esta sincronizando, proba de nuevo en un minuto");
+  }
+
+  let row = 0;
+  let oldValue = "";
+  try {
+    row = findTrabajoRow_(sheet, Number(request.row) || 0, order, product);
+    if (!row) {
+      throw new Error("No se encontro la orden " + order + " en la planilla (se movio o se borro). Actualiza la lista.");
+    }
+    const cell = sheet.getRange(row, CFG.STATE_COL);
+    oldValue = cleanString_(cell.getDisplayValue());
+    if (oldValue === state) {
+      return { row: row, state: state, previousState: oldValue, changed: false };
+    }
+    cell.setValue(state);
+    SpreadsheetApp.flush();
+  } finally {
+    lock.releaseLock();
+  }
+
+  // Un cambio hecho por script no dispara los activadores de edicion: se
+  // llama al mismo que usa la planilla (notificaciones, fecha de estado,
+  // orden). Va fuera del lock porque el ordenado toma ese lock por su cuenta.
+  let automationError = "";
+  try {
+    if (typeof notificarVentaNeoFinalizadaAlEditar !== "function") {
+      throw new Error("esta planilla no tiene el activador de notificaciones");
+    }
+    notificarVentaNeoFinalizadaAlEditar({
+      range: sheet.getRange(row, CFG.STATE_COL),
+      value: state,
+      oldValue: oldValue,
+      source: sheet.getParent(),
+    });
+  } catch (err) {
+    automationError = err && err.message ? err.message : String(err);
+    Logger.log("setTrabajoStateFromApi_ automatizaciones: " + automationError);
+  }
+
+  Logger.log("Estado de " + order + " (fila " + row + "): " + oldValue + " -> " + state + " por " + user);
+  return {
+    row: row,
+    state: state,
+    previousState: oldValue,
+    changed: true,
+    automationError: automationError,
+  };
+}
+
+/**
+ * Devuelve un PDF de la carpeta de etiquetas precargadas. Solo de esa carpeta:
+ * la Web App corre con la cuenta del dueño y no tiene que poder leer otros
+ * archivos de su Drive.
+ */
+function readPreloadedPdfForApi_(fileId) {
+  if (!fileId) throw new Error("Falta el id del archivo");
+  if (typeof FOLDER_ID === "undefined") {
+    throw new Error("Esta planilla no tiene etiquetas precargadas (falta 09_EtiquetasPrecargadas)");
+  }
+  const file = DriveApp.getFileById(fileId);
+  let inFolder = false;
+  const parents = file.getParents();
+  while (parents.hasNext()) {
+    if (parents.next().getId() === FOLDER_ID) {
+      inFolder = true;
+      break;
+    }
+  }
+  if (!inFolder || file.getMimeType() !== MimeType.PDF) {
+    throw new Error("El archivo no es un PDF de la carpeta de etiquetas precargadas");
+  }
+  return {
+    id: fileId,
+    name: file.getName(),
+    pdfBase64: Utilities.base64Encode(file.getBlob().getBytes()),
+  };
+}
+
+function readTrabajosForApi_() {
+  const sheet = getTrabajosSheetForApi_();
+
+  const lastRow = sheet.getLastRow();
+  const lastCol = sheet.getLastColumn();
+  const headerRowCount = CFG.FIRST_DATA_ROW - 1;
+  const headers = headerRowCount > 0
+    ? sheet.getRange(1, 1, headerRowCount, lastCol).getDisplayValues()
+    : [];
+
+  const rows = [];
+  if (lastRow >= CFG.FIRST_DATA_ROW) {
+    const rowCount = lastRow - CFG.FIRST_DATA_ROW + 1;
+    const range = sheet.getRange(CFG.FIRST_DATA_ROW, 1, rowCount, lastCol);
+    const display = range.getDisplayValues();
+    const rich = sheet.getRange(CFG.FIRST_DATA_ROW, CFG.LINK_COL, rowCount, 1).getRichTextValues();
+    const backgrounds = sheet.getRange(CFG.FIRST_DATA_ROW, CFG.STATE_COL, rowCount, 1).getBackgrounds();
+    const dueValues = sheet.getRange(CFG.FIRST_DATA_ROW, TRABAJOS_API.DUE_COL, rowCount, 1).getValues();
+    const timeZone = Session.getScriptTimeZone();
+
+    let emptyGap = 0;
+    for (let i = 0; i < rowCount; i++) {
+      const order = String(display[i][CFG.ORDER_COL - 1] || "").trim();
+      const customer = String(display[i][CFG.CUSTOMER_COL - 1] || "").trim();
+      const product = String(display[i][CFG.PRODUCT_COL - 1] || "").trim();
+      if (!order && !customer && !product) {
+        emptyGap++;
+        if (emptyGap > TRABAJOS_API.MAX_EMPTY_GAP) break;
+        continue;
+      }
+      emptyGap = 0;
+      rows.push({
+        row: CFG.FIRST_DATA_ROW + i,
+        values: display[i],
+        link: rich[i][0] ? rich[i][0].getLinkUrl() || "" : "",
+        stateColor: backgrounds[i][0] || "",
+        dueDate: dueValues[i][0] instanceof Date
+          ? Utilities.formatDate(dueValues[i][0], timeZone, "yyyy-MM-dd")
+          : "",
+      });
+    }
+  }
+
+  return {
+    sheet: CFG.SHEET_NAME,
+    firstDataRow: CFG.FIRST_DATA_ROW,
+    columns: {
+      order: CFG.ORDER_COL,
+      link: CFG.LINK_COL,
+      customer: CFG.CUSTOMER_COL,
+      product: CFG.PRODUCT_COL,
+      quantity: CFG.QUANTITY_COL,
+      state: CFG.STATE_COL,
+      newRowCheckbox: CFG.NEW_ROW_CHECKBOX_COL,
+      secondaryCheckbox: CFG.SECONDARY_CHECKBOX_COL,
+      manufacturingId: CFG.MFG_ID_COL,
+    },
+    headers: headers,
+    states: getTrabajosAllowedStates_(sheet),
+    rows: rows,
+    generatedAt: new Date().toISOString(),
+  };
+}
+
+function trabajosApiJson_(payload) {
+  return ContentService.createTextOutput(JSON.stringify(payload)).setMimeType(
+    ContentService.MimeType.JSON
+  );
+}

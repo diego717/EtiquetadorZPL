@@ -105,3 +105,6 @@ temp/
 *.bak
 *.swp
 *.swo
+
+# Credenciales de la Web App de Trabajos (Apps Script)
+config/trabajos_api.json

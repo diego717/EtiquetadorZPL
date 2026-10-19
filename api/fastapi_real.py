@@ -167,6 +167,13 @@ try:
 except ImportError as e:
     print(f"ADVERTENCIA: Endpoints de Hoy no disponibles: {e}")
 
+# Incluir trabajos de produccion (lectura de la hoja TRABAJOS de la planilla)
+try:
+    from trabajos_endpoints import router as trabajos_router
+    app.include_router(trabajos_router)
+except ImportError as e:
+    print(f"ADVERTENCIA: Endpoints de Trabajos no disponibles: {e}")
+
 # Incluir estado de impresoras del flujo (panel de Impresion)
 try:
     from printing_status_endpoints import router as printing_status_router

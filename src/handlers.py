@@ -772,33 +772,8 @@ class PDFHandler(FileSystemEventHandler):
             threshold = int(self.config.get("zpl_threshold", threshold) or threshold)
         except (TypeError, ValueError):
             threshold = 200
-        threshold = max(1, min(254, threshold))
-
         with Image.open(png_path) as img:
-            gray = img.convert("L")
-            # ZPL ^GF usa bits encendidos como puntos negros.
-            dots = gray.point(lambda pixel: 255 if pixel < threshold else 0, "1")
-            width, height = dots.size
-            row_bytes = (width + 7) // 8
-            padded_width = row_bytes * 8
-            if padded_width != width:
-                padded = Image.new("1", (padded_width, height), 0)
-                padded.paste(dots, (0, 0))
-                dots = padded
-                width = padded_width
-
-            bitmap = dots.tobytes()
-            total_bytes = len(bitmap)
-            hex_data = bitmap.hex().upper()
-
-        zpl = (
-            "^XA\n"
-            f"^PW{width}\n"
-            f"^LL{height}\n"
-            f"^FO0,0^GFA,{total_bytes},{total_bytes},{row_bytes},{hex_data}\n"
-            "^XZ\n"
-        )
-        return zpl.encode("ascii")
+            return image_to_zpl_bytes(img, threshold)
 
     def _is_grayscale_forced(self):
         return bool(self.config.get("force_grayscale", False))
@@ -1112,3 +1087,32 @@ class PDFHandler(FileSystemEventHandler):
         if self.processing_thread and self.processing_thread.is_alive():
             self.processing_thread.join(timeout=5)
         logging.info("Handler cerrado correctamente")
+
+
+def image_to_zpl_bytes(img, threshold=200):
+    """Convierte una imagen (1 pixel = 1 punto de la impresora) en una etiqueta ZPL ^GFA."""
+    threshold = max(1, min(254, int(threshold)))
+    gray = img.convert("L")
+    # ZPL ^GF usa bits encendidos como puntos negros.
+    dots = gray.point(lambda pixel: 255 if pixel < threshold else 0, "1")
+    width, height = dots.size
+    row_bytes = (width + 7) // 8
+    padded_width = row_bytes * 8
+    if padded_width != width:
+        padded = Image.new("1", (padded_width, height), 0)
+        padded.paste(dots, (0, 0))
+        dots = padded
+        width = padded_width
+
+    bitmap = dots.tobytes()
+    total_bytes = len(bitmap)
+    hex_data = bitmap.hex().upper()
+
+    zpl = (
+        "^XA\n"
+        f"^PW{width}\n"
+        f"^LL{height}\n"
+        f"^FO0,0^GFA,{total_bytes},{total_bytes},{row_bytes},{hex_data}\n"
+        "^XZ\n"
+    )
+    return zpl.encode("ascii")

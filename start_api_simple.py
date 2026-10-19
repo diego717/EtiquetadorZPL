@@ -11,8 +11,26 @@ sys.path.insert(0, str(project_root / "src"))
 sys.path.insert(0, str(project_root / "api"))
 sys.path.insert(0, str(project_root / "config"))
 
+def ensure_console_title():
+    """Playwright (Envios, Trabajos) lanza Node, que se cae con "Assertion failed:
+    process_title" si la consola heredada no tiene titulo. Pasa al arrancar con
+    `start "" ...` (restart_api_server.bat), asi que se le pone uno si falta."""
+    if sys.platform != "win32":
+        return
+    try:
+        import ctypes
+
+        kernel32 = ctypes.windll.kernel32
+        buffer = ctypes.create_unicode_buffer(256)
+        if not kernel32.GetConsoleTitleW(buffer, len(buffer)):
+            kernel32.SetConsoleTitleW("EtiquetadorZPL API")
+    except Exception:
+        pass
+
+
 def start_api():
     """Iniciar API"""
+    ensure_console_title()
     print("Iniciando API...")
     
     try:

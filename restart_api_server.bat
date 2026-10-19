@@ -40,7 +40,8 @@ if not errorlevel 1 (
 )
 
 echo [3/4] Iniciando API...
-start "" /MIN cmd /c ""%START_BAT%""
+rem El titulo no puede quedar vacio: Playwright (Node) se cae con una consola sin titulo.
+start "EtiquetadorZPL API" /MIN cmd /c ""%START_BAT%""
 
 echo [4/4] Verificando estado /api/status...
 set "OK=0"
