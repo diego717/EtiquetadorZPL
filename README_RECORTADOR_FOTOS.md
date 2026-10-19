@@ -8,6 +8,25 @@ vincular una planilla CSV/Excel, tratar fondos, generar tarjetas con logo y QR,
 crear una hoja PDF de revisión y descargar el resultado por lote. Los proyectos
 se pueden guardar y reabrir con sus originales y ajustes.
 
+### Mejora de imagen
+
+En la pestaña **Editar**, la sección **Mejora de imagen** se aplica a todas las fotos al
+exportar, imprimir y en la vista exacta del editor. El original nunca se modifica.
+
+- **Mejora automática** (suave, normal o intensa): reduce ruido, corrige el balance de
+  blancos usando los tonos neutros de la foto, levanta el contraste local y enfoca. No
+  inventa rasgos.
+- **Agrandar con IA las fotos de baja resolución**: si el recorte tiene menos píxeles de los
+  que pide la caja de la foto a 300 dpi, se agranda con Real-ESRGAN (modelo local de 4,6 MB,
+  sin conexión). El resultado se mezcla con un agrandado común para conservar la textura de
+  la piel. Si falta más de tres veces la resolución, conviene pedir otra foto.
+- **No mejorar esta foto** la deja como está.
+- **Ver antes / después** muestra la comparación de la foto actual.
+
+Debajo se indica la resolución del recorte. La revisión previa avisa de las fotos de baja
+resolución. No se usan modelos de "restauración de rostros" (GFPGAN, CodeFormer) porque
+inventan rasgos y pueden cambiar a la persona.
+
 ### Editor de credenciales
 
 La pestaña **Tarjeta** abre un editor de diseño libre, con el mismo enfoque que
@@ -37,6 +56,33 @@ CardExchange Producer o Magicard TrustID:
 - **Guardar diseño / Abrir diseño**: archivo `.credencial.json` con las imágenes
   incluidas, para reutilizarlo con otros lotes.
 
+### Herramientas vectoriales (como en Corel)
+
+- **Logos SVG**: cargá el logo exportado desde Corel o Illustrator en SVG (Archivo ›
+  Exportar › SVG). Se dibuja a la resolución exacta de salida, así que nunca se
+  pixela. Se respetan estilos, degradados y transparencias. Un logo en CDR, AI o EPS
+  hay que exportarlo antes a SVG.
+- **Pintar de un color**: en una imagen, pasa el logo (SVG o PNG con fondo
+  transparente) a un solo color, por ejemplo blanco sobre una banda.
+- **Pluma** (`P`): clic agrega un nodo en punta, arrastrar crea una curva Bézier,
+  Mayús limita a 45°, clic en el primer nodo cierra la forma, y Enter o doble clic
+  termina un trazado abierto.
+- **Edición de nodos** (doble clic en un trazado): arrastrar nodos y manejadores,
+  clic sobre la línea para agregar un nodo, Supr para borrarlo, Alt para quebrar un
+  manejador. Desde el panel: nodo en punta o suave, tramo recto o curvo, y abrir o
+  cerrar el trazado.
+- **Formas**: triángulo, rombo, polígono y estrella (con lados, puntas y
+  profundidad editables), flecha, galón, cinta, esquina cortada, cruz, banda con
+  onda, escudo, corazón y globo de diálogo.
+- **Relleno y contorno**: color liso, degradado lineal (con ángulo) o radial;
+  contorno continuo, en rayas o en puntos, con extremos y esquinas rectos,
+  redondeados o en punta.
+- **Forma**: *Soldar*, *Recortar* (por ejemplo, un texto calado en una banda),
+  *Intersectar*, *Excluir*, *Combinar* (las superposiciones quedan huecas),
+  *Separar*, *Voltear* y **Convertir a curvas** (`Ctrl+Q`). Se pueden convertir
+  textos, códigos QR y de barras, rectángulos, elipses y líneas. Un texto con
+  campos queda fijo con los datos de la credencial actual.
+
 ### Exportar credenciales
 
 Desde el editor (**Exportar…**) o desde la pestaña Tarjeta se elige:
@@ -46,6 +92,10 @@ Desde el editor (**Exportar…**) o desde la pestaña Tarjeta se elige:
 - PDF de una credencial por página a tamaño real, o pliegos A4/Carta/Oficio con
   márgenes, separación, marcas de corte y dorso espejado para impresión dúplex.
 - Nombre de archivo con campos, por ejemplo `{Apellido}_{Nombre}`.
+- **PDF vectorial** (activado por defecto): textos (en curvas, sin depender de
+  las fuentes instaladas), formas, trazados, QR, códigos de barras y logos SVG van
+  en vectores. Una imprenta puede ampliarlos sin perder calidad. Las fotos, las
+  imágenes PNG/JPG y los degradados van como imagen a la resolución elegida.
 
 Una sola imagen se descarga directa; varias, en un ZIP. Los proyectos guardados
 con el diseñador anterior se convierten automáticamente al abrirlos.
@@ -64,6 +114,34 @@ controlador. Si el dorso sale invertido, marcá **Girar el dorso 180°**.
 Cada impresión queda marcada en la credencial (“Impresa ×2”), se guarda en el
 proyecto y se registra en `%APPDATA%\EtiquetadorZPL\logs\credenciales_impresas.csv`.
 El alcance **Las que no se imprimieron** permite retomar un lote a medias.
+
+### Banda magnética
+
+En el editor, sin nada seleccionado, la sección **Banda magnética** activa la
+codificación y define el dato de cada pista con campos, por ejemplo
+`{Apellido}^{Nombre}` en la pista 1 o `{Legajo}` en la pista 2. Se valida con la norma
+ISO 7811: la pista 1 admite hasta 76 letras mayúsculas sin acentos, números y signos
+básicos; las pistas 2 y 3, sólo números y `=` (hasta 37 y 104). Los centinelas
+`% ; ?` los agrega la impresora. Sobre la cara elegida se marca la zona aproximada de
+la banda para no poner textos ni códigos encima.
+
+Al imprimir, igual que CardExchange o TrustID, los datos viajan como texto con los
+comandos de cada marca y el controlador los graba en la banda. Los comandos se
+eligen solos según la impresora y se pueden editar:
+
+| Marca | Comandos por defecto | Ajuste en el controlador |
+| --- | --- | --- |
+| Magicard | `~1`, `~2`, `~3` | Activar el procesamiento de macros |
+| Entrust / Datacard (XPS) | `~1`, `~2`, `~3` | Escapes de texto para banda magnética |
+| Zebra | `${1` … `}$` | Codificación magnética con macros (algunos controladores usan `~1=`) |
+| Evolis | `\|1` … `\|` | Codificación por texto delimitado |
+| Fargo | `~1`, `~2`, `~3` | Texto de codificación activado |
+| Swiftpro | `~1`, `~2`, `~3` | A confirmar con una tarjeta de prueba |
+
+La primera vez con cada impresora hacé **una sola tarjeta de prueba**: si el
+controlador no tiene activada la codificación por texto, los datos se imprimen sobre
+la tarjeta en lugar de grabarse. El registro de impresiones indica qué tarjetas se
+codificaron.
 
 ### Revisión previa
 

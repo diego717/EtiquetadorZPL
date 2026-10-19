@@ -181,14 +181,30 @@ class CardPrintJob:
     def dpi(self) -> int:
         return self.geometry.dpi if self.geometry else 300
 
-    def add_card(self, faces: Iterable[Image.Image], *, rotate_back: bool = False) -> None:
+    def add_card(self, faces: Iterable[Image.Image], *, rotate_back: bool = False, encode: list[str] | None = None) -> None:
+        """Agrega una tarjeta; ``encode`` son los textos de codificación magnética (van en la primera página)."""
         for index, face in enumerate(faces):
             image = face.convert("RGB")
             if index == 1 and rotate_back:
                 image = image.rotate(180)
-            self._page(image)
+            self._page(image, encode if index == 0 else None)
 
-    def _page(self, image: Image.Image) -> None:
+    def _draw_encoding(self, texts: list[str]) -> None:
+        """Escribe los comandos de banda magnética como texto real (no imagen) para que el controlador los capture."""
+        _win32print, _win32gui, win32ui = _win32()
+        height = max(8, round(self.dpi * 7 / 72))
+        font = win32ui.CreateFont({"name": "Arial", "height": -height, "weight": 400})
+        previous = self._dc.SelectObject(font)
+        try:
+            self._dc.SetBkMode(1)  # TRANSPARENT
+            self._dc.SetTextColor(0)
+            for index, text in enumerate(texts):
+                self._dc.TextOut(height, height + index * round(height * 1.4), text)
+        finally:
+            if previous is not None:
+                self._dc.SelectObject(previous)
+
+    def _page(self, image: Image.Image, encode: list[str] | None = None) -> None:
         geometry = self.geometry
         if (image.width > image.height) != (geometry.width > geometry.height):
             # El controlador quedó en la otra orientación: se gira la imagen.
@@ -199,6 +215,8 @@ class CardPrintJob:
             self._dc.GetHandleOutput(),
             (-geometry.offset_x, -geometry.offset_y, geometry.width - geometry.offset_x, geometry.height - geometry.offset_y),
         )
+        if encode:
+            self._draw_encoding(encode)
         self._dc.EndPage()
         self.pages += 1
 
@@ -234,7 +252,7 @@ def append_print_log(rows: list[list[str]], path: Path | None = None) -> None:
     with target.open("a", newline="", encoding="utf-8-sig") as output:
         writer = csv.writer(output)
         if new_file:
-            writer.writerow(["Fecha y hora", "Impresora", "Archivo", "Datos", "Caras", "Copias"])
+            writer.writerow(["Fecha y hora", "Impresora", "Archivo", "Datos", "Caras", "Copias", "Banda magnética"])
         writer.writerows(rows)
 
 

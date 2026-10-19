@@ -24,9 +24,9 @@
     ];
     const TYPE_LABELS = {
         text: 'Texto', photo: 'Foto', image: 'Imagen', qr: 'Código QR', barcode: 'Código de barras',
-        rect: 'Rectángulo', ellipse: 'Elipse', line: 'Línea',
+        rect: 'Rectángulo', ellipse: 'Elipse', line: 'Línea', path: 'Trazado',
     };
-    const TYPE_ICONS = { text: 'T', photo: '◪', image: '▣', qr: '▦', barcode: '┃┃', rect: '□', ellipse: '○', line: '─' };
+    const TYPE_ICONS = { text: 'T', photo: '◪', image: '▣', qr: '▦', barcode: '┃┃', rect: '□', ellipse: '○', line: '─', path: '✒' };
     const DEFAULTS = {
         text: {
             text: 'Texto', font: 'sans', size: 12, bold: false, italic: false, underline: false, uppercase: false,
@@ -34,16 +34,20 @@
             fill: null, stroke_color: null, stroke_width: 0, radius: 0,
         },
         photo: { shape: 'rect', radius: 3, stroke_color: null, stroke_width: 0, image_fit: 'cover', grayscale: false },
-        image: { asset: null, image_fit: 'contain', radius: 0, stroke_color: null, stroke_width: 0, grayscale: false },
+        image: { asset: null, image_fit: 'contain', radius: 0, stroke_color: null, stroke_width: 0, grayscale: false, recolor: null },
         qr: { value: '{Archivo}', color: '#000000', background: '#ffffff', ecc: 'M' },
         barcode: { value: '{Nro}', symbology: 'code128', show_text: true, color: '#000000', background: null },
-        rect: { fill: '#176b87', stroke_color: null, stroke_width: 0, radius: 0 },
-        ellipse: { fill: '#176b87', stroke_color: null, stroke_width: 0 },
-        line: { stroke_color: '#17202b', stroke_width: 1 },
+        rect: { fill: '#176b87', gradient: null, stroke_color: null, stroke_width: 0, radius: 0, dash: 'solid' },
+        ellipse: { fill: '#176b87', gradient: null, stroke_color: null, stroke_width: 0, dash: 'solid' },
+        line: { stroke_color: '#17202b', stroke_width: 1, dash: 'solid', line_cap: 'butt' },
+        path: {
+            paths: [], fill: '#176b87', gradient: null, fill_rule: 'evenodd', stroke_color: null, stroke_width: 0,
+            dash: 'solid', line_cap: 'round', line_join: 'round', preset: null,
+        },
     };
     const NEW_SIZES_MM = {
         text: [40, 8], photo: [24, 32], image: [20, 12], qr: [16, 16], barcode: [36, 12],
-        rect: [30, 14], ellipse: [16, 16], line: [36, 2],
+        rect: [30, 14], ellipse: [16, 16], line: [36, 2], path: [20, 20],
     };
     const BARCODE_TYPES = [
         ['code128', 'Code 128 · alfanumérico'], ['code39', 'Code 39'], ['ean13', 'EAN-13'],
@@ -69,6 +73,170 @@
     const newId = () => `e${Math.random().toString(36).slice(2, 10)}`;
     const $ = (id) => document.getElementById(id);
 
+    // ------------------------------------------------------------------ //
+    // Geometría vectorial (trazados Bézier en fracciones de la caja)
+    // ------------------------------------------------------------------ //
+
+    const SVG_NS = 'http://www.w3.org/2000/svg';
+    const DASH_PATTERNS = { dash: [4, 2], dot: [1, 1.5], dashdot: [4, 2, 1, 2] };
+    const DASH_OPTIONS = [['solid', 'Continua'], ['dash', 'Rayas'], ['dot', 'Puntos'], ['dashdot', 'Raya y punto']];
+    const CAP_OPTIONS = [['butt', 'Recto'], ['round', 'Redondeado'], ['square', 'Cuadrado']];
+    const JOIN_OPTIONS = [['miter', 'En punta'], ['round', 'Redondeada'], ['bevel', 'Biselada']];
+    let svgUid = 0;
+
+    function svgNode(tag, attributes = {}, children = []) {
+        const node = document.createElementNS(SVG_NS, tag);
+        Object.entries(attributes).forEach(([key, value]) => {
+            if (value === undefined || value === null || value === false) return;
+            node.setAttribute(key, String(value));
+        });
+        children.forEach((child) => { if (child) node.append(child); });
+        return node;
+    }
+
+    const lerp = (a, b, t) => [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t];
+    const dist = (a, b) => Math.hypot(a[0] - b[0], a[1] - b[1]);
+
+    function subSegments(sub) {
+        const nodes = sub.nodes || [];
+        const count = sub.closed && nodes.length > 1 ? nodes.length : nodes.length - 1;
+        const result = [];
+        for (let index = 0; index < count; index += 1) {
+            const start = nodes[index];
+            const end = nodes[(index + 1) % nodes.length];
+            const curved = start.o || end.i;
+            result.push({ index, p0: start.p, c1: curved ? (start.o || start.p) : null, c2: curved ? (end.i || end.p) : null, p3: end.p });
+        }
+        return result;
+    }
+
+    function cubicAt(p0, c1, c2, p3, t) {
+        const u = 1 - t;
+        const a = u * u * u; const b = 3 * u * u * t; const c = 3 * u * t * t; const d = t * t * t;
+        return [a * p0[0] + b * c1[0] + c * c2[0] + d * p3[0], a * p0[1] + b * c1[1] + c * c2[1] + d * p3[1]];
+    }
+
+    function pathData(paths, sx = 1, sy = 1) {
+        const f = (point) => `${(point[0] * sx).toFixed(3)} ${(point[1] * sy).toFixed(3)}`;
+        return paths.map((sub) => {
+            if (!sub.nodes?.length) return '';
+            let d = `M${f(sub.nodes[0].p)}`;
+            subSegments(sub).forEach((segment) => {
+                d += segment.c1 ? `C${f(segment.c1)} ${f(segment.c2)} ${f(segment.p3)}` : `L${f(segment.p3)}`;
+            });
+            return sub.closed ? `${d}Z` : d;
+        }).join('');
+    }
+
+    function flattenSub(sub, steps = 24) {
+        const nodes = sub.nodes || [];
+        if (!nodes.length) return [];
+        const points = [nodes[0].p];
+        subSegments(sub).forEach((segment) => {
+            if (!segment.c1) { points.push(segment.p3); return; }
+            for (let step = 1; step <= steps; step += 1) points.push(cubicAt(segment.p0, segment.c1, segment.c2, segment.p3, step / steps));
+        });
+        return points;
+    }
+
+    function pathsBounds(paths) {
+        let left = Infinity; let top = Infinity; let right = -Infinity; let bottom = -Infinity;
+        paths.forEach((sub) => flattenSub(sub).forEach(([x, y]) => {
+            left = Math.min(left, x); top = Math.min(top, y); right = Math.max(right, x); bottom = Math.max(bottom, y);
+        }));
+        return Number.isFinite(left) ? { left, top, right, bottom } : null;
+    }
+
+    function mapPaths(paths, transform) {
+        return paths.map((sub) => ({
+            closed: Boolean(sub.closed),
+            nodes: sub.nodes.map((entry) => ({
+                p: transform(entry.p), i: entry.i ? transform(entry.i) : null, o: entry.o ? transform(entry.o) : null,
+                ...(entry.s ? { s: true } : {}),
+            })),
+        }));
+    }
+
+    function fitUnit(paths, minSize = 0.2) {
+        // Normaliza trazados (en mm) a la caja que los contiene: devuelve fracciones 0..1 y la caja.
+        const bounds = pathsBounds(paths);
+        if (!bounds) return null;
+        let width = bounds.right - bounds.left;
+        let height = bounds.bottom - bounds.top;
+        let { left, top } = bounds;
+        if (width < minSize) { left -= (minSize - width) / 2; width = minSize; }
+        if (height < minSize) { top -= (minSize - height) / 2; height = minSize; }
+        const round = (value) => Math.round(value * 1e6) / 1e6;
+        return { paths: mapPaths(paths, ([x, y]) => [round((x - left) / width), round((y - top) / height)]), box: { left, top, width, height } };
+    }
+
+    const polyline = (points) => [{ closed: true, nodes: points.map((p) => ({ p, i: null, o: null })) }];
+
+    function regularPolygon(sides) {
+        const count = clamp(Math.round(sides), 3, 24);
+        return polyline(Array.from({ length: count }, (_, index) => {
+            const angle = -Math.PI / 2 + index * 2 * Math.PI / count;
+            return [0.5 + 0.5 * Math.cos(angle), 0.5 + 0.5 * Math.sin(angle)];
+        }));
+    }
+
+    function starShape(points, inner) {
+        const count = clamp(Math.round(points), 3, 40);
+        return polyline(Array.from({ length: count * 2 }, (_, index) => {
+            const radius = index % 2 === 0 ? 0.5 : 0.5 * clamp(inner, 0.05, 0.95);
+            const angle = -Math.PI / 2 + index * Math.PI / count;
+            return [0.5 + radius * Math.cos(angle), 0.5 + radius * Math.sin(angle)];
+        }));
+    }
+
+    const SHAPE_PRESETS = [
+        { id: 'triangle', label: 'Triángulo', size: [20, 18], build: () => polyline([[0.5, 0], [1, 1], [0, 1]]) },
+        { id: 'diamond', label: 'Rombo', size: [18, 22], build: () => polyline([[0.5, 0], [1, 0.5], [0.5, 1], [0, 0.5]]) },
+        { id: 'polygon', label: 'Polígono', size: [20, 20], params: { sides: 6 }, build: ({ sides }) => regularPolygon(sides) },
+        { id: 'star', label: 'Estrella', size: [20, 20], params: { points: 5, inner: 0.45 }, build: ({ points, inner }) => starShape(points, inner) },
+        { id: 'arrow', label: 'Flecha', size: [30, 14], build: () => polyline([[0, 0.3], [0.62, 0.3], [0.62, 0], [1, 0.5], [0.62, 1], [0.62, 0.7], [0, 0.7]]) },
+        { id: 'chevron', label: 'Galón', size: [24, 14], build: () => polyline([[0, 0], [0.72, 0], [1, 0.5], [0.72, 1], [0, 1], [0.28, 0.5]]) },
+        { id: 'ribbon', label: 'Cinta', size: [40, 10], build: () => polyline([[0, 0], [1, 0], [0.9, 0.5], [1, 1], [0, 1], [0.1, 0.5]]) },
+        { id: 'cut', label: 'Esquina cortada', size: [30, 14], build: () => polyline([[0, 0], [0.82, 0], [1, 0.3], [1, 1], [0, 1]]) },
+        { id: 'cross', label: 'Cruz', size: [18, 18], build: () => polyline([[0.34, 0], [0.66, 0], [0.66, 0.34], [1, 0.34], [1, 0.66], [0.66, 0.66], [0.66, 1], [0.34, 1], [0.34, 0.66], [0, 0.66], [0, 0.34], [0.34, 0.34]]) },
+        {
+            id: 'wave', label: 'Banda con onda', size: [60, 14], build: () => [{ closed: true, nodes: [
+                { p: [0, 0], i: null, o: null }, { p: [1, 0], i: null, o: null },
+                { p: [1, 0.7], i: null, o: [0.83, 1.05] },
+                { p: [0.5, 0.7], i: [0.67, 1.05], o: [0.33, 0.35], s: true },
+                { p: [0, 0.7], i: [0.17, 0.35], o: null },
+            ] }],
+        },
+        {
+            id: 'shield', label: 'Escudo', size: [18, 22], build: () => [{ closed: true, nodes: [
+                { p: [0, 0], i: null, o: null }, { p: [1, 0], i: null, o: null },
+                { p: [1, 0.45], i: null, o: [1, 0.78] },
+                { p: [0.5, 1], i: [0.88, 0.9], o: [0.12, 0.9], s: true },
+                { p: [0, 0.45], i: [0, 0.78], o: null },
+            ] }],
+        },
+        {
+            id: 'heart', label: 'Corazón', size: [20, 18], build: () => [{ closed: true, nodes: [
+                { p: [0.5, 0.22], i: [0.3, -0.08], o: [0.7, -0.08] },
+                { p: [0.5, 1], i: [1.12, 0.42], o: [-0.12, 0.42] },
+            ] }],
+        },
+        {
+            id: 'bubble', label: 'Globo de diálogo', size: [30, 20], build: () => [{ closed: true, nodes: [
+                { p: [0.1, 0], i: [0, 0], o: null }, { p: [0.9, 0], i: null, o: [1, 0] },
+                { p: [1, 0.15], i: [1, 0.05], o: null }, { p: [1, 0.6], i: null, o: [1, 0.7] },
+                { p: [0.9, 0.75], i: [1, 0.75], o: null }, { p: [0.42, 0.75], i: null, o: null },
+                { p: [0.2, 1], i: null, o: null }, { p: [0.26, 0.75], i: null, o: null },
+                { p: [0.1, 0.75], i: null, o: [0, 0.75] }, { p: [0, 0.6], i: [0, 0.7], o: null },
+                { p: [0, 0.15], i: null, o: [0, 0.05] },
+            ] }],
+        },
+    ];
+
+    function presetPaths(preset, params) {
+        return fitUnit(preset.build({ ...(preset.params || {}), ...(params || {}) }), 0.001).paths;
+    }
+
     function h(tag, attributes = {}, children = []) {
         const node = document.createElement(tag);
         Object.entries(attributes).forEach(([key, value]) => {
@@ -90,6 +258,31 @@
     // ------------------------------------------------------------------ //
     // Modelo
     // ------------------------------------------------------------------ //
+
+    const MAG_TRACK_LIMITS = { 1: 76, 2: 37, 3: 104 };
+
+    function defaultMagstripe() {
+        return { enabled: false, side: 'back', track1: '', track2: '', track3: '' };
+    }
+
+    function normalizeMagTrack(track, value) {
+        let text = String(value || '').trim();
+        if (track === 1) { text = text.toUpperCase(); if (text.startsWith('%')) text = text.slice(1); }
+        else if (text.startsWith(';')) text = text.slice(1);
+        if (text.endsWith('?')) text = text.slice(0, -1);
+        return text;
+    }
+
+    function magTrackError(track, value) {
+        // Mismas reglas ISO 7811 que el servidor.
+        if (!value) return null;
+        if (value.length > MAG_TRACK_LIMITS[track]) return `${value.length} caracteres, admite hasta ${MAG_TRACK_LIMITS[track]}`;
+        const invalid = [...new Set([...value].filter((char) => (track === 1
+            ? char.charCodeAt(0) < 0x20 || char.charCodeAt(0) > 0x5f || char === '%' || char === '?'
+            : !/[0-9=]/.test(char))))];
+        if (invalid.length) return `caracteres no admitidos: ${invalid.slice(0, 6).map((char) => (char === ' ' ? 'espacio' : char)).join(' ')}${track === 1 ? ' (sin acentos ni ñ)' : ' (sólo números y =)'}`;
+        return null;
+    }
 
     function emptySide(color = '#ffffff') {
         return { background_color: color, background_image: null, elements: [] };
@@ -280,11 +473,15 @@
             clipboard: [],
             pxPerMm: null,
             zoomMode: 'fit',
+            handTool: false,
+            spaceHeld: false,
             snapGrid: true,
             smartGuides: true,
             showSafe: true,
             pristine: true,
             cropping: null,
+            pen: null,
+            nodeEdit: null,
             exactUrl: null,
             photoUrls: new Map(),
         };
@@ -484,10 +681,17 @@
                 case 'image': {
                     const url = assetUrl(item.asset);
                     content.classList.add('cd-imagebox');
-                    if (url) content.style.backgroundImage = `url("${url}")`;
+                    const size = { cover: 'cover', stretch: '100% 100%' }[item.image_fit] || 'contain';
+                    if (url && item.recolor) {
+                        // Logo de un solo color: la imagen se usa como máscara sobre el color elegido.
+                        const tint = h('div', { class: 'cd-recolor', style: { background: item.recolor } });
+                        ['maskImage', 'webkitMaskImage'].forEach((key) => { tint.style[key] = `url("${url}")`; });
+                        ['maskSize', 'webkitMaskSize'].forEach((key) => { tint.style[key] = size; });
+                        content.append(tint);
+                    } else if (url) content.style.backgroundImage = `url("${url}")`;
                     else content.append(h('span', { class: 'cd-placeholder', text: 'IMAGEN' }));
-                    content.style.backgroundSize = { cover: 'cover', stretch: '100% 100%' }[item.image_fit] || 'contain';
-                    if (item.grayscale) content.style.filter = 'grayscale(1)';
+                    content.style.backgroundSize = size;
+                    if (item.grayscale && !item.recolor) content.style.filter = 'grayscale(1)';
                     applyFrame(content);
                     break;
                 }
@@ -518,11 +722,10 @@
                 }
                 case 'rect':
                 case 'ellipse':
-                    if (item.fill) content.style.background = item.fill;
-                    applyFrame(content);
-                    break;
                 case 'line':
-                    content.append(h('div', { class: 'cd-line-bar', style: { height: `${Math.max(1, (item.stroke_width || 1) * ptToPx)}px`, background: item.stroke_color || '#17202b' } }));
+                case 'path':
+                    content.classList.add('cd-vector');
+                    content.append(vectorContent(item, boxPx, ptToPx));
                     break;
                 default:
                     break;
@@ -592,13 +795,35 @@
             state.pxPerMm = pxPerMm;
             el.stage.style.width = `${design().width_mm * pxPerMm}px`;
             el.stage.style.height = `${design().height_mm * pxPerMm}px`;
-            $('cd-zoom-value').value = state.zoomMode === 'fit' ? 'Ajustar' : `${Math.round(pxPerMm / 3.7795 * 100)}%`;
+            // Con zoom manual el lienzo tiene margen para llevar cualquier borde de la tarjeta al centro.
+            const manual = state.zoomMode !== 'fit';
+            el.shell.style.padding = manual ? `${Math.round(el.shell.clientHeight * 0.45)}px ${Math.round(el.shell.clientWidth * 0.45)}px` : '';
+            el.shell.classList.toggle('cd-free', manual);
+            $('cd-zoom-value').value = `${Math.round(pxPerMm / 3.7795 * 100)}%`;
+            $('cd-zoom-fit').classList.toggle('active', !manual);
             const mm = (value) => value.toLocaleString('es-UY', { maximumFractionDigits: 2 });
             $('cd-size-note').textContent = `${mm(design().width_mm)} × ${mm(design().height_mm)} mm${design().double_sided ? ' · doble faz' : ''}`;
+            renderMagGuide(pxPerMm);
             const safe = el.stage.querySelector('.cd-safe');
             safe.hidden = !state.showSafe;
             safe.style.inset = `${SAFE_MARGIN_MM * pxPerMm}px`;
             safe.style.borderRadius = `${Math.max(0, CARD_CORNER_MM - SAFE_MARGIN_MM / 2) * pxPerMm}px`;
+        }
+
+        function renderMagGuide(pxPerMm) {
+            // Zona aproximada de la banda (ISO 7811: unos 4,5 a 16,5 mm desde el borde largo).
+            let guide = el.stage.querySelector(':scope > .cd-magband');
+            const mag = design().magstripe;
+            if (!mag?.enabled || mag.side !== state.side) { guide?.remove(); return; }
+            if (!guide) {
+                guide = h('div', { class: 'cd-magband' }, [h('span', { text: 'Banda magnética (zona aproximada: evitá textos y códigos)' })]);
+                el.stage.append(guide);
+            }
+            const portrait = design().height_mm > design().width_mm;
+            Object.assign(guide.style, portrait
+                ? { top: '0', bottom: '0', left: 'auto', right: `${4.5 * pxPerMm}px`, width: `${12 * pxPerMm}px`, height: 'auto' }
+                : { left: '0', right: '0', top: `${4.5 * pxPerMm}px`, bottom: 'auto', height: `${12 * pxPerMm}px`, width: 'auto' });
+            guide.classList.toggle('vertical', portrait);
         }
 
         function renderStage() {
@@ -606,6 +831,7 @@
             layoutStage();
             renderSide(el.stage, side(), { photo: host.getCurrentPhoto(), interactive: true });
             renderSelection();
+            renderVectorOverlay();
         }
 
         function renderSelection() {
@@ -620,7 +846,7 @@
                         transform: item.rotation ? `rotate(${item.rotation}deg)` : '',
                     },
                 });
-                if (items.length === 1 && !item.locked && state.cropping !== item.id) {
+                if (items.length === 1 && !item.locked && state.cropping !== item.id && state.nodeEdit?.id !== item.id) {
                     [[-1, -1], [0, -1], [1, -1], [1, 0], [1, 1], [0, 1], [-1, 1], [-1, 0]].forEach(([hx, hy]) => {
                         frame.append(h('i', { class: `cd-handle h${hx}${hy}`, 'data-hx': hx, 'data-hy': hy, style: { left: `${(hx + 1) * 50}%`, top: `${(hy + 1) * 50}%` } }));
                     });
@@ -642,6 +868,7 @@
 
         function select(ids, { additive = false } = {}) {
             if (state.cropping && (additive || ids.length !== 1 || ids[0] !== state.cropping)) exitCropMode({ quiet: true });
+            if (state.nodeEdit && (additive || ids.length !== 1 || ids[0] !== state.nodeEdit.id)) { state.nodeEdit = null; removeModeBanner(); }
             if (additive) {
                 const set = new Set(state.selected);
                 ids.forEach((id) => (set.has(id) ? set.delete(id) : set.add(id)));
@@ -837,6 +1064,8 @@
                 if (event.button !== 0) return;
                 event.preventDefault();
                 el.stage.focus({ preventScroll: true });
+                if (state.pen) return penPointerDown(event);
+                if (state.nodeEdit && nodeEditPointerDown(event)) return undefined;
                 if (state.cropping) {
                     const croppingNode = event.target.closest('.cd-element');
                     const croppingItem = findElement(state.cropping);
@@ -858,11 +1087,21 @@
                 if (insideSelection) return startMove(event, insideSelection);
                 return startMarquee(event);
             });
+            el.stage.addEventListener('pointermove', (event) => {
+                if (!state.pen) return;
+                const point = stageMm(event).p;
+                const last = state.pen.nodes[state.pen.nodes.length - 1];
+                state.pen.cursor = event.shiftKey && last ? constrain45(last.p, point) : point;
+                renderVectorOverlay();
+            });
             el.stage.addEventListener('dblclick', (event) => {
+                if (state.pen) { finishPen(false); return; }
+                if (state.nodeEdit) return;
                 const node = event.target.closest('.cd-element');
                 const item = node && findElement(node.dataset.id);
                 if (!item) return;
                 if (item.type === 'photo') { enterCropMode(item); return; }
+                if (item.type === 'path') { enterNodeEdit(item); return; }
                 select([item.id]);
                 const target = item.type === 'text' ? $('cd-prop-text') : item.type === 'image' ? null : $('cd-prop-value');
                 if (item.type === 'image') { assetTarget = item.id; el.assetInput.click(); }
@@ -875,17 +1114,94 @@
                     cropZoom(event.deltaY > 0 ? 1.05 : 0.95);
                     return;
                 }
-                if (!event.ctrlKey) return;
+                if (!event.ctrlKey && !event.altKey) return;
+                // Ctrl+rueda (o pellizco en el panel táctil) acerca hacia el puntero.
                 event.preventDefault();
-                setZoom((state.pxPerMm || fitPxPerMm()) * (event.deltaY > 0 ? 0.9 : 1.1));
+                const delta = clamp(event.deltaMode === 1 ? event.deltaY * 33 : event.deltaY, -240, 240);
+                zoomTo((state.pxPerMm || fitPxPerMm()) * Math.exp(-delta * 0.0022), event);
             }, { passive: false });
+            el.shell.addEventListener('pointerdown', (event) => {
+                const onBackground = event.target === el.shell;
+                const panning = event.button === 1 || (event.button === 0 && (state.handTool || state.spaceHeld || onBackground));
+                if (!panning) return;
+                event.preventDefault();
+                event.stopPropagation();
+                startPan(event);
+            }, true);
+            el.shell.addEventListener('auxclick', (event) => { if (event.button === 1) event.preventDefault(); });
             new ResizeObserver(() => { if (!el.modal.hidden) renderStage(); }).observe(el.shell);
         }
 
-        function setZoom(pxPerMm) {
+        const MIN_PX_PER_MM = 0.8;
+        const MAX_PX_PER_MM = 60;
+
+        function zoomTo(pxPerMm, anchor = null) {
+            // Mantiene fijo en pantalla el punto de la tarjeta bajo el puntero (o el centro del visor).
+            const shellRect = el.shell.getBoundingClientRect();
+            const before = el.stage.getBoundingClientRect();
+            const x = anchor ? anchor.clientX : shellRect.left + shellRect.width / 2;
+            const y = anchor ? anchor.clientY : shellRect.top + shellRect.height / 2;
+            const k = before.width / design().width_mm || 1;
+            const mmX = (x - before.left) / k;
+            const mmY = (y - before.top) / k;
             state.zoomMode = 'manual';
-            state.pxPerMm = clamp(pxPerMm, 0.8, 30);
+            state.pxPerMm = clamp(pxPerMm, MIN_PX_PER_MM, MAX_PX_PER_MM);
             renderStage();
+            const after = el.stage.getBoundingClientRect();
+            el.shell.scrollLeft += after.left + mmX * state.pxPerMm - x;
+            el.shell.scrollTop += after.top + mmY * state.pxPerMm - y;
+        }
+
+        function setZoom(pxPerMm) {
+            zoomTo(pxPerMm);
+        }
+
+        function zoomFit() {
+            state.zoomMode = 'fit';
+            renderStage();
+            el.shell.scrollLeft = 0;
+            el.shell.scrollTop = 0;
+        }
+
+        function zoomToSelection() {
+            const items = selectedElements();
+            if (!items.length) { zoomFit(); return; }
+            const bounds = boundsOf(items);
+            const widthMm = Math.max(2, bounds.width * design().width_mm);
+            const heightMm = Math.max(2, bounds.height * design().height_mm);
+            const shellRect = el.shell.getBoundingClientRect();
+            state.zoomMode = 'manual';
+            state.pxPerMm = clamp(Math.min(shellRect.width * 0.7 / widthMm, shellRect.height * 0.7 / heightMm), MIN_PX_PER_MM, MAX_PX_PER_MM);
+            renderStage();
+            const stageRect = el.stage.getBoundingClientRect();
+            const centerX = stageRect.left + (bounds.left + bounds.width / 2) * stageRect.width;
+            const centerY = stageRect.top + (bounds.top + bounds.height / 2) * stageRect.height;
+            el.shell.scrollLeft += centerX - (shellRect.left + shellRect.width / 2);
+            el.shell.scrollTop += centerY - (shellRect.top + shellRect.height / 2);
+        }
+
+        function startPan(event) {
+            if (state.zoomMode === 'fit') zoomTo(state.pxPerMm || fitPxPerMm());
+            const start = { x: event.clientX, y: event.clientY, left: el.shell.scrollLeft, top: el.shell.scrollTop };
+            el.shell.classList.add('cd-panning');
+            const onMove = (moveEvent) => {
+                el.shell.scrollLeft = start.left - (moveEvent.clientX - start.x);
+                el.shell.scrollTop = start.top - (moveEvent.clientY - start.y);
+            };
+            const onUp = () => {
+                el.shell.classList.remove('cd-panning');
+                window.removeEventListener('pointermove', onMove);
+                window.removeEventListener('pointerup', onUp);
+            };
+            window.addEventListener('pointermove', onMove);
+            window.addEventListener('pointerup', onUp);
+        }
+
+        function setHandTool(active) {
+            state.handTool = active;
+            if (active && state.pen) cancelPen();
+            el.shell.classList.toggle('cd-hand', state.handTool || state.spaceHeld);
+            $('cd-tool-hand').classList.toggle('active', state.handTool);
         }
 
         // -------------------------- acciones de objetos -------------------------- //
@@ -1261,7 +1577,7 @@
 
         function typeSection(item) {
             const children = [];
-            const title = { text: 'Texto', photo: 'Fotografía', image: 'Imagen', qr: 'Código QR', barcode: 'Código de barras', rect: 'Forma', ellipse: 'Forma', line: 'Línea' }[item.type];
+            const title = { text: 'Texto', photo: 'Fotografía', image: 'Imagen', qr: 'Código QR', barcode: 'Código de barras', rect: 'Forma', ellipse: 'Forma', line: 'Línea', path: 'Trazado' }[item.type];
             if (item.type === 'text') {
                 const area = h('textarea', { id: 'cd-prop-text', rows: 3, maxlength: 1000, spellcheck: true });
                 area.value = item.text;
@@ -1313,6 +1629,11 @@
                 const gray = h('input', { type: 'checkbox', checked: Boolean(item.grayscale) });
                 bindLive(gray, () => { item.grayscale = gray.checked; }, { event: 'change' });
                 children.push(h('label', { class: 'designer-check' }, [gray, h('span', { text: 'Blanco y negro' })]));
+                if (item.type === 'image') {
+                    children.push(control('Pintar de un color', colorInput(item.recolor, (value) => { item.recolor = value; }, { optional: true }), {
+                        wide: true, note: 'Para logos SVG o PNG con fondo transparente, por ejemplo en blanco sobre una banda.',
+                    }));
+                }
             } else if (item.type === 'qr' || item.type === 'barcode') {
                 const input = h('input', { id: 'cd-prop-value', type: 'text', maxlength: 1000 });
                 input.value = item.value;
@@ -1334,16 +1655,20 @@
                     control('Color', colorInput(item.color, (value) => { item.color = value; })),
                     control('Fondo', colorInput(item.background, (value) => { item.background = value; }, { optional: true })),
                 ]));
-            } else if (item.type === 'rect' || item.type === 'ellipse') {
-                children.push(h('div', { class: 'cd-grid2' }, [
-                    control('Relleno', colorInput(item.fill, (value) => { item.fill = value; }, { optional: true })),
-                    ...frameControls(item).filter((node) => node && !(item.type === 'ellipse' && node.textContent.startsWith('Radio'))),
-                ]));
+            } else if (item.type === 'rect' || item.type === 'ellipse' || item.type === 'path') {
+                children.push(presetControls(item), ...fillControls(item), strokeControls(item));
+                if (item.type === 'rect') children.push(control('Radio esquinas pt', numberInput(item.radius || 0, { min: 0, max: 200, step: 0.5 }, (value) => { item.radius = value; })));
+                if (item.type === 'path') {
+                    children.push(control('Superposiciones', selectInput([['evenodd', 'Dejan hueco (par-impar)'], ['nonzero', 'Se rellenan (distinto de cero)']], item.fill_rule || 'evenodd', (value) => { item.fill_rule = value; }), { wide: true }));
+                }
             } else if (item.type === 'line') {
-                children.push(h('div', { class: 'cd-grid2' }, [
-                    control('Color', colorInput(item.stroke_color, (value) => { item.stroke_color = value; })),
-                    control('Grosor pt', numberInput(item.stroke_width || 1, { min: 0.1, max: 40, step: 0.25 }, (value) => { item.stroke_width = value; })),
-                ]));
+                children.push(strokeControls(item));
+            }
+            if (CONVERTIBLE.includes(item.type)) {
+                children.push(h('button', {
+                    class: 'btn secondary compact wide', type: 'button', text: '✒ Convertir a curvas (Ctrl+Q)', disabled: item.locked,
+                    title: 'Lo transforma en un trazado con nodos editables, como en Corel', onclick: () => convertToCurves([item]),
+                }));
             }
             return h('section', { class: 'cd-section' }, [h('div', { class: 'cd-section-title', text: title }), ...children]);
         }
@@ -1369,13 +1694,54 @@
             return h('section', { class: 'cd-section' }, [h('div', { class: 'cd-section-title', text: 'Visibilidad condicional' }), ...children]);
         }
 
+        function magstripeSection() {
+            const mag = design().magstripe || (design().magstripe = defaultMagstripe());
+            const enabled = h('input', { type: 'checkbox', checked: Boolean(mag.enabled) });
+            enabled.addEventListener('change', () => change(() => { mag.enabled = enabled.checked; }));
+            const children = [
+                h('div', { class: 'cd-section-title', text: 'Banda magnética' }),
+                h('label', { class: 'designer-check' }, [enabled, h('span', { text: 'Codificar la banda al imprimir' })]),
+            ];
+            if (mag.enabled) {
+                const values = valuesFor(host.getCurrentPhoto());
+                children.push(control('La banda está en', selectInput([['back', 'El dorso'], ['front', 'El frente']], mag.side, (value) => { mag.side = value; }), { wide: true }));
+                [1, 2, 3].forEach((track) => {
+                    const key = `track${track}`;
+                    const input = h('input', { type: 'text', maxlength: 200, placeholder: track === 1 ? 'Ej.: {Apellido}^{Nombre}' : 'Ej.: {Legajo}' });
+                    input.value = mag[key] || '';
+                    const preview = h('small', { class: 'cd-mag-preview' });
+                    const refresh = () => {
+                        const data = normalizeMagTrack(track, resolveFields(mag[key], values));
+                        const error = magTrackError(track, data);
+                        preview.className = `cd-mag-preview${error ? ' error' : ''}`;
+                        preview.textContent = !mag[key]?.trim() ? 'Sin usar' : error ? `⚠ ${error}` : `Esta credencial: ${data || '(vacío)'}`;
+                    };
+                    bindLive(input, () => { mag[key] = input.value; refresh(); });
+                    refresh();
+                    children.push(
+                        h('div', { class: 'cd-label-row' }, [
+                            h('span', { text: `Pista ${track} · ${track === 1 ? 'letras y números, hasta 76' : track === 2 ? 'números, hasta 37' : 'números, hasta 104'}` }),
+                            fieldPicker((token) => insertAtCursor(input, token, (value) => { mag[key] = value; refresh(); })),
+                        ]),
+                        input,
+                        preview,
+                    );
+                });
+                children.push(h('small', { class: 'cd-hint', text: 'Los centinelas (% ; ?) los agrega la impresora. La pista 1 va en mayúsculas sin acentos; ^ separa campos. Elegí la marca y los comandos en Imprimir…' }));
+            }
+            return h('section', { class: 'cd-section' }, children);
+        }
+
         function sidePropertiesSection() {
             const current = side();
             const options = [['', 'Sin imagen'], ...state.assets.map((asset) => [asset.asset_id, asset.filename])];
             const colors = new Set();
             ['front', 'back'].forEach((key) => {
                 colors.add(design()[key].background_color);
-                design()[key].elements.forEach((item) => ['color', 'fill', 'stroke_color', 'background'].forEach((prop) => { if (item[prop]) colors.add(item[prop].toLowerCase()); }));
+                design()[key].elements.forEach((item) => {
+                    ['color', 'fill', 'stroke_color', 'background', 'recolor'].forEach((prop) => { if (item[prop]) colors.add(item[prop].toLowerCase()); });
+                    if (item.gradient) { colors.add(item.gradient.start.toLowerCase()); colors.add(item.gradient.end.toLowerCase()); }
+                });
             });
             const from = h('select', {}, [...colors].map((color) => h('option', { value: color, text: color, style: { background: color } })));
             const to = h('input', { type: 'color', value: '#176b87' });
@@ -1389,6 +1755,7 @@
                     h('button', { class: 'btn secondary compact wide', type: 'button', text: 'Cargar imagen de fondo…', onclick: () => { assetTarget = '__background__'; el.assetInput.click(); } }),
                     h('small', { class: 'cd-hint', text: 'La imagen se recorta para cubrir la tarjeta completa. Usá 1011×638 px (300 dpi) o más.' }),
                 ]),
+                magstripeSection(),
                 h('section', { class: 'cd-section' }, [
                     h('div', { class: 'cd-section-title', text: 'Reemplazar color en todo el diseño' }),
                     h('div', { class: 'cd-grid2' }, [control('Color actual', from), control('Nuevo color', to)]),
@@ -1397,13 +1764,16 @@
                         onclick: () => change(() => ['front', 'back'].forEach((key) => {
                             const sideData = design()[key];
                             if (sideData.background_color.toLowerCase() === from.value) sideData.background_color = to.value;
-                            sideData.elements.forEach((item) => ['color', 'fill', 'stroke_color', 'background'].forEach((prop) => { if (item[prop] && item[prop].toLowerCase() === from.value) item[prop] = to.value; }));
+                            sideData.elements.forEach((item) => {
+                                ['color', 'fill', 'stroke_color', 'background', 'recolor'].forEach((prop) => { if (item[prop] && item[prop].toLowerCase() === from.value) item[prop] = to.value; });
+                                if (item.gradient) ['start', 'end'].forEach((prop) => { if (item.gradient[prop].toLowerCase() === from.value) item.gradient[prop] = to.value; });
+                            });
                         })),
                     }),
                 ]),
                 h('section', { class: 'cd-section cd-shortcuts' }, [
                     h('div', { class: 'cd-section-title', text: 'Atajos' }),
-                    h('p', { class: 'field-note', text: 'Clic + Mayús: selección múltiple · Arrastrar en vacío: seleccionar área · Flechas: mover 0,5 mm (Mayús: 5 mm) · Ctrl+D duplicar · Ctrl+C / Ctrl+V · Supr eliminar · Ctrl+Z / Ctrl+Y · Alt al arrastrar: sin imán · Ctrl+rueda: zoom' }),
+                    h('p', { class: 'field-note', text: 'Clic + Mayús: selección múltiple · Arrastrar en vacío: seleccionar área · Flechas: mover 0,5 mm (Mayús: 5 mm) · Ctrl+D duplicar · Ctrl+C / Ctrl+V · Supr eliminar · Ctrl+Z / Ctrl+Y · Alt al arrastrar: sin imán · Ctrl+rueda: zoom hacia el puntero · Espacio o rueda apretada + arrastrar: mover la vista · H: mano · Ctrl+0: encajar · Ctrl+1: 1:1 · Mayús+2: zoom a la selección · P: pluma · Ctrl+Q: convertir a curvas · doble clic en un trazado: editar nodos' }),
                 ]),
             ];
         }
@@ -1433,10 +1803,11 @@
             const name = h('input', { type: 'text', maxlength: 80, placeholder: TYPE_LABELS[item.type] });
             name.value = item.name || '';
             bindLive(name, () => { item.name = name.value; });
-            el.properties.replaceChildren(
+            el.properties.replaceChildren(...[
                 h('section', { class: 'cd-section' }, [control('Nombre del objeto', name, { wide: true })]),
                 item.type === 'photo' ? framingSection(item) : null,
                 typeSection(item),
+                item.type === 'path' ? nodeSection(item) : null,
                 geometrySection(item),
                 conditionSection(item),
                 h('section', { class: 'cd-section' }, [h('div', { class: 'cd-button-row' }, [
@@ -1444,7 +1815,7 @@
                     h('button', { class: 'btn secondary compact', type: 'button', text: '⧉ Duplicar', onclick: duplicateSelected }),
                     h('button', { class: 'btn secondary compact danger-outline', type: 'button', text: '🗑 Eliminar', disabled: item.locked, onclick: removeSelected }),
                 ])]),
-            );
+            ].filter(Boolean));
         }
 
         function renderRecordData() {
@@ -1501,11 +1872,755 @@
         }
 
         function updateToolbar() {
+            $('cd-tool-pen')?.classList.toggle('active', Boolean(state.pen));
             $('cd-undo').disabled = !state.history.length;
             $('cd-redo').disabled = !state.future.length;
             const hasSelection = state.selected.length > 0;
             document.querySelectorAll('[data-cd-needs-selection]').forEach((button) => { button.disabled = !hasSelection; });
             document.querySelectorAll('[data-cd-needs-multi]').forEach((button) => { button.disabled = state.selected.length < Number(button.dataset.cdNeedsMulti); });
+        }
+
+
+        // ------------------------------ formas vectoriales ------------------------------ //
+
+        function vectorContent(item, boxPx, ptToPx) {
+            const { w, h } = boxPx;
+            const strokePx = item.type === 'line'
+                ? (item.stroke_width || 1) * ptToPx
+                : (item.stroke_color ? (item.stroke_width || 0) * ptToPx : 0);
+            const strokeColor = item.type === 'line' ? (item.stroke_color || '#17202b') : item.stroke_color;
+            const root = svgNode('svg', { class: 'cd-svg', width: w, height: h, viewBox: `0 0 ${w} ${h}`, overflow: 'visible' });
+            const defs = svgNode('defs');
+            root.append(defs);
+            const fillPaint = () => {
+                const gradient = item.gradient;
+                if (!gradient) return item.fill || 'none';
+                const id = `cdg${svgUid += 1}`;
+                const stops = [svgNode('stop', { offset: 0, 'stop-color': gradient.start }), svgNode('stop', { offset: 1, 'stop-color': gradient.end })];
+                if (gradient.kind === 'radial') {
+                    const ratio = h / Math.max(w, 1e-6);
+                    defs.append(svgNode('radialGradient', {
+                        id, gradientUnits: 'userSpaceOnUse', cx: w / 2, cy: h / 2, r: w / 2,
+                        gradientTransform: `translate(${w / 2} ${h / 2}) scale(1 ${ratio}) translate(${-w / 2} ${-h / 2})`,
+                    }, stops));
+                } else {
+                    const angle = (gradient.angle || 0) * Math.PI / 180;
+                    const dx = Math.cos(angle); const dy = Math.sin(angle);
+                    const extent = Math.abs(w * dx) + Math.abs(h * dy);
+                    defs.append(svgNode('linearGradient', {
+                        id, gradientUnits: 'userSpaceOnUse',
+                        x1: w / 2 - dx * extent / 2, y1: h / 2 - dy * extent / 2, x2: w / 2 + dx * extent / 2, y2: h / 2 + dy * extent / 2,
+                    }, stops));
+                }
+                return `url(#${id})`;
+            };
+            const stroke = strokePx > 0 && strokeColor ? {
+                stroke: strokeColor, 'stroke-width': strokePx, 'stroke-linecap': item.line_cap || 'butt',
+                'stroke-linejoin': item.line_join || 'miter', 'stroke-miterlimit': 10,
+                'stroke-dasharray': DASH_PATTERNS[item.dash] ? DASH_PATTERNS[item.dash].map((value) => value * strokePx).join(' ') : null,
+                fill: 'none',
+            } : null;
+            const hasFill = Boolean(item.fill || item.gradient);
+            if (item.type === 'rect' || item.type === 'ellipse') {
+                const radius = item.type === 'rect' ? Math.min((item.radius || 0) * ptToPx, w / 2, h / 2) : 0;
+                const inset = stroke ? strokePx / 2 : 0;
+                const shape = (pad, attrs) => (item.type === 'ellipse'
+                    ? svgNode('ellipse', { cx: w / 2, cy: h / 2, rx: Math.max(0.1, w / 2 - pad), ry: Math.max(0.1, h / 2 - pad), ...attrs })
+                    : svgNode('rect', { x: pad, y: pad, width: Math.max(0.1, w - pad * 2), height: Math.max(0.1, h - pad * 2), rx: Math.max(0, radius - pad), ...attrs }));
+                if (hasFill) root.append(shape(0, { fill: fillPaint() }));
+                if (stroke) root.append(shape(inset, stroke));
+            } else if (item.type === 'line') {
+                if (stroke) root.append(svgNode('line', { x1: 0, y1: h / 2, x2: w, y2: h / 2, ...stroke }));
+            } else {
+                const fill = hasFill ? fillPaint() : 'none';
+                root.append(svgNode('path', { d: pathData(item.paths || [], w, h), ...(stroke || {}), fill, 'fill-rule': item.fill_rule || 'evenodd' }));
+            }
+            return root;
+        }
+
+        const mmW = () => design().width_mm;
+        const mmH = () => design().height_mm;
+
+        function stageMm(event) {
+            const point = stagePoint(event);
+            return { p: [point.x * mmW(), point.y * mmH()], rect: point.rect, k: point.rect.width / mmW() };
+        }
+
+        function itemFrame(item) {
+            const W = mmW(); const H = mmH();
+            return { w: item.w * W, h: item.h * H, cx: (item.x + item.w / 2) * W, cy: (item.y + item.h / 2) * H, a: (item.rotation || 0) * Math.PI / 180 };
+        }
+
+        function localToCard(frame, [x, y]) {
+            const dx = x - frame.w / 2; const dy = y - frame.h / 2;
+            const cos = Math.cos(frame.a); const sin = Math.sin(frame.a);
+            return [frame.cx + dx * cos - dy * sin, frame.cy + dx * sin + dy * cos];
+        }
+
+        function cardToLocal(frame, [x, y]) {
+            const dx = x - frame.cx; const dy = y - frame.cy;
+            const cos = Math.cos(frame.a); const sin = Math.sin(frame.a);
+            return [dx * cos + dy * sin + frame.w / 2, -dx * sin + dy * cos + frame.h / 2];
+        }
+
+        function absolutePaths(item) {
+            const frame = itemFrame(item);
+            return mapPaths(item.paths || [], ([u, v]) => localToCard(frame, [u * frame.w, v * frame.h]));
+        }
+
+        function pathFromAbsolute(paths, props = {}) {
+            const fit = fitUnit(paths);
+            if (!fit) return null;
+            const { left, top, width, height } = fit.box;
+            return makeElement('path', { x: left / mmW(), y: top / mmH(), w: width / mmW(), h: height / mmH(), rotation: 0, paths: fit.paths, ...props });
+        }
+
+        function refitPath(item) {
+            // Ajusta la caja al trazado editado sin moverlo en la tarjeta (respeta el giro).
+            const frame = itemFrame(item);
+            const fit = fitUnit(mapPaths(item.paths, ([u, v]) => [u * frame.w, v * frame.h]));
+            if (!fit) return;
+            const { left, top, width, height } = fit.box;
+            const ox = left + width / 2 - frame.w / 2;
+            const oy = top + height / 2 - frame.h / 2;
+            const cos = Math.cos(frame.a); const sin = Math.sin(frame.a);
+            const cx = frame.cx + ox * cos - oy * sin;
+            const cy = frame.cy + ox * sin + oy * cos;
+            item.paths = fit.paths;
+            item.w = width / mmW();
+            item.h = height / mmH();
+            item.x = (cx - width / 2) / mmW();
+            item.y = (cy - height / 2) / mmH();
+        }
+
+        function styleFrom(item) {
+            const keep = { opacity: item.opacity ?? 1, condition: item.condition ? clone(item.condition) : null };
+            if (['path', 'rect', 'ellipse'].includes(item.type)) {
+                if (!item.fill && !item.gradient && item.type === 'path') return { ...keep, fill: item.stroke_color || '#17202b', stroke_color: null, stroke_width: 0 };
+                return {
+                    ...keep, fill: item.fill || null, gradient: item.gradient ? clone(item.gradient) : null, stroke_color: item.stroke_color || null,
+                    stroke_width: item.stroke_width || 0, dash: item.dash || 'solid', line_join: item.line_join || 'round', line_cap: item.line_cap || 'round',
+                };
+            }
+            if (item.type === 'line') return { ...keep, fill: item.stroke_color || '#17202b', stroke_color: null, stroke_width: 0 };
+            return { ...keep, fill: item.color || '#17202b', stroke_color: null, stroke_width: 0 };
+        }
+
+        function showModeBanner(text, buttons) {
+            removeModeBanner();
+            el.shell.parentElement.append(h('div', { class: 'cd-crop-banner cd-mode-banner' }, [
+                h('span', { text }),
+                ...buttons.map(([label, action, secondary]) => h('button', { class: `btn compact${secondary ? ' secondary' : ''}`, type: 'button', text: label, onclick: action })),
+            ]));
+        }
+
+        function removeModeBanner() {
+            el.shell.parentElement.querySelectorAll('.cd-mode-banner').forEach((node) => node.remove());
+        }
+
+        function overlayRoot() {
+            let root = el.stage.querySelector(':scope > .cd-vector-overlay');
+            if (!root) {
+                root = svgNode('svg', { class: 'cd-vector-overlay' });
+                el.stage.append(root);
+            }
+            return root;
+        }
+
+        function renderVectorOverlay() {
+            const root = overlayRoot();
+            root.replaceChildren();
+            const active = Boolean(state.pen || state.nodeEdit);
+            root.classList.toggle('active', active);
+            if (!active) return;
+            const width = el.stage.clientWidth;
+            const height = el.stage.clientHeight;
+            if (!width) return;
+            const k = width / mmW();
+            root.setAttribute('viewBox', `0 0 ${width} ${height}`);
+            root.setAttribute('width', width);
+            root.setAttribute('height', height);
+            const handle = (node, which, toPx, key) => {
+                if (!node[which]) return;
+                const a = toPx(node.p); const b = toPx(node[which]);
+                root.append(svgNode('line', { class: 'cd-ov-arm', x1: a[0], y1: a[1], x2: b[0], y2: b[1] }));
+                root.append(svgNode('circle', { class: 'cd-ov-handle', cx: b[0], cy: b[1], r: 4.5, 'data-role': 'handle', 'data-key': key, 'data-which': which }));
+            };
+            const square = (point, attrs) => svgNode('rect', { x: point[0] - 4.5, y: point[1] - 4.5, width: 9, height: 9, ...attrs });
+            if (state.pen) {
+                const toPx = ([x, y]) => [x * k, y * k];
+                const nodes = state.pen.nodes;
+                if (!nodes.length) return;
+                const scaled = mapPaths([{ closed: false, nodes }], toPx);
+                root.append(svgNode('path', { class: 'cd-ov-path', d: pathData(scaled) }));
+                const last = nodes[nodes.length - 1];
+                if (state.pen.cursor && !state.pen.dragging) {
+                    const from = toPx(last.p); const to = toPx(state.pen.cursor);
+                    const c1 = last.o ? toPx(last.o) : from;
+                    root.append(svgNode('path', { class: 'cd-ov-rubber', d: `M${from[0]} ${from[1]}C${c1[0]} ${c1[1]} ${to[0]} ${to[1]} ${to[0]} ${to[1]}` }));
+                }
+                handle(last, 'i', toPx, '');
+                handle(last, 'o', toPx, '');
+                nodes.forEach((entry, index) => root.append(square(toPx(entry.p), { class: `cd-ov-node${index === 0 ? ' first' : ''}` })));
+                return;
+            }
+            const item = findElement(state.nodeEdit.id);
+            if (!item) return;
+            const frame = itemFrame(item);
+            const toPx = ([u, v]) => { const [x, y] = localToCard(frame, [u * frame.w, v * frame.h]); return [x * k, y * k]; };
+            const scaled = mapPaths(item.paths, toPx);
+            const d = pathData(scaled);
+            root.append(svgNode('path', { class: 'cd-ov-hit', d, 'data-role': 'segment' }));
+            root.append(svgNode('path', { class: 'cd-ov-path', d }));
+            item.paths.forEach((sub, si) => sub.nodes.forEach((entry, ni) => {
+                const key = `${si}:${ni}`;
+                if (!state.nodeEdit.sel.has(key)) return;
+                handle(entry, 'i', toPx, key);
+                handle(entry, 'o', toPx, key);
+            }));
+            item.paths.forEach((sub, si) => sub.nodes.forEach((entry, ni) => {
+                const key = `${si}:${ni}`;
+                const point = toPx(entry.p);
+                const attrs = { class: `cd-ov-node${state.nodeEdit.sel.has(key) ? ' selected' : ''}${entry.s ? ' smooth' : ''}`, 'data-role': 'node', 'data-key': key };
+                root.append(entry.s ? svgNode('circle', { cx: point[0], cy: point[1], r: 5, ...attrs }) : square(point, attrs));
+            }));
+        }
+
+        // ---- pluma ----
+
+        function startPen() {
+            if (state.cropping) exitCropMode({ quiet: true });
+            if (state.nodeEdit) exitNodeEdit();
+            state.pen = { nodes: [], cursor: null, dragging: false };
+            state.selected = [];
+            el.stage.classList.add('cd-pen-mode');
+            showModeBanner('Pluma: clic = nodo en punta · arrastrar = curva · Mayús = ángulos de 45° · clic en el primer nodo cierra la forma · Enter o doble clic termina · Retroceso borra el último nodo', [
+                ['Terminar', () => finishPen(false)], ['Cancelar', cancelPen, true],
+            ]);
+            render();
+        }
+
+        function cancelPen() {
+            state.pen = null;
+            el.stage.classList.remove('cd-pen-mode');
+            removeModeBanner();
+            renderVectorOverlay();
+            updateToolbar();
+        }
+
+        function constrain45(from, to) {
+            const dx = to[0] - from[0]; const dy = to[1] - from[1];
+            const angle = Math.round(Math.atan2(dy, dx) / (Math.PI / 4)) * (Math.PI / 4);
+            const length = Math.hypot(dx, dy);
+            return [from[0] + Math.cos(angle) * length, from[1] + Math.sin(angle) * length];
+        }
+
+        function penPointerDown(event) {
+            const pen = state.pen;
+            const start = stageMm(event);
+            const last = pen.nodes[pen.nodes.length - 1];
+            const p = event.shiftKey && last ? constrain45(last.p, start.p) : start.p;
+            if (pen.nodes.length >= 2 && dist(p, pen.nodes[0].p) * start.k < 9) { finishPen(true); return; }
+            if (last && dist(p, last.p) * start.k < 3) return;
+            const entry = { p, i: null, o: null };
+            pen.nodes.push(entry);
+            pen.dragging = true;
+            const onMove = (moveEvent) => {
+                const point = stageMm(moveEvent);
+                const dx = point.p[0] - p[0]; const dy = point.p[1] - p[1];
+                if (Math.hypot(dx, dy) * point.k < 7) { entry.i = null; entry.o = null; delete entry.s; }
+                else { entry.o = [p[0] + dx, p[1] + dy]; entry.i = [p[0] - dx, p[1] - dy]; entry.s = true; }
+                renderVectorOverlay();
+            };
+            const onUp = () => {
+                pen.dragging = false;
+                window.removeEventListener('pointermove', onMove);
+                window.removeEventListener('pointerup', onUp);
+                renderVectorOverlay();
+            };
+            window.addEventListener('pointermove', onMove);
+            window.addEventListener('pointerup', onUp);
+            renderVectorOverlay();
+        }
+
+        function finishPen(closed) {
+            const pen = state.pen;
+            if (!pen) return;
+            const nodes = pen.nodes;
+            cancelPen();
+            if (nodes.length < 2) { host.setStatus('El trazado necesita al menos dos nodos.', 'error'); render(); return; }
+            const style = closed
+                ? { fill: '#176b87', stroke_color: null, stroke_width: 0 }
+                : { fill: null, stroke_color: '#17202b', stroke_width: 1, line_cap: 'round', line_join: 'round' };
+            const item = pathFromAbsolute([{ closed, nodes }], style);
+            if (!item) return;
+            change(() => elements().push(item));
+            select([item.id]);
+            host.setStatus('Trazado creado. Doble clic sobre él para editar los nodos.');
+        }
+
+        // ---- edición de nodos ----
+
+        async function enterNodeEdit(item) {
+            if (!item || item.locked) return;
+            let target = item;
+            if (item.type !== 'path') {
+                const created = await convertToCurves([item], { quiet: true });
+                if (created.length !== 1) { if (created.length) host.setStatus('El objeto quedó en varias piezas: elegí una para editar sus nodos.'); return; }
+                [target] = created;
+            }
+            if (state.cropping) exitCropMode({ quiet: true });
+            if (state.pen) cancelPen();
+            if (target.preset) change(() => { target.preset = null; }, { panel: false });
+            state.nodeEdit = { id: target.id, sel: new Set() };
+            state.selected = [target.id];
+            showModeBanner('Nodos: arrastrá nodos o manejadores · clic sobre la línea agrega un nodo · Mayús suma a la selección · Alt quiebra el manejador · Supr borra · Enter o Esc termina', [
+                ['Terminar', () => exitNodeEdit()],
+            ]);
+            render();
+        }
+
+        function exitNodeEdit() {
+            if (!state.nodeEdit) return;
+            state.nodeEdit = null;
+            removeModeBanner();
+            render();
+        }
+
+        function nodeEditTarget() {
+            const item = state.nodeEdit && findElement(state.nodeEdit.id);
+            if (!item || item.type !== 'path') { if (state.nodeEdit) exitNodeEdit(); return null; }
+            return item;
+        }
+
+        function selectedNodes(item) {
+            return [...state.nodeEdit.sel].map((key) => {
+                const [si, ni] = key.split(':').map(Number);
+                const node = item.paths[si]?.nodes[ni];
+                return node ? { si, ni, node, key } : null;
+            }).filter(Boolean);
+        }
+
+        function splitSegment(item, si, index, t) {
+            const sub = item.paths[si];
+            const start = sub.nodes[index];
+            const endIndex = (index + 1) % sub.nodes.length;
+            const end = sub.nodes[endIndex];
+            let created;
+            if (!start.o && !end.i) {
+                created = { p: lerp(start.p, end.p, t), i: null, o: null };
+            } else {
+                const p0 = start.p; const c1 = start.o || start.p; const c2 = end.i || end.p; const p3 = end.p;
+                const q0 = lerp(p0, c1, t); const q1 = lerp(c1, c2, t); const q2 = lerp(c2, p3, t);
+                const r0 = lerp(q0, q1, t); const r1 = lerp(q1, q2, t);
+                created = { p: lerp(r0, r1, t), i: r0, o: r1, s: true };
+                start.o = q0;
+                end.i = q2;
+            }
+            sub.nodes.splice(index + 1, 0, created);
+            return `${si}:${index + 1}`;
+        }
+
+        function nodeEditPointerDown(event) {
+            const item = nodeEditTarget();
+            if (!item) return false;
+            const role = event.target.dataset?.role;
+            const frame = itemFrame(item);
+            const toUnit = (pointerEvent) => {
+                const [x, y] = cardToLocal(frame, stageMm(pointerEvent).p);
+                return [x / frame.w, y / frame.h];
+            };
+            const toMm = ([u, v]) => [u * frame.w, v * frame.h];
+            const fromMm = ([x, y]) => [x / frame.w, y / frame.h];
+            const drag = (onMove) => {
+                const before = snapshot();
+                let moved = false;
+                const move = (moveEvent) => { moved = true; onMove(moveEvent); renderStage(); };
+                const up = () => {
+                    window.removeEventListener('pointermove', move);
+                    window.removeEventListener('pointerup', up);
+                    if (moved) refitPath(item);
+                    commit(before);
+                    render();
+                };
+                window.addEventListener('pointermove', move);
+                window.addEventListener('pointerup', up);
+            };
+            if (role === 'node') {
+                const key = event.target.dataset.key;
+                const sel = state.nodeEdit.sel;
+                if (event.shiftKey) { if (sel.has(key)) sel.delete(key); else sel.add(key); } else if (!sel.has(key)) state.nodeEdit.sel = new Set([key]);
+                renderVectorOverlay();
+                const start = toUnit(event);
+                const originals = selectedNodes(item).map((entry) => ({ node: entry.node, copy: clone(entry.node) }));
+                drag((moveEvent) => {
+                    const now = toUnit(moveEvent);
+                    const du = now[0] - start[0]; const dv = now[1] - start[1];
+                    const shift = (point) => (point ? [point[0] + du, point[1] + dv] : null);
+                    originals.forEach(({ node, copy }) => { node.p = shift(copy.p); node.i = shift(copy.i); node.o = shift(copy.o); });
+                });
+                return true;
+            }
+            if (role === 'handle') {
+                const [si, ni] = event.target.dataset.key.split(':').map(Number);
+                const which = event.target.dataset.which;
+                const other = which === 'i' ? 'o' : 'i';
+                const node = item.paths[si].nodes[ni];
+                drag((moveEvent) => {
+                    node[which] = toUnit(moveEvent);
+                    if (moveEvent.altKey) { delete node.s; return; }
+                    if (node.s && node[other]) {
+                        // Nodo suave: el manejador opuesto sigue la dirección y conserva su largo.
+                        const center = toMm(node.p);
+                        const moved = toMm(node[which]);
+                        const length = dist(center, toMm(node[other]));
+                        const span = dist(center, moved) || 1;
+                        node[other] = fromMm([center[0] - (moved[0] - center[0]) / span * length, center[1] - (moved[1] - center[1]) / span * length]);
+                    }
+                });
+                return true;
+            }
+            if (role === 'segment') {
+                const point = stageMm(event);
+                const k = point.k;
+                const target = [point.p[0] * k, point.p[1] * k];
+                let best = null;
+                item.paths.forEach((sub, si) => subSegments(sub).forEach((segment) => {
+                    for (let step = 1; step < 64; step += 1) {
+                        const t = step / 64;
+                        const unit = segment.c1 ? cubicAt(segment.p0, segment.c1, segment.c2, segment.p3, t) : lerp(segment.p0, segment.p3, t);
+                        const [x, y] = localToCard(frame, toMm(unit));
+                        const gap = Math.hypot(x * k - target[0], y * k - target[1]);
+                        if (!best || gap < best.gap) best = { gap, si, index: segment.index, t };
+                    }
+                }));
+                if (best && best.gap < 10) {
+                    const before = snapshot();
+                    const key = splitSegment(item, best.si, best.index, best.t);
+                    state.nodeEdit.sel = new Set([key]);
+                    commit(before);
+                    render();
+                }
+                return true;
+            }
+            const node = event.target.closest('.cd-element');
+            if (node?.dataset.id === item.id || event.target.closest('.cd-vector-overlay')) {
+                state.nodeEdit.sel = new Set();
+                renderVectorOverlay();
+                return true;
+            }
+            exitNodeEdit();
+            return false;
+        }
+
+        function editNodes(mutator, message) {
+            const item = nodeEditTarget();
+            if (!item) return;
+            const chosen = selectedNodes(item);
+            if (!chosen.length && message) { host.setStatus(message, 'error'); return; }
+            change(() => { mutator(item, chosen); refitPath(item); }, { panel: true });
+        }
+
+        function deleteNodes() {
+            editNodes((item, chosen) => {
+                const doomed = new Set(chosen.map((entry) => entry.key));
+                item.paths = item.paths.map((sub, si) => ({ ...sub, nodes: sub.nodes.filter((_node, ni) => !doomed.has(`${si}:${ni}`)) }))
+                    .filter((sub) => sub.nodes.length >= 2);
+                state.nodeEdit.sel = new Set();
+            }, 'Elegí los nodos a borrar.');
+            const item = nodeEditTarget();
+            if (item && !item.paths.length) {
+                exitNodeEdit();
+                change(() => { side().elements = elements().filter((entry) => entry.id !== item.id); });
+                state.selected = [];
+                render();
+            }
+        }
+
+        function setNodesSmooth(smooth) {
+            editNodes((item, chosen) => chosen.forEach(({ node }) => {
+                if (!smooth) { delete node.s; return; }
+                node.s = true;
+                const frame = itemFrame(item);
+                const toMm = ([u, v]) => [u * frame.w, v * frame.h];
+                const fromMm = ([x, y]) => [x / frame.w, y / frame.h];
+                const center = toMm(node.p);
+                const into = node.i ? toMm(node.i) : null;
+                const out = node.o ? toMm(node.o) : null;
+                if (!into && !out) return;
+                const direction = into && out ? [out[0] - into[0], out[1] - into[1]] : out ? [out[0] - center[0], out[1] - center[1]] : [center[0] - into[0], center[1] - into[1]];
+                const span = Math.hypot(...direction) || 1;
+                const unit = [direction[0] / span, direction[1] / span];
+                const lengthOut = out ? dist(center, out) : dist(center, into);
+                const lengthIn = into ? dist(center, into) : dist(center, out);
+                node.o = fromMm([center[0] + unit[0] * lengthOut, center[1] + unit[1] * lengthOut]);
+                node.i = fromMm([center[0] - unit[0] * lengthIn, center[1] - unit[1] * lengthIn]);
+            }), 'Elegí uno o más nodos.');
+        }
+
+        function setSegmentsKind(curve) {
+            editNodes((item, chosen) => chosen.forEach(({ si, ni, node }) => {
+                const nodes = item.paths[si].nodes;
+                const closed = item.paths[si].closed;
+                const prev = ni > 0 ? nodes[ni - 1] : (closed ? nodes[nodes.length - 1] : null);
+                const next = ni < nodes.length - 1 ? nodes[ni + 1] : (closed ? nodes[0] : null);
+                if (!curve) {
+                    node.i = null; node.o = null; delete node.s;
+                    if (prev) prev.o = null;
+                    if (next) next.i = null;
+                    return;
+                }
+                if (next && !node.o && !next.i) { node.o = lerp(node.p, next.p, 1 / 3); next.i = lerp(next.p, node.p, 1 / 3); }
+                if (prev && !node.i && !prev.o) { node.i = lerp(node.p, prev.p, 1 / 3); prev.o = lerp(prev.p, node.p, 1 / 3); }
+            }), 'Elegí uno o más nodos.');
+        }
+
+        function toggleClosed() {
+            editNodes((item, chosen) => {
+                const subs = chosen.length ? [...new Set(chosen.map((entry) => entry.si))] : item.paths.map((_sub, si) => si);
+                subs.forEach((si) => { item.paths[si].closed = !item.paths[si].closed; });
+            });
+        }
+
+        function nudgeNodes(dx, dy) {
+            editNodes((item, chosen) => {
+                const frame = itemFrame(item);
+                const cos = Math.cos(frame.a); const sin = Math.sin(frame.a);
+                const du = (dx * cos + dy * sin) / frame.w;
+                const dv = (-dx * sin + dy * cos) / frame.h;
+                const shift = (point) => (point ? [point[0] + du, point[1] + dv] : null);
+                chosen.forEach(({ node }) => { node.p = shift(node.p); node.i = shift(node.i); node.o = shift(node.o); });
+            });
+        }
+
+        function nodeSection(item) {
+            const count = item.paths.reduce((total, sub) => total + sub.nodes.length, 0);
+            const editing = state.nodeEdit?.id === item.id;
+            const children = [
+                h('div', { class: 'cd-section-title', text: 'Nodos' }),
+                h('p', { class: 'field-note', text: `${count} nodo${count === 1 ? '' : 's'} · ${item.paths.length} subtrazado${item.paths.length === 1 ? '' : 's'}${editing ? ` · ${state.nodeEdit.sel.size} elegido${state.nodeEdit.sel.size === 1 ? '' : 's'}` : ''}` }),
+            ];
+            if (!editing) {
+                children.push(h('button', { class: 'btn secondary compact wide', type: 'button', text: '✎ Editar nodos (doble clic)', disabled: item.locked, onclick: () => enterNodeEdit(item) }));
+            } else {
+                const button = (text, title, action) => h('button', { class: 'btn secondary compact', type: 'button', text, title, onclick: action });
+                children.push(
+                    h('div', { class: 'cd-button-row' }, [
+                        button('◇ Punta', 'Nodo en punta: los manejadores se mueven por separado', () => setNodesSmooth(false)),
+                        button('● Suave', 'Nodo suave: manejadores alineados', () => setNodesSmooth(true)),
+                    ]),
+                    h('div', { class: 'cd-button-row' }, [
+                        button('╱ A recta', 'Convierte en recta los tramos de los nodos elegidos', () => setSegmentsKind(false)),
+                        button('⌒ A curva', 'Convierte en curva los tramos de los nodos elegidos', () => setSegmentsKind(true)),
+                    ]),
+                    h('div', { class: 'cd-button-row' }, [
+                        button('⊂⊃ Abrir/cerrar', 'Abre o cierra el subtrazado', toggleClosed),
+                        button('🗑 Borrar nodo', 'Supr', deleteNodes),
+                    ]),
+                    h('button', { class: 'btn compact wide', type: 'button', text: 'Terminar edición', onclick: () => exitNodeEdit() }),
+                );
+            }
+            return h('section', { class: 'cd-section' }, children);
+        }
+
+        // ---- convertir, combinar y operaciones ----
+
+        async function vectorApi(path, body) {
+            const response = await host.api(`/vector/${path}`, {
+                method: 'POST', headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ width_mm: mmW(), height_mm: mmH(), values: valuesFor(host.getCurrentPhoto()), ...body }),
+            });
+            return response.json();
+        }
+
+        const CONVERTIBLE = ['text', 'qr', 'barcode', 'rect', 'ellipse', 'line'];
+
+        async function convertToCurves(items = selectedElements(), { quiet = false, select: reselect = true } = {}) {
+            const sources = items.filter((item) => !item.locked && CONVERTIBLE.includes(item.type));
+            if (!sources.length) {
+                if (!quiet) host.setStatus(items.some((item) => item.type === 'path') ? 'Ya es un trazado: doble clic para editar los nodos.' : 'Las fotos e imágenes no se convierten a curvas. Usá textos, códigos o formas.', 'error');
+                return [];
+            }
+            const variable = sources.filter((item) => /\{[^{}]+\}/.test(`${item.text || ''}${item.value || ''}`));
+            if (variable.length && !window.confirm('Hay textos o códigos con campos variables. Al convertirlos a curvas quedan fijos con los datos de esta credencial. ¿Continuar?')) return [];
+            host.setBusy(true);
+            try {
+                const data = await vectorApi('outline', { elements: sources });
+                const created = [];
+                change(() => data.results.forEach((result) => {
+                    const index = elements().findIndex((entry) => entry.id === result.source);
+                    if (index < 0) return;
+                    const made = result.elements.map((props) => makeElement('path', { ...props, id: newId(), preset: null }));
+                    elements().splice(index, 1, ...made);
+                    created.push(...made);
+                }));
+                if (reselect) select(created.map((entry) => entry.id));
+                if (!quiet) host.setStatus(`Convertido a curvas: ${created.length} trazado${created.length === 1 ? '' : 's'}. Doble clic para editar los nodos.`);
+                return created;
+            } catch (error) {
+                host.setStatus(error.message, 'error');
+                return [];
+            } finally {
+                host.setBusy(false);
+            }
+        }
+
+        const orderedSelection = () => elements().filter((item) => state.selected.includes(item.id));
+
+        async function booleanOperation(operation) {
+            const items = orderedSelection().filter((item) => !item.hidden);
+            if (items.length < 2) return host.setStatus('Seleccioná al menos dos formas.', 'error');
+            if (items.some((item) => item.locked)) return host.setStatus('Hay objetos bloqueados en la selección.', 'error');
+            if (items.some((item) => item.type === 'photo' || item.type === 'image')) return host.setStatus('Las fotos e imágenes no se pueden combinar: usá formas, trazados o textos.', 'error');
+            host.setBusy(true);
+            try {
+                const data = await vectorApi('boolean', { operation, elements: items });
+                const base = items[0];
+                const result = makeElement('path', { ...data.element, ...styleFrom(base), name: '' });
+                change(() => {
+                    const list = elements();
+                    const ids = new Set(items.map((item) => item.id));
+                    if (operation === 'intersection') {
+                        list.splice(list.indexOf(items[items.length - 1]) + 1, 0, result);
+                    } else {
+                        const index = list.indexOf(base);
+                        const kept = list.filter((item, position) => !ids.has(item.id) || position === index);
+                        kept.splice(kept.indexOf(base), 1, result);
+                        side().elements = kept;
+                    }
+                });
+                select([result.id]);
+                const labels = { union: 'Formas soldadas', difference: 'Forma de abajo recortada: las de arriba se usaron como molde', intersection: 'Intersección creada (los originales quedan debajo)', xor: 'Superposición excluida' };
+                host.setStatus(`${labels[operation]}. Doble clic para editar los nodos.`);
+            } catch (error) {
+                host.setStatus(error.message, 'error');
+            } finally {
+                host.setBusy(false);
+            }
+        }
+
+        async function pathsFromSelection() {
+            // Convierte a curvas lo que haga falta y devuelve los trazados de la selección en orden.
+            const ids = orderedSelection().filter((item) => !item.locked).map((item) => item.id);
+            const pending = ids.map(findElement).filter((item) => item.type !== 'path');
+            let createdIds = new Set();
+            if (pending.length) {
+                const created = await convertToCurves(pending, { quiet: true, select: false });
+                if (!created.length) return null;
+                createdIds = new Set(created.map((item) => item.id));
+            }
+            return elements().filter((item) => createdIds.has(item.id) || (ids.includes(item.id) && item.type === 'path'));
+        }
+
+        async function combineSelection() {
+            if (orderedSelection().length < 2) return host.setStatus('Seleccioná al menos dos objetos para combinar.', 'error');
+            const items = await pathsFromSelection();
+            if (!items || items.length < 2) return;
+            const base = items[0];
+            const merged = items.flatMap((item) => absolutePaths(item));
+            const result = pathFromAbsolute(merged, { ...styleFrom(base), fill_rule: 'evenodd' });
+            if (!result) return;
+            change(() => {
+                const ids = new Set(items.map((item) => item.id));
+                const list = elements();
+                const index = list.indexOf(base);
+                const kept = list.filter((item, position) => !ids.has(item.id) || position === index);
+                kept.splice(kept.indexOf(base), 1, result);
+                side().elements = kept;
+            });
+            select([result.id]);
+            host.setStatus('Objetos combinados en un solo trazado: donde se superponen quedan huecos.');
+        }
+
+        function breakApart() {
+            const item = selectedElements()[0];
+            if (!item || item.type !== 'path' || item.paths.length < 2) return host.setStatus('Elegí un trazado con varias partes para separarlo.', 'error');
+            const style = { fill: item.fill, gradient: item.gradient ? clone(item.gradient) : null, stroke_color: item.stroke_color, stroke_width: item.stroke_width, dash: item.dash, line_cap: item.line_cap, line_join: item.line_join, opacity: item.opacity, condition: item.condition ? clone(item.condition) : null };
+            const parts = absolutePaths(item).map((sub) => pathFromAbsolute([sub], clone(style))).filter(Boolean);
+            change(() => { elements().splice(elements().indexOf(item), 1, ...parts); });
+            select(parts.map((part) => part.id));
+            host.setStatus(`Trazado separado en ${parts.length} partes.`);
+        }
+
+        function flipSelection(axis) {
+            const items = selectedElements().filter((item) => !item.locked);
+            const paths = items.filter((item) => item.type === 'path');
+            if (!paths.length) return host.setStatus('Voltear se aplica a trazados y formas convertidas a curvas.', 'error');
+            change(() => paths.forEach((item) => {
+                item.paths = mapPaths(item.paths, ([u, v]) => (axis === 'x' ? [1 - u, v] : [u, 1 - v]));
+                item.rotation = -(item.rotation || 0);
+                if (item.gradient?.kind === 'linear') item.gradient.angle = axis === 'x' ? 180 - (item.gradient.angle || 0) : -(item.gradient.angle || 0);
+            }));
+        }
+
+        function insertShape(presetId) {
+            const preset = SHAPE_PRESETS.find((entry) => entry.id === presetId);
+            if (!preset) return;
+            const [widthMm, heightMm] = preset.size;
+            const w = Math.min(0.9, widthMm / mmW());
+            const height = Math.min(0.9, heightMm / mmH());
+            const offset = (elements().length % 6) * 0.02;
+            const item = makeElement('path', {
+                name: preset.label, x: clamp(0.5 - w / 2 + offset, 0, 1 - w), y: clamp(0.5 - height / 2 + offset, 0, 1 - height), w, h: height,
+                paths: presetPaths(preset), preset: preset.params ? { kind: preset.id, ...preset.params } : null,
+                fill: $('cd-template-color')?.value || '#176b87',
+            });
+            change(() => elements().push(item));
+            select([item.id]);
+        }
+
+        // ---- controles del panel ----
+
+        function fillControls(item) {
+            const mode = item.gradient ? item.gradient.kind : (item.fill ? 'solid' : 'none');
+            const nodes = [control('Relleno', selectInput([['none', 'Sin relleno'], ['solid', 'Color liso'], ['linear', 'Degradado lineal'], ['radial', 'Degradado radial']], mode, (value) => {
+                const current = item.gradient;
+                if (value === 'none') { item.fill = null; item.gradient = null; }
+                else if (value === 'solid') { item.fill = item.fill || current?.start || '#176b87'; item.gradient = null; }
+                else item.gradient = { kind: value, start: current?.start || item.fill || '#176b87', end: current?.end || '#8c63ed', angle: current?.angle ?? 0 };
+                renderProperties();
+            }), { wide: true })];
+            if (mode === 'solid') nodes.push(control('Color', colorInput(item.fill, (value) => { item.fill = value; })));
+            if (item.gradient) {
+                nodes.push(h('div', { class: 'cd-grid2' }, [
+                    control('Desde', colorInput(item.gradient.start, (value) => { item.gradient.start = value; })),
+                    control('Hasta', colorInput(item.gradient.end, (value) => { item.gradient.end = value; })),
+                    item.gradient.kind === 'linear' ? control('Ángulo °', numberInput(item.gradient.angle || 0, { min: -360, max: 360, step: 15 }, (value) => { item.gradient.angle = value; })) : null,
+                    h('button', {
+                        class: 'btn secondary compact', type: 'button', text: '⇄ Invertir', title: 'Intercambia los colores',
+                        onclick: () => change(() => { [item.gradient.start, item.gradient.end] = [item.gradient.end, item.gradient.start]; }),
+                    }),
+                ]));
+                nodes.push(h('small', { class: 'cd-hint', text: 'En el PDF vectorial los degradados se insertan como imagen a la resolución elegida.' }));
+            }
+            return nodes;
+        }
+
+        function strokeControls(item) {
+            const isLine = item.type === 'line';
+            const grid = [
+                isLine
+                    ? control('Color', colorInput(item.stroke_color || '#17202b', (value) => { item.stroke_color = value; }))
+                    : control('Contorno', colorInput(item.stroke_color, (value) => { item.stroke_color = value; }, { optional: true })),
+                control(isLine ? 'Grosor pt' : 'Grosor contorno pt', numberInput(item.stroke_width || (isLine ? 1 : 0), { min: isLine ? 0.1 : 0, max: 40, step: 0.25 }, (value) => { item.stroke_width = value; })),
+                control('Tipo de línea', selectInput(DASH_OPTIONS, item.dash || 'solid', (value) => { item.dash = value; })),
+            ];
+            if (item.type === 'path' || isLine) grid.push(control('Extremos', selectInput(CAP_OPTIONS, item.line_cap || 'butt', (value) => { item.line_cap = value; })));
+            if (item.type === 'path') grid.push(control('Esquinas', selectInput(JOIN_OPTIONS, item.line_join || 'miter', (value) => { item.line_join = value; })));
+            return h('div', { class: 'cd-grid2' }, grid);
+        }
+
+        function presetControls(item) {
+            const preset = item.preset && SHAPE_PRESETS.find((entry) => entry.id === item.preset.kind);
+            if (!preset?.params) return null;
+            const regenerate = () => { item.paths = presetPaths(preset, item.preset); };
+            const fields = [];
+            if ('points' in preset.params) {
+                fields.push(control('Puntas', numberInput(item.preset.points, { min: 3, max: 40, step: 1 }, (value) => { item.preset.points = Math.round(value); regenerate(); })));
+                fields.push(control('Profundidad %', numberInput((1 - item.preset.inner) * 100, { min: 5, max: 95, step: 5 }, (value) => { item.preset.inner = 1 - value / 100; regenerate(); })));
+            }
+            if ('sides' in preset.params) fields.push(control('Lados', numberInput(item.preset.sides, { min: 3, max: 24, step: 1 }, (value) => { item.preset.sides = Math.round(value); regenerate(); })));
+            return h('div', { class: 'cd-grid2' }, fields);
         }
 
         // --------------------------- encuadre de la foto --------------------------- //
@@ -1745,7 +2860,56 @@
 
         // ------------------------- exportación e impresión ------------------------- //
 
-        const exportState = { printers: [], checkTimer: null, checkToken: 0, lastCheck: null };
+        const exportState = { printers: [], checkTimer: null, checkToken: 0, lastCheck: null, magProfiles: [] };
+
+        async function loadMagProfiles() {
+            if (exportState.magProfiles.length) return;
+            try {
+                exportState.magProfiles = (await (await host.api('/magstripe/profiles')).json()).profiles || [];
+            } catch (_) { exportState.magProfiles = []; }
+            const select = $('cx-mag-profile');
+            select.replaceChildren(...exportState.magProfiles.map((profile) => h('option', { value: profile.id, text: profile.label })));
+        }
+
+        function magCommandInputs() {
+            return [1, 2, 3].map((track) => [$(`cx-mag-start-${track}`), $(`cx-mag-end-${track}`)]);
+        }
+
+        function applyMagProfile(profileId, saved = null) {
+            const profile = exportState.magProfiles.find((item) => item.id === profileId) || exportState.magProfiles[0];
+            if (!profile) return;
+            $('cx-mag-profile').value = profile.id;
+            magCommandInputs().forEach(([start, end], index) => {
+                start.value = saved?.start?.[index] ?? profile.start[index];
+                end.value = saved?.end?.[index] ?? profile.end[index];
+            });
+            $('cx-mag-note').textContent = profile.note;
+        }
+
+        function updateMagOptions() {
+            const wrap = $('cx-mag');
+            const visible = isPrinting() && Boolean(design().magstripe?.enabled);
+            wrap.hidden = !visible;
+            if (!visible || !exportState.magProfiles.length) return;
+            const printerName = $('cx-printer').value;
+            if (wrap.dataset.printer === printerName) return;
+            wrap.dataset.printer = printerName;
+            let saved = null;
+            try { saved = JSON.parse(readSetting(`fotos.mag.${printerName}`, 'null')); } catch (_) { saved = null; }
+            if (saved?.profile) { applyMagProfile(saved.profile, saved); return; }
+            const printer = exportState.printers.find((item) => item.name === printerName);
+            const text = `${printerName} ${printer?.driver || ''}`;
+            const detected = exportState.magProfiles.find((profile) => profile.id !== 'custom' && new RegExp(profile.pattern, 'i').test(text));
+            applyMagProfile(detected?.id || 'magicard');
+        }
+
+        function magPayload() {
+            if ($('cx-mag').hidden || !$('cx-encode').checked) return { encode: false };
+            const commands = magCommandInputs();
+            const payload = { encode: true, mag_start: commands.map(([start]) => start.value), mag_end: commands.map(([, end]) => end.value) };
+            writeSetting(`fotos.mag.${$('cx-printer').value}`, JSON.stringify({ profile: $('cx-mag-profile').value, start: payload.mag_start, end: payload.mag_end }));
+            return payload;
+        }
         const readSetting = (key, fallback) => { try { return window.localStorage.getItem(key) ?? fallback; } catch (_) { return fallback; } };
         const writeSetting = (key, value) => { try { window.localStorage.setItem(key, value); } catch (_) { /* almacenamiento no disponible */ } };
 
@@ -1787,6 +2951,7 @@
                 status.textContent = exportState.printers.length ? 'Marcá “Mostrar todas las impresoras” si la tuya no aparece.' : '';
                 return;
             }
+            updateMagOptions();
             status.className = `cx-printer-status ${printer.ready && printer.status === 'Lista' ? 'ok' : 'warn'}`;
             status.textContent = `${printer.driver} · ${printer.status}${printer.status === 'Lista' ? '' : ' según Windows'}`;
         }
@@ -1805,6 +2970,7 @@
         }
 
         function updateExportSummary() {
+            updateMagOptions();
             const scope = exportScope();
             const format = $('cx-format').value;
             const printing = format === 'PRINT';
@@ -1869,7 +3035,7 @@
                 const sessionId = await host.ensureSession();
                 const response = await host.api(`/sessions/${sessionId}/cards/check`, {
                     method: 'POST', headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ design: design(), items: photos.map((photo) => host.exportItem(photo)), sides: $('cx-sides').value }),
+                    body: JSON.stringify({ design: design(), items: photos.map((photo) => host.exportItem(photo)), sides: $('cx-sides').value, upscale: host.photoOptions().upscale }),
                 });
                 const report = await response.json();
                 if (token !== exportState.checkToken) return;
@@ -1908,6 +3074,8 @@
             if (!host.getPhotos().length) return host.setStatus('Agregá fotos al lote para exportar o imprimir credenciales.', 'error');
             const radio = document.querySelector(`input[name="cx-scope"][value="${scope}"]`);
             if (radio) radio.checked = true;
+            $('cx-vector').checked = readSetting('fotos.cardVector', '1') !== '0';
+            loadMagProfiles().then(() => { $('cx-mag').dataset.printer = ''; updateMagOptions(); });
             if (print === true) $('cx-format').value = 'PRINT';
             else if (print === false || !exportState.opened) $('cx-format').value = readSetting('fotos.cardDestination', 'PDF');
             if (print === false && isPrinting()) $('cx-format').value = 'PDF';
@@ -1922,6 +3090,9 @@
             const printer = $('cx-printer').value;
             const sides = $('cx-sides').value;
             const copies = clamp(Math.round(Number($('cx-copies').value) || 1), 1, 10);
+            const magnetic = magPayload();
+            if (magnetic.encode && readSetting('fotos.magConfirmed', '') !== printer && !window.confirm(`Se va a codificar la banda magnética con los comandos de “${$('cx-mag-profile').selectedOptions[0]?.textContent || 'la impresora'}”.\n\nLa primera vez hacé una sola tarjeta de prueba: si el controlador no tiene activada la codificación por comandos de texto, los datos se imprimen sobre la tarjeta en lugar de grabarse.\n\n¿Continuar?`)) return;
+            if (magnetic.encode) writeSetting('fotos.magConfirmed', printer);
             clearTimeout(exportState.checkTimer);
             await runCheck();
             const errors = exportState.lastCheck?.errors || 0;
@@ -1937,12 +3108,12 @@
                     method: 'POST', headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
                         design: design(), items: photos.map((photo) => host.exportItem(photo)), printer, sides, copies,
-                        rotate_back: $('cx-rotate-back').checked, ...host.photoOptions(),
+                        rotate_back: $('cx-rotate-back').checked, ...magnetic, ...host.photoOptions(),
                     }),
                 });
                 const result = await response.json();
                 host.onPrinted(result.printed);
-                host.setStatus(`Enviadas ${result.cards} tarjeta${result.cards === 1 ? '' : 's'} a ${result.printer} (${result.pages} página${result.pages === 1 ? '' : 's'}). Revisá la cola de Windows si no empieza a imprimir.`, 'ok', 100);
+                host.setStatus(`Enviadas ${result.cards} tarjeta${result.cards === 1 ? '' : 's'} a ${result.printer} (${result.pages} página${result.pages === 1 ? '' : 's'})${result.encoded ? ` · banda magnética en ${result.encoded}` : ''}. Revisá la cola de Windows si no empieza a imprimir.`, 'ok', 100);
             } catch (error) {
                 host.setStatus(error.message, 'error', 0);
             } finally {
@@ -1959,8 +3130,10 @@
                 pdf_layout: $('cx-layout').value, sheet: $('cx-sheet').value,
                 margin_mm: Number($('cx-margin').value) || 0, gap_mm: Number($('cx-gap').value) || 0,
                 crop_marks: $('cx-marks').checked, duplex_mirror: $('cx-mirror').checked,
+                vector: $('cx-vector').checked,
                 filename_pattern: $('cx-pattern').value.trim() || '{Archivo}',
             };
+            writeSetting('fotos.cardVector', output.vector ? '1' : '0');
             const faces = photos.length * (output.sides === 'both' ? 2 : 1);
             if (output.dpi > 300 && faces > 120) return host.setStatus('A 600 dpi se pueden exportar hasta 120 caras por vez. Usá 300 dpi o dividí el lote.', 'error');
             writeSetting('fotos.cardDestination', output.format);
@@ -1996,6 +3169,31 @@
             const mod = event.ctrlKey || event.metaKey;
             if (mod && key === 'z' && !typing) { event.preventDefault(); if (event.shiftKey) redo(); else undo(); return; }
             if (mod && key === 'y' && !typing) { event.preventDefault(); redo(); return; }
+            if (!typing && event.key === ' ') {
+                event.preventDefault();
+                if (!state.spaceHeld) { state.spaceHeld = true; setHandTool(state.handTool); }
+                return;
+            }
+            if (mod && !typing && ['+', '=', 'Add'].includes(event.key)) { event.preventDefault(); setZoom((state.pxPerMm || fitPxPerMm()) * 1.25); return; }
+            if (mod && !typing && ['-', 'Subtract'].includes(event.key)) { event.preventDefault(); setZoom((state.pxPerMm || fitPxPerMm()) / 1.25); return; }
+            if (mod && !typing && event.key === '0') { event.preventDefault(); zoomFit(); return; }
+            if (mod && !typing && event.key === '1') { event.preventDefault(); setZoom(3.7795); return; }
+            if (!mod && !typing && event.shiftKey && event.code === 'Digit2') { event.preventDefault(); zoomToSelection(); return; }
+            if (!mod && !typing && key === 'h' && !state.cropping) { event.preventDefault(); setHandTool(!state.handTool); return; }
+            if (state.pen && !typing) {
+                if (event.key === 'Enter') { event.preventDefault(); finishPen(false); return; }
+                if (event.key === 'Escape') { event.preventDefault(); if (state.pen.nodes.length >= 2) finishPen(false); else cancelPen(); return; }
+                if (event.key === 'Backspace' || event.key === 'Delete') { event.preventDefault(); state.pen.nodes.pop(); renderVectorOverlay(); return; }
+                return;
+            }
+            if (state.nodeEdit && !typing) {
+                const pans = { ArrowLeft: [-1, 0], ArrowRight: [1, 0], ArrowUp: [0, -1], ArrowDown: [0, 1] };
+                if (event.key === 'Escape' || event.key === 'Enter') { event.preventDefault(); exitNodeEdit(); return; }
+                if (event.key === 'Delete' || event.key === 'Backspace') { event.preventDefault(); deleteNodes(); return; }
+                if (pans[event.key] && state.nodeEdit.sel.size) { event.preventDefault(); nudgeNodes(...pans[event.key].map((value) => value * (event.shiftKey ? 1 : 0.1))); return; }
+            }
+            if (mod && key === 'q' && !typing) { event.preventDefault(); convertToCurves(); return; }
+            if (!mod && !typing && key === 'p' && !state.cropping) { event.preventDefault(); setHandTool(false); startPen(); return; }
             if (state.cropping && !typing) {
                 const pans = { ArrowLeft: [-1, 0], ArrowRight: [1, 0], ArrowUp: [0, -1], ArrowDown: [0, 1] };
                 if (event.key === 'Escape' || event.key === 'Enter') { event.preventDefault(); exitCropMode(); return; }
@@ -2037,6 +3235,8 @@
 
         function close() {
             exitCropMode({ quiet: true });
+            if (state.pen) cancelPen();
+            if (state.nodeEdit) exitNodeEdit();
             el.modal.hidden = true;
             el.exact.hidden = true;
             document.body.classList.remove('designer-open');
@@ -2083,9 +3283,22 @@
             document.querySelectorAll('[data-cd-distribute]').forEach((button) => button.addEventListener('click', () => distribute(button.dataset.cdDistribute)));
             document.querySelectorAll('[data-cd-order]').forEach((button) => button.addEventListener('click', () => reorder(button.dataset.cdOrder)));
             $('cd-duplicate').addEventListener('click', duplicateSelected);
+            $('cd-tool-pen').addEventListener('click', () => (state.pen ? cancelPen() : startPen()));
+            const shapeInsert = $('cd-insert-shape');
+            shapeInsert.replaceChildren(h('option', { value: '', text: 'Formas…' }), ...SHAPE_PRESETS.map((preset) => h('option', { value: preset.id, text: preset.label })));
+            shapeInsert.addEventListener('change', () => { if (shapeInsert.value) insertShape(shapeInsert.value); shapeInsert.value = ''; });
+            document.querySelectorAll('[data-cd-boolean]').forEach((button) => button.addEventListener('click', () => booleanOperation(button.dataset.cdBoolean)));
+            $('cd-combine').addEventListener('click', combineSelection);
+            $('cd-break').addEventListener('click', breakApart);
+            $('cd-to-curves').addEventListener('click', () => convertToCurves());
+            $('cd-flip-x').addEventListener('click', () => flipSelection('x'));
+            $('cd-flip-y').addEventListener('click', () => flipSelection('y'));
             $('cd-delete').addEventListener('click', removeSelected);
             document.querySelectorAll('[data-cd-side]').forEach((button) => button.addEventListener('click', () => {
                 exitCropMode({ quiet: true });
+                if (state.pen) cancelPen();
+                state.nodeEdit = null;
+                removeModeBanner();
                 state.side = button.dataset.cdSide;
                 state.selected = [];
                 render();
@@ -2115,10 +3328,17 @@
             $('cd-snap').addEventListener('change', () => { state.snapGrid = $('cd-snap').checked; });
             $('cd-guides').addEventListener('change', () => { state.smartGuides = $('cd-guides').checked; });
             $('cd-safe').addEventListener('change', () => { state.showSafe = $('cd-safe').checked; renderStage(); });
-            $('cd-zoom-in').addEventListener('click', () => setZoom((state.pxPerMm || fitPxPerMm()) * 1.15));
-            $('cd-zoom-out').addEventListener('click', () => setZoom((state.pxPerMm || fitPxPerMm()) / 1.15));
-            $('cd-zoom-fit').addEventListener('click', () => { state.zoomMode = 'fit'; renderStage(); });
+            $('cd-zoom-in').addEventListener('click', () => setZoom((state.pxPerMm || fitPxPerMm()) * 1.25));
+            $('cd-zoom-out').addEventListener('click', () => setZoom((state.pxPerMm || fitPxPerMm()) / 1.25));
+            $('cd-zoom-fit').addEventListener('click', zoomFit);
             $('cd-zoom-real').addEventListener('click', () => setZoom(3.7795));
+            $('cd-zoom-selection').addEventListener('click', zoomToSelection);
+            $('cd-zoom-value').addEventListener('dblclick', zoomFit);
+            $('cd-tool-hand').addEventListener('click', () => setHandTool(!state.handTool));
+            document.addEventListener('keyup', (event) => {
+                if (event.key === ' ' && state.spaceHeld) { state.spaceHeld = false; setHandTool(state.handTool); }
+            });
+            window.addEventListener('blur', () => { if (state.spaceHeld) { state.spaceHeld = false; setHandTool(state.handTool); } });
             el.modal.addEventListener('pointerdown', (event) => { if (event.target === el.modal) close(); });
             // Exportación
             $('cx-close').addEventListener('click', () => { el.exportModal.hidden = true; });
@@ -2128,6 +3348,7 @@
             el.exportModal.querySelectorAll('input, select').forEach((input) => input.addEventListener('change', updateExportSummary));
             el.exportModal.querySelectorAll('input[type="number"]').forEach((input) => input.addEventListener('input', updateExportSummary));
             $('cx-printer').addEventListener('change', updatePrinterStatus);
+            $('cx-mag-profile').addEventListener('change', () => applyMagProfile($('cx-mag-profile').value));
             $('cx-printer-refresh').addEventListener('click', () => loadPrinters(true));
             $('cx-show-all-printers').addEventListener('change', renderPrinterOptions);
             $('cx-check-run').addEventListener('click', runCheck);
@@ -2146,6 +3367,7 @@
                 double_sided: Boolean(raw?.double_sided),
                 front: { ...emptySide(), ...(raw?.front || {}) },
                 back: { ...emptySide(), ...(raw?.back || {}) },
+                magstripe: { ...defaultMagstripe(), ...(raw?.magstripe || {}) },
             };
             ['front', 'back'].forEach((key) => {
                 result[key].elements = (result[key].elements || []).filter((item) => TYPE_LABELS[item.type]).map((item) => ({ ...makeElement(item.type), ...item, id: item.id || newId() }));
@@ -2192,7 +3414,7 @@
         function defaultDesign() {
             const template = TEMPLATES[0];
             return {
-                version: 2, width_mm: 85.6, height_mm: 53.98, double_sided: false,
+                version: 2, width_mm: 85.6, height_mm: 53.98, double_sided: false, magstripe: defaultMagstripe(),
                 front: template.build({ accent: '#176b87', logo: state.assets.find((asset) => asset.asset_id === 'logo') ? 'logo' : null, fields: guessFields(host.getHeaders()) }),
                 back: emptySide(),
             };

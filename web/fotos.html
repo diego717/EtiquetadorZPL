@@ -148,6 +148,23 @@
                     </section>
 
                     <section class="control-section">
+                        <div class="section-label"><span>Mejora de imagen</span><span class="step-chip">✦</span></div>
+                        <label class="field wide">Mejora automática · todas las fotos
+                            <select id="enhance-level">
+                                <option value="off">Sin mejora</option>
+                                <option value="soft" selected>Suave</option>
+                                <option value="normal">Normal</option>
+                                <option value="strong">Intensa</option>
+                            </select>
+                        </label>
+                        <label class="designer-check"><input id="upscale-toggle" type="checkbox" checked><span>Agrandar con IA las fotos de baja resolución</span></label>
+                        <label class="designer-check"><input id="enhance-skip" type="checkbox"><span>No mejorar esta foto</span></label>
+                        <p class="field-note" id="resolution-note"></p>
+                        <button class="btn secondary compact wide" id="enhance-compare-btn" type="button">Ver antes / después</button>
+                        <p class="field-note">Reduce ruido, corrige el color y el contraste y enfoca. No inventa rasgos: el original no se modifica.</p>
+                    </section>
+
+                    <section class="control-section">
                         <div class="section-label"><span>Fondo</span><span class="step-chip">3</span></div>
                         <label class="field wide">Tratamiento
                             <select id="background-mode">
@@ -264,7 +281,7 @@
 
         <div class="designer-modal" id="card-designer-modal" hidden>
             <div class="designer-window" role="dialog" aria-modal="true" aria-labelledby="designer-title">
-                <input id="cd-asset-input" type="file" accept="image/jpeg,image/png,image/webp,image/bmp" hidden>
+                <input id="cd-asset-input" type="file" accept="image/jpeg,image/png,image/webp,image/bmp,image/svg+xml,.svg" hidden>
                 <input id="cd-design-input" type="file" accept=".json,application/json" hidden>
                 <header class="designer-toolbar">
                     <div class="cd-title-block">
@@ -301,6 +318,20 @@
                         <button type="button" data-cd-insert="rect" title="Rectángulo">□</button>
                         <button type="button" data-cd-insert="ellipse" title="Elipse">○</button>
                         <button type="button" data-cd-insert="line" title="Línea">─</button>
+                        <select id="cd-insert-shape" title="Formas prediseñadas: estrella, polígono, flecha, escudo…"><option value="">Formas…</option></select>
+                        <button type="button" id="cd-tool-pen" title="Pluma: dibujar trazados con curvas Bézier (P)">✒ Pluma</button>
+                    </div>
+                    <div class="cd-group">
+                        <span class="cd-group-label">Forma</span>
+                        <button type="button" data-cd-boolean="union" data-cd-needs-multi="2" title="Soldar: une las formas elegidas en una sola">⊕ Soldar</button>
+                        <button type="button" data-cd-boolean="difference" data-cd-needs-multi="2" title="Recortar: a la forma de más abajo le quita las de arriba (por ejemplo, un texto calado en una banda)">⊖ Recortar</button>
+                        <button type="button" data-cd-boolean="intersection" data-cd-needs-multi="2" title="Intersectar: crea la parte común (los originales quedan)">⊗ Intersectar</button>
+                        <button type="button" data-cd-boolean="xor" data-cd-needs-multi="2" title="Excluir: une las formas y quita donde se superponen">⊘ Excluir</button>
+                        <button type="button" id="cd-combine" data-cd-needs-multi="2" title="Combinar en un solo trazado (las superposiciones quedan huecas)">⧉ Combinar</button>
+                        <button type="button" id="cd-break" data-cd-needs-selection title="Separar las partes de un trazado combinado">Separar</button>
+                        <button type="button" id="cd-to-curves" data-cd-needs-selection title="Convertir a curvas (Ctrl+Q)">A curvas</button>
+                        <button type="button" id="cd-flip-x" data-cd-needs-selection title="Voltear horizontalmente">⇋</button>
+                        <button type="button" id="cd-flip-y" data-cd-needs-selection title="Voltear verticalmente">⇵</button>
                     </div>
                     <div class="cd-group">
                         <span class="cd-group-label">Alinear</span>
@@ -377,13 +408,15 @@
 
                     <section class="designer-workspace">
                         <div class="designer-ruler">
-                            <span>Arrastrá para mover · esquinas para escalar · círculo para girar</span>
+                            <span>Ctrl+rueda: zoom · Espacio + arrastrar: mover la vista</span>
                             <div class="designer-zoom">
-                                <button id="cd-zoom-out" type="button" aria-label="Alejar">−</button>
-                                <output id="cd-zoom-value">Ajustar</output>
-                                <button id="cd-zoom-in" type="button" aria-label="Acercar">＋</button>
-                                <button id="cd-zoom-fit" type="button">Encajar</button>
-                                <button id="cd-zoom-real" type="button" title="Tamaño aproximado real en pantalla">1:1</button>
+                                <button id="cd-tool-hand" type="button" title="Mano: arrastrar para mover la vista (H, o mantener Espacio, o arrastrar con la rueda apretada)">✋</button>
+                                <button id="cd-zoom-out" type="button" aria-label="Alejar" title="Alejar (Ctrl+−)">−</button>
+                                <output id="cd-zoom-value" title="Doble clic: encajar">100%</output>
+                                <button id="cd-zoom-in" type="button" aria-label="Acercar" title="Acercar (Ctrl++ o Ctrl+rueda)">＋</button>
+                                <button id="cd-zoom-fit" type="button" title="Ver la tarjeta completa (Ctrl+0)">Encajar</button>
+                                <button id="cd-zoom-selection" type="button" title="Acercar a lo seleccionado (Mayús+2)">Selección</button>
+                                <button id="cd-zoom-real" type="button" title="Tamaño aproximado real en pantalla (Ctrl+1)">1:1</button>
                             </div>
                             <span id="cd-size-note"></span>
                         </div>
@@ -455,6 +488,20 @@
                                 <label class="designer-check"><input id="cx-show-all-printers" type="checkbox"><span>Mostrar todas las impresoras</span></label>
                             </div>
                         </div>
+                        <div class="cx-mag" id="cx-mag" hidden>
+                            <label class="designer-check"><input id="cx-encode" type="checkbox" checked><span>Codificar la banda magnética</span></label>
+                            <label class="field">Comandos del controlador<select id="cx-mag-profile"></select></label>
+                            <p class="field-note" id="cx-mag-note"></p>
+                            <details class="cx-mag-commands">
+                                <summary>Ver o cambiar los comandos de inicio y fin</summary>
+                                <div class="cx-mag-grid">
+                                    <span></span><span>Inicio</span><span>Fin</span>
+                                    <span>Pista 1</span><input id="cx-mag-start-1" maxlength="12"><input id="cx-mag-end-1" maxlength="12">
+                                    <span>Pista 2</span><input id="cx-mag-start-2" maxlength="12"><input id="cx-mag-end-2" maxlength="12">
+                                    <span>Pista 3</span><input id="cx-mag-start-3" maxlength="12"><input id="cx-mag-end-3" maxlength="12">
+                                </div>
+                            </details>
+                        </div>
                         <p class="field-note">Ribbon, panel negro (K), overlay y calidad se toman de las preferencias del controlador en Windows. Para que textos y códigos salgan en resina negra, dejalos en negro puro (#000000) y activá la extracción de negro en el controlador.</p>
                     </div>
                     <div class="cx-grid" id="cx-file-options">
@@ -478,6 +525,7 @@
                                 <label class="designer-check"><input id="cx-mirror" type="checkbox" checked><span>Dorso espejado para dúplex</span></label>
                             </div>
                         </div>
+                        <label class="designer-check cx-vector"><input id="cx-vector" type="checkbox" checked><span>PDF vectorial: textos, formas, códigos y logos SVG nítidos a cualquier tamaño (ideal para imprenta)</span></label>
                     </div>
                     <section class="cx-check" id="cx-check">
                         <div class="cx-check-head"><strong id="cx-check-title">Revisión previa</strong><button class="cd-link-btn" id="cx-check-run" type="button">Volver a revisar</button></div>

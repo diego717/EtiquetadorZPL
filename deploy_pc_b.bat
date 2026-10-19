@@ -47,9 +47,13 @@ echo Archivos para mover a PC B:
 echo   - Carpeta: %OUT_DIR%
 echo   - ZIP:     %ZIP_FILE%
 echo.
-echo En PC B ejecutar:
-echo   1) install_runtime_pc_b.bat
-echo   2) enable_autostart_pc_b.bat  (opcional, recomendado)
+echo Pasos de la mudanza:
+echo   1) En la PC VIEJA: servidor_mudanza_exportar_y_desactivar.bat
+echo      (deja un EtiquetadorZPL_config_*.zip en el Escritorio)
+echo   2) Copiar la carpeta pc_b_test a la PC nueva y poner el ZIP adentro
+echo   3) En la PC nueva: servidor_instalar_o_actualizar.bat
+echo.
+echo Para actualizar despues: repetir 2 y 3 sin el ZIP (la config no se toca).
 echo.
 
 start "" "%RELEASE_DIR%"

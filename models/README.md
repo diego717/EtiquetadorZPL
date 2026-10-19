@@ -26,3 +26,22 @@ Para verificar la integridad:
 ```powershell
 python -c "import hashlib,pathlib; print(hashlib.sha256(pathlib.Path('models/face_detection_yunet_2023mar.onnx').read_bytes()).hexdigest())"
 ```
+
+## `realesr-general-x4v3.onnx`
+
+Superresolución ×4 (Real-ESRGAN, red SRVGGNetCompact), usada por `src/photo_enhance.py`
+para agrandar las fotos que no alcanzan la resolución de la caja de la credencial.
+
+| | |
+|---|---|
+| Modelo original | https://github.com/xinntao/Real-ESRGAN (`realesr-general-x4v3.pth`) |
+| Conversión ONNX | https://huggingface.co/jonathanst29/tinier-upscale-models (fp32, opset 17, alto y ancho dinámicos) |
+| Descargado el | 2026-10-15 |
+| Tamaño | 4.866.396 bytes |
+| sha256 | `924ebad6532777303582d4ce7811849b88869231a3ae7093e0f21200249df8d5` |
+| Licencia | BSD-3-Clause — Copyright (c) 2021, Xintao Wang. Texto completo en `LICENSE-realesrgan.txt` |
+| Requiere | `onnxruntime` (CPU) |
+
+Entrada `float32 [1, 3, h, w]` RGB en 0..1; salida `[1, 3, 4h, 4w]`. Se ejecuta por mosaicos
+de 256 px. Si falta el archivo o `onnxruntime`, las fotos se agrandan con LANCZOS y el resto
+sigue funcionando. Igual que YuNet, se lee del disco local y nunca se descarga en runtime.

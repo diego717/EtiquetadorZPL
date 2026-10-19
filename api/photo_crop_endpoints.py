@@ -16,12 +16,12 @@ import zipfile
 from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
-from typing import Literal
+from typing import Annotated, Literal
 from urllib.parse import quote, urlsplit
 
 from fastapi import APIRouter, HTTPException, Query, Request
 from fastapi.responses import FileResponse, Response, StreamingResponse
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 from PIL import Image, ImageDraw, ImageFont, ImageOps, UnidentifiedImageError
 import fitz
 from openpyxl import load_workbook
@@ -37,6 +37,7 @@ from card_renderer import (
     BARCODE_SYMBOLOGIES,
     BarcodeError,
     CardRenderer,
+    FIELD_PATTERN,
     FontCache,
     barcode_svg,
     build_pdf,
@@ -44,7 +45,11 @@ from card_renderer import (
     record_values,
     resolve_fields,
 )
+import card_magstripe
+import photo_enhance
 import card_printing
+import card_vectors
+from card_vector_pdf import NotVector, convert_to_paths, element_area, side_pdf
 from system_fonts import public_font_catalog, resolve_font_variant
 from photo_crop_service import (
     ExportTransform,
@@ -73,6 +78,8 @@ MAX_PROJECT_BYTES = 850 * 1024 * 1024
 MAX_ASSETS = 40
 MAX_ASSET_BYTES = 20 * 1024 * 1024
 MAX_CARD_ELEMENTS = 120
+MAX_PATH_NODES = 40000
+ASSET_EXTENSIONS = SUPPORTED_EXTENSIONS | {".svg"}
 
 
 @dataclass
@@ -85,6 +92,8 @@ class PhotoRecord:
     height: int
     size: int
     analysis: tuple | None = None
+    # Fotos ya mejoradas o agrandadas, para no repetir el cálculo en cada tarjeta.
+    enhance_cache: dict = field(default_factory=dict)
 
     def public(self, session_id: str) -> dict:
         return {
@@ -328,6 +337,7 @@ class ExportItem(BaseModel):
     issues: list[str] = Field(default_factory=list, max_length=20)
     metadata: dict[str, str] = Field(default_factory=dict)
     sequence: int | None = Field(default=None, ge=1, le=100_000)
+    enhance: bool = True
 
     @field_validator("crop")
     @classmethod
@@ -359,12 +369,38 @@ class CardCondition(BaseModel):
     value: str = Field(default="", max_length=200)
 
 
+PathCoord = Annotated[float, Field(ge=-50, le=51)]
+
+
+class PathNode(BaseModel):
+    """Nodo de un trazado: punto y manejadores Bezier, en fracciones de la caja del objeto."""
+
+    model_config = ConfigDict(extra="ignore")
+    p: tuple[PathCoord, PathCoord]
+    i: tuple[PathCoord, PathCoord] | None = None
+    o: tuple[PathCoord, PathCoord] | None = None
+
+
+class PathSubpath(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    closed: bool = False
+    nodes: list[PathNode] = Field(min_length=1, max_length=MAX_PATH_NODES)
+
+
+class CardGradient(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    kind: Literal["linear", "radial"] = "linear"
+    start: str = Field(default="#ffffff", pattern=r"^#[0-9a-fA-F]{6}$")
+    end: str = Field(default="#000000", pattern=r"^#[0-9a-fA-F]{6}$")
+    angle: float = Field(default=0, ge=-360, le=360)
+
+
 class CardElement(BaseModel):
     """Objeto libre de la credencial. Los campos que no aplican a un tipo se ignoran."""
 
     model_config = ConfigDict(extra="ignore")
     id: str = Field(max_length=40, pattern=r"^[A-Za-z0-9_-]+$")
-    type: Literal["text", "photo", "image", "qr", "barcode", "rect", "ellipse", "line"]
+    type: Literal["text", "photo", "image", "qr", "barcode", "rect", "ellipse", "line", "path"]
     name: str = Field(default="", max_length=80)
     x: float = Field(default=0, ge=-2, le=3)
     y: float = Field(default=0, ge=-2, le=3)
@@ -401,6 +437,19 @@ class CardElement(BaseModel):
     show_text: bool = True
     ecc: Literal["L", "M", "Q", "H"] = "M"
     background: str | None = Field(default=None, pattern=HEX_COLOR)
+    paths: list[PathSubpath] = Field(default_factory=list, max_length=4000)
+    fill_rule: Literal["evenodd", "nonzero"] = "evenodd"
+    gradient: CardGradient | None = None
+    line_cap: Literal["butt", "round", "square"] = "butt"
+    line_join: Literal["miter", "round", "bevel"] = "miter"
+    dash: Literal["solid", "dash", "dot", "dashdot"] = "solid"
+    recolor: str | None = Field(default=None, pattern=HEX_COLOR)
+
+    @model_validator(mode="after")
+    def limit_nodes(self) -> "CardElement":
+        if sum(len(subpath.nodes) for subpath in self.paths) > MAX_PATH_NODES:
+            raise ValueError(f"El trazado tiene más de {MAX_PATH_NODES} nodos")
+        return self
 
 
 class CardSide(BaseModel):
@@ -408,6 +457,17 @@ class CardSide(BaseModel):
     background_color: str = Field(default="#ffffff", pattern=HEX_COLOR)
     background_image: str | None = Field(default=None, pattern=ASSET_ID)
     elements: list[CardElement] = Field(default_factory=list, max_length=MAX_CARD_ELEMENTS)
+
+
+class MagStripe(BaseModel):
+    """Datos de la banda magnética: plantillas con campos, por pista."""
+
+    model_config = ConfigDict(extra="ignore")
+    enabled: bool = False
+    side: Literal["front", "back"] = "back"
+    track1: str = Field(default="", max_length=200)
+    track2: str = Field(default="", max_length=200)
+    track3: str = Field(default="", max_length=200)
 
 
 class CardDesign(BaseModel):
@@ -418,11 +478,14 @@ class CardDesign(BaseModel):
     double_sided: bool = False
     front: CardSide = Field(default_factory=CardSide)
     back: CardSide = Field(default_factory=CardSide)
+    magstripe: MagStripe = Field(default_factory=MagStripe)
 
 
 class PhotoOptions(BaseModel):
     background_mode: str = "original"
     background_strength: int = Field(default=55, ge=0, le=100)
+    enhance: Literal["off", "soft", "normal", "strong"] = "off"
+    upscale: bool = False
 
     @field_validator("background_mode")
     @classmethod
@@ -460,6 +523,7 @@ class CardOutput(BaseModel):
     gap_mm: float = Field(default=4, ge=0, le=40)
     crop_marks: bool = True
     duplex_mirror: bool = True
+    vector: bool = True
     filename_pattern: str = Field(default="{Archivo}", max_length=160)
 
 
@@ -480,6 +544,14 @@ class CardCheckRequest(BaseModel):
     design: CardDesign
     items: list[ExportItem] = Field(min_length=1, max_length=MAX_PHOTOS)
     sides: Literal["front", "back", "both"] = "front"
+    upscale: bool = False
+
+
+class EnhancePreviewRequest(PhotoOptions):
+    item: ExportItem
+    design: CardDesign | None = None
+    width: int | None = Field(default=None, ge=64, le=6000)
+    height: int | None = Field(default=None, ge=64, le=6000)
 
 
 class CardPrintRequest(PhotoOptions):
@@ -489,33 +561,90 @@ class CardPrintRequest(PhotoOptions):
     sides: Literal["front", "back", "both"] = "front"
     copies: int = Field(default=1, ge=1, le=10)
     rotate_back: bool = False
+    encode: bool = False
+    mag_start: list[str] = Field(default_factory=lambda: ["~1", "~2", "~3"], min_length=3, max_length=3)
+    mag_end: list[str] = Field(default_factory=lambda: ["", "", ""], min_length=3, max_length=3)
+
+    @field_validator("mag_start", "mag_end")
+    @classmethod
+    def validate_commands(cls, value: list[str]) -> list[str]:
+        if any(len(command) > 12 or any(ord(char) < 32 for char in command) for command in value):
+            raise ValueError("Comando de codificación inválido")
+        return value
 
 
 class ProjectRequest(BaseModel):
     state: dict = Field(default_factory=dict)
 
 
-def render_portrait(record: PhotoRecord, item: ExportItem, options: PhotoOptions, output_size: tuple[int, int] | None) -> Image.Image:
-    image = open_oriented_image(record.source_path)
-    rendered = render_export(
-        image,
-        ExportTransform(item.crop, item.brightness, item.contrast, item.rotation),
-        output_size,
-    )
+class VectorRequest(BaseModel):
+    width_mm: float = Field(default=85.6, ge=20, le=320)
+    height_mm: float = Field(default=53.98, ge=20, le=320)
+    elements: list[CardElement] = Field(min_length=1, max_length=MAX_CARD_ELEMENTS)
+    values: dict[str, str] = Field(default_factory=dict)
+
+
+class BooleanRequest(VectorRequest):
+    operation: Literal["union", "difference", "intersection", "xor"]
+
+
+def render_portrait(
+    record: PhotoRecord,
+    item: ExportItem,
+    options: PhotoOptions,
+    output_size: tuple[int, int] | None,
+    target: tuple[int, int] | None = None,
+) -> Image.Image:
+    """Recorte final de la foto. ``target`` es el tamaño en píxeles de la caja de la credencial."""
+    level = options.enhance if item.enhance else "off"
+    upscale = options.upscale and item.enhance
+    transform = ExportTransform(item.crop, item.brightness, item.contrast, item.rotation)
+    if level == "off" and not upscale:
+        rendered = render_export(open_oriented_image(record.source_path), transform, output_size)
+        return process_background(rendered, options.background_mode, options.background_strength)
+    goal = output_size or target
+    key = (tuple(round(value, 1) for value in item.crop), item.rotation, item.brightness, item.contrast, level, upscale, goal)
+    cached = record.enhance_cache.get(key)
+    if cached is None:
+        rendered = render_export(open_oriented_image(record.source_path), transform, None)
+        cached, _used_ai = photo_enhance.improve(rendered, goal, level=level, upscale=upscale)
+        while len(record.enhance_cache) >= 3:
+            record.enhance_cache.pop(next(iter(record.enhance_cache)))
+        record.enhance_cache[key] = cached
+    rendered = cached.copy()
+    if output_size and rendered.size != output_size:
+        rendered = rendered.resize(output_size, Image.Resampling.LANCZOS)
     return process_background(rendered, options.background_mode, options.background_strength)
 
 
-def load_assets(session: PhotoSession, design: CardDesign) -> dict[str, Image.Image]:
+def photo_target(design: CardDesign, sides: list[str], dpi: int) -> tuple[int, int] | None:
+    """Píxeles de la caja de foto más grande del diseño a la resolución de salida."""
+    sizes = [
+        (element.w * design.width_mm / 25.4 * dpi, element.h * design.height_mm / 25.4 * dpi)
+        for side in sides for element in getattr(design, side).elements if element.type == "photo" and not element.hidden
+    ]
+    if not sizes:
+        return None
+    return photo_enhance.ceil_size(max(size[0] for size in sizes), max(size[1] for size in sizes))
+
+
+def load_assets(session: PhotoSession, design: CardDesign) -> dict[str, object]:
     """Abre una sola vez los recursos que usa el diseño."""
     wanted: set[str] = set()
     for side in (design.front, design.back):
         if side.background_image:
             wanted.add(side.background_image)
         wanted.update(element.asset for element in side.elements if element.type == "image" and element.asset)
-    images: dict[str, Image.Image] = {}
+    images: dict[str, object] = {}
     for asset_id in wanted:
         asset = session.assets.get(asset_id)
         if asset is None or not asset.path.exists():
+            continue
+        if asset.path.suffix.casefold() == ".svg":
+            try:
+                images[asset_id] = card_vectors.SvgAsset(asset.path.read_bytes())
+            except Exception:  # noqa: BLE001 - SVG dañado: se informa como imagen sin cargar
+                pass
             continue
         try:
             with Image.open(asset.path) as source:
@@ -536,6 +665,35 @@ def card_renderer(session: PhotoSession, design: CardDesign, dpi: int) -> CardRe
     )
 
 
+def magstripe_tracks(design: CardDesign, values: dict[str, str]) -> dict[int, str]:
+    if not design.magstripe.enabled:
+        return {}
+    return card_magstripe.resolve_tracks(design.magstripe.model_dump(), values, resolve_fields)
+
+
+def magstripe_issues(design: CardDesign, values: dict[str, str]) -> list[dict]:
+    """Revisión de la banda: datos faltantes, caracteres no admitidos o demasiado largos."""
+    if not design.magstripe.enabled:
+        return []
+    issues = []
+    templates = design.magstripe.model_dump()
+    tracks = magstripe_tracks(design, values)
+    for track in card_magstripe.TRACKS:
+        template = str(templates.get(f"track{track}") or "")
+        if not template.strip():
+            continue
+        missing = [name.strip() for name in FIELD_PATTERN.findall(template) if not values.get(name.strip(), "").strip()]
+        if missing:
+            issues.append({"level": "warning", "element": "Banda magnética", "side": "",
+                           "message": f"pista {track} sin dato en " + ", ".join(f"{{{name}}}" for name in dict.fromkeys(missing))})
+        error = card_magstripe.track_error(track, tracks.get(track, ""))
+        if error:
+            issues.append({"level": "error", "element": "Banda magnética", "side": "", "message": error})
+    if not any(tracks.values()):
+        issues.append({"level": "error", "element": "Banda magnética", "side": "", "message": "no hay datos para grabar en ninguna pista"})
+    return issues
+
+
 def side_uses_photo(design: CardDesign, side: str) -> bool:
     return any(element.type == "photo" for element in getattr(design, side).elements)
 
@@ -550,8 +708,23 @@ def render_card_faces(
 ) -> list[Image.Image]:
     values = record_values(item.metadata, record.filename, item.sequence)
     needs_photo = any(side_uses_photo(design, side) for side in sides)
-    portrait = render_portrait(record, item, options, None) if needs_photo else None
+    portrait = render_portrait(record, item, options, None, photo_target(design, sides, renderer.dpi)) if needs_photo else None
     return [renderer.render_side(getattr(design, side).model_dump(), values, portrait) for side in sides]
+
+
+def vector_card_faces(
+    renderer: CardRenderer,
+    design: CardDesign,
+    record: PhotoRecord,
+    item: ExportItem,
+    options: PhotoOptions,
+    sides: list[str],
+) -> list:
+    """Caras como documentos PDF vectoriales de una página."""
+    values = record_values(item.metadata, record.filename, item.sequence)
+    needs_photo = any(side_uses_photo(design, side) for side in sides)
+    portrait = render_portrait(record, item, options, None, photo_target(design, sides, renderer.dpi)) if needs_photo else None
+    return [side_pdf(renderer, getattr(design, side).model_dump(), values, portrait) for side in sides]
 
 
 def render_item(
@@ -716,14 +889,29 @@ async def import_data(
     return {"filename": name, "headers": headers, "rows": rows, "count": len(rows)}
 
 
-def store_asset(session: PhotoSession, asset_id: str, filename: str, content: bytes, label: str) -> SessionAsset:
+def validate_svg(content: bytes, label: str) -> None:
+    if not card_vectors.is_svg(content):
+        raise HTTPException(415, f"{label} no es un SVG válido")
+    try:
+        asset = card_vectors.SvgAsset(content)
+        asset.render((32, 32))
+    except Exception as exc:  # noqa: BLE001
+        raise HTTPException(415, f"{label} no es un SVG válido") from exc
+
+
+def store_asset(session: PhotoSession, asset_id: str, filename: str, content: bytes, label: str, *, allow_svg: bool = False) -> SessionAsset:
     """Guarda una imagen de recursos validandola antes de exponerla."""
     extension = Path(filename).suffix.casefold()
+    if extension == ".svg":
+        if not allow_svg:
+            raise HTTPException(415, f"{label} debe ser una imagen JPG, PNG, WEBP o BMP")
+        validate_svg(content, label)
     path = session.folder / "assets" / f"{asset_id}{extension}"
     path.write_bytes(content)
     try:
-        with Image.open(path) as image:
-            image.verify()
+        if extension != ".svg":
+            with Image.open(path) as image:
+                image.verify()
     except (UnidentifiedImageError, Image.DecompressionBombError, OSError):
         path.unlink(missing_ok=True)
         raise HTTPException(415, f"{label} no es una imagen valida")
@@ -739,7 +927,12 @@ def asset_response(session: PhotoSession, asset_id: str, missing: str) -> FileRe
     asset = session.assets.get(asset_id)
     if asset is None or not asset.path.exists():
         raise HTTPException(404, missing)
-    return FileResponse(asset.path, headers={"Cache-Control": "private, max-age=3600"})
+    headers = {"Cache-Control": "private, max-age=3600", "X-Content-Type-Options": "nosniff"}
+    if asset.path.suffix.casefold() == ".svg":
+        # Un SVG abierto directamente no debe poder ejecutar scripts en el origen local.
+        headers["Content-Security-Policy"] = "default-src 'none'; style-src 'unsafe-inline'; img-src data:; sandbox"
+        return FileResponse(asset.path, media_type="image/svg+xml", headers=headers)
+    return FileResponse(asset.path, headers=headers)
 
 
 @router.post("/sessions/{session_id}/assets", status_code=201)
@@ -750,11 +943,13 @@ async def upload_asset(
 ) -> dict:
     require_same_origin(request)
     session = STORE.get(session_id)
-    name = clean_filename(filename)
+    name = Path(filename.replace("\\", "/")).name.strip()[:220]
+    if not name or Path(name).suffix.casefold() not in ASSET_EXTENSIONS:
+        raise HTTPException(415, "Formato de imagen no admitido: usá JPG, PNG, WEBP, BMP o SVG")
     if len(session.assets) >= MAX_ASSETS:
         raise HTTPException(413, f"El diseño admite hasta {MAX_ASSETS} imagenes")
     content = await read_limited_body(request, MAX_ASSET_BYTES, "La imagen")
-    asset = store_asset(session, f"a{uuid.uuid4().hex[:12]}", name, content, "La imagen")
+    asset = store_asset(session, f"a{uuid.uuid4().hex[:12]}", name, content, "La imagen", allow_svg=True)
     return asset.public(session.id)
 
 
@@ -810,6 +1005,64 @@ def optional_color(value: str | None) -> str | None:
 
 
 SVG_HEADERS = {"Cache-Control": "private, max-age=600"}
+
+
+def vector_renderer(payload: VectorRequest) -> CardRenderer:
+    fonts = FontCache(lambda family, bold, italic: resolve_font_variant(family, bold=bold, italic=italic))
+    return CardRenderer(width_mm=payload.width_mm, height_mm=payload.height_mm, dpi=600, fonts=fonts)
+
+
+def vector_values(payload: VectorRequest) -> dict[str, str]:
+    return record_values(payload.values, str(payload.values.get("Archivo") or "Nombre de ejemplo"))
+
+
+@router.post("/vector/outline")
+def vector_outline(payload: VectorRequest, request: Request) -> dict:
+    """Convierte objetos a curvas editables (como Ctrl+Q en Corel)."""
+    require_same_origin(request)
+    renderer = vector_renderer(payload)
+    values = vector_values(payload)
+    results = []
+    for element in payload.elements:
+        try:
+            converted = convert_to_paths(renderer, element.model_dump(), values)
+        except NotVector as exc:
+            raise HTTPException(422, f"{element.name or element.type}: no se puede convertir a curvas ({exc})") from exc
+        results.append({"source": element.id, "elements": converted})
+    return {"results": results}
+
+
+@router.post("/vector/boolean")
+def vector_boolean(payload: BooleanRequest, request: Request) -> dict:
+    """Soldar, recortar, intersectar o excluir formas; devuelve el trazado resultante."""
+    require_same_origin(request)
+    renderer = vector_renderer(payload)
+    values = vector_values(payload)
+    card_mm = (payload.width_mm, payload.height_mm)
+    geometries = []
+    for element in payload.elements:
+        if element.type in {"photo", "image"}:
+            raise HTTPException(422, "Las fotos e imágenes no se pueden combinar: usá formas, trazados o textos")
+        try:
+            geometries.append(element_area(renderer, element.model_dump(), values, card_mm))
+        except NotVector as exc:
+            raise HTTPException(422, f"{element.name or element.type}: {exc}") from exc
+    try:
+        result = card_vectors.boolean_geometry(payload.operation, geometries)
+    except ValueError as exc:
+        raise HTTPException(422, str(exc)) from exc
+    fitted = card_vectors.fit_paths_to_box(card_vectors.geometry_paths(result, simplify=0.004))
+    if fitted is None:
+        raise HTTPException(422, "El resultado quedó vacío: las formas no se superponen")
+    unit, (left, top, width, height) = fitted
+    total_nodes = sum(len(subpath["nodes"]) for subpath in unit)
+    if total_nodes > MAX_PATH_NODES:
+        raise HTTPException(422, "El resultado es demasiado complejo")
+    return {"element": {
+        "x": left / payload.width_mm, "y": top / payload.height_mm,
+        "w": width / payload.width_mm, "h": height / payload.height_mm,
+        "rotation": 0, "fill_rule": "evenodd", "paths": card_vectors.serialize_paths(unit),
+    }}
 
 
 @router.get("/qr.svg")
@@ -1013,10 +1266,14 @@ def export_cards(session_id: str, payload: CardExportRequest, request: Request) 
     renderer = card_renderer(session, design, output.dpi)
     stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
 
-    rendered: list[tuple[PhotoRecord, ExportItem, list[Image.Image]]] = []
+    vector_pdf = output.format == "PDF" and output.vector
+    rendered: list[tuple[PhotoRecord, ExportItem, list]] = []
     for item in payload.items:
         record = session_record(session, item.photo_id)
-        rendered.append((record, item, render_card_faces(renderer, design, record, item, payload, sides)))
+        if vector_pdf:
+            rendered.append((record, item, vector_card_faces(renderer, design, record, item, payload, sides)))
+        else:
+            rendered.append((record, item, render_card_faces(renderer, design, record, item, payload, sides)))
 
     if output.format == "PDF":
         try:
@@ -1092,12 +1349,54 @@ def check_cards(session_id: str, payload: CardCheckRequest, request: Request) ->
             side_data = getattr(payload.design, side)
             for issue in renderer.inspect_side(side_data.model_dump(), values):
                 issues.append({**issue, "side": side_labels[side]})
+        issues.extend(magstripe_issues(payload.design, values))
+        target = photo_target(payload.design, sides, 300)
+        crop_size = (round(item.crop[2] - item.crop[0]), round(item.crop[3] - item.crop[1]))
+        if target and photo_enhance.needs_upscale(crop_size, target):
+            rescue = payload.upscale and item.enhance and photo_enhance.model_path() is not None
+            too_small = photo_enhance.missing_scale(crop_size, target) > photo_enhance.TOO_SMALL
+            issues.append({
+                "level": "warning", "element": "Foto", "side": "",
+                "message": f"foto de baja resolución ({crop_size[0]}×{crop_size[1]} px; la caja pide {target[0]}×{target[1]} a 300 dpi)"
+                + (" · conviene pedir otra foto" if too_small else " · se agranda con IA" if rescue else " · puede verse pixelada"),
+            })
         if not item.approved and item.issues:
             issues.append({"level": "warning", "element": "Foto", "side": "", "message": item.issues[0].lower()})
         if issues:
             results.append({"photo_id": item.photo_id, "filename": record.filename, "issues": issues})
     errors = sum(1 for result in results for issue in result["issues"] if issue["level"] == "error")
     return {"checked": len(payload.items), "with_issues": len(results), "errors": errors, "results": results}
+
+
+@router.post("/sessions/{session_id}/enhance-preview")
+def enhance_preview(session_id: str, payload: EnhancePreviewRequest, request: Request) -> Response:
+    """Comparación antes / después de la mejora de imagen para una foto."""
+    require_same_origin(request)
+    session = STORE.get(session_id)
+    record = session_record(session, payload.item.photo_id)
+    output_size = (payload.width, payload.height) if payload.width and payload.height else None
+    target = photo_target(payload.design, ["front", "back"] if payload.design.double_sided else ["front"], 300) if payload.design else None
+    goal = output_size or target
+    plain_options = payload.model_copy(update={"enhance": "off", "upscale": False})
+    before = render_portrait(record, payload.item, plain_options, output_size)
+    after = render_portrait(record, payload.item.model_copy(update={"enhance": True}), payload, output_size, target)
+    used_ai = bool(goal) and payload.upscale and photo_enhance.needs_upscale(before.size, goal) and photo_enhance.super_resolver() is not None
+    height = 560
+    panels = [image.resize((max(1, round(image.width * height / image.height)), height), Image.Resampling.LANCZOS) for image in (before, after)]
+    gap = 12
+    canvas = Image.new("RGB", (panels[0].width + panels[1].width + gap, height + 34), (12, 20, 32))
+    canvas.paste(panels[0], (0, 34))
+    canvas.paste(panels[1], (panels[0].width + gap, 34))
+    draw = ImageDraw.Draw(canvas)
+    try:
+        font = ImageFont.truetype("arialbd.ttf", 18)
+    except OSError:
+        font = ImageFont.load_default()
+    draw.text((8, 8), f"Antes · {before.width}×{before.height} px", font=font, fill=(200, 210, 222))
+    draw.text((panels[0].width + gap + 8, 8), "Después" + (" · agrandada con IA" if used_ai else ""), font=font, fill=(120, 230, 210))
+    output = io.BytesIO()
+    canvas.save(output, "JPEG", quality=92)
+    return Response(output.getvalue(), media_type="image/jpeg", headers={"Cache-Control": "no-store", "X-Upscaled": "1" if used_ai else "0"})
 
 
 @router.get("/card-printers")
@@ -1121,6 +1420,22 @@ def print_cards(session_id: str, payload: CardPrintRequest, request: Request) ->
     records = [(session_record(session, item.photo_id), item) for item in payload.items]
     if len({item.photo_id for item in payload.items}) != len(payload.items):
         raise HTTPException(400, "El lote contiene credenciales repetidas")
+    encode = payload.encode and design.magstripe.enabled
+    encodings: dict[str, list[str]] = {}
+    if encode:
+        if not any(payload.mag_start):
+            raise HTTPException(422, "Faltan los comandos de codificación de la impresora")
+        for record, item in records:
+            values = record_values(item.metadata, record.filename, item.sequence)
+            tracks = magstripe_tracks(design, values)
+            for track, data in tracks.items():
+                error = card_magstripe.track_error(track, data)
+                if error:
+                    raise HTTPException(422, f"{record.filename}: {error}")
+            strings = card_magstripe.encoding_strings(tracks, payload.mag_start, payload.mag_end)
+            if not strings:
+                raise HTTPException(422, f"{record.filename}: no hay datos para la banda magnética")
+            encodings[item.photo_id] = strings
     landscape = design.width_mm >= design.height_mm
     title = f"Credenciales ({len(records)})" if len(records) > 1 else Path(records[0][0].filename).stem
     printed = []
@@ -1133,11 +1448,11 @@ def print_cards(session_id: str, payload: CardPrintRequest, request: Request) ->
             for record, item in records:
                 faces = render_card_faces(renderer, design, record, item, payload, sides)
                 for _copy in range(payload.copies):
-                    job.add_card(faces, rotate_back=payload.rotate_back)
+                    job.add_card(faces, rotate_back=payload.rotate_back, encode=encodings.get(item.photo_id))
                 stamp = card_printing.timestamp()
-                printed.append({"photo_id": item.photo_id, "printed_at": stamp})
+                printed.append({"photo_id": item.photo_id, "printed_at": stamp, "encoded": item.photo_id in encodings})
                 summary = " · ".join(value for value in list(item.metadata.values())[:4] if value)
-                log_rows.append([stamp, payload.printer, record.filename, summary, "+".join(sides), str(payload.copies)])
+                log_rows.append([stamp, payload.printer, record.filename, summary, "+".join(sides), str(payload.copies), "sí" if item.photo_id in encodings else ""])
             pages = job.pages
     except card_printing.CardPrintError as exc:
         raise HTTPException(502, str(exc)) from exc
@@ -1147,7 +1462,13 @@ def print_cards(session_id: str, payload: CardPrintRequest, request: Request) ->
         card_printing.append_print_log(log_rows)
     except OSError:
         pass
-    return {"printer": payload.printer, "cards": len(printed) * payload.copies, "pages": pages, "printed": printed}
+    return {"printer": payload.printer, "cards": len(printed) * payload.copies, "pages": pages, "printed": printed, "encoded": len(encodings)}
+
+
+@router.get("/magstripe/profiles")
+def magstripe_profiles() -> dict:
+    """Comandos de codificación magnética de cada marca, para el diálogo de impresión."""
+    return {"profiles": card_magstripe.public_profiles()}
 
 
 @router.post("/sessions/{session_id}/project")
@@ -1208,7 +1529,7 @@ def restore_project_assets(session: PhotoSession, project: dict, bundle: zipfile
         if (
             not asset_id or len(asset_id) > 40 or not all(char.isalnum() or char == "_" for char in asset_id)
             or asset_id != asset_id.casefold() or member not in names or not member.startswith("assets/")
-            or extension not in SUPPORTED_EXTENSIONS or bundle.getinfo(member).file_size > MAX_ASSET_BYTES
+            or extension not in ASSET_EXTENSIONS or bundle.getinfo(member).file_size > MAX_ASSET_BYTES
         ):
             continue
         path = session.folder / "assets" / f"{asset_id}{extension}"

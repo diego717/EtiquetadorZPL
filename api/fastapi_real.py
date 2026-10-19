@@ -887,8 +887,11 @@ async def get_system_metrics():
         raise HTTPException(status_code=500, detail=str(e))
 
 def find_free_port():
-    """Usar puerto fijo para Electron"""
-    return 8002
+    """Usar puerto fijo para Electron (ETIQUETADOR_API_PORT permite otro, ej. para pruebas)"""
+    try:
+        return int(os.environ.get("ETIQUETADOR_API_PORT", "8002"))
+    except ValueError:
+        return 8002
 
 
 def _is_port_listening(port: int, host: str = "127.0.0.1", timeout: float = 1.0) -> bool:

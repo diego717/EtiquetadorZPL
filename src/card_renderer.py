@@ -22,6 +22,8 @@ from typing import Callable, Iterable, Mapping, Optional
 
 from PIL import Image, ImageDraw, ImageFont, ImageOps
 
+import card_vectors as vectors
+
 
 MM_PER_INCH = 25.4
 POINTS_PER_INCH = 72
@@ -31,7 +33,7 @@ SHEET_SIZES_MM = {"A4": (210.0, 297.0), "LETTER": (215.9, 279.4), "LEGAL": (215.
 SUPERSAMPLE = 3
 ELEMENT_LABELS = {
     "text": "Texto", "photo": "Foto", "image": "Imagen", "qr": "Código QR", "barcode": "Código de barras",
-    "rect": "Rectángulo", "ellipse": "Elipse", "line": "Línea",
+    "rect": "Rectángulo", "ellipse": "Elipse", "line": "Línea", "path": "Trazado",
 }
 
 FontResolver = Callable[[str, bool, bool], Optional[Path]]
@@ -154,6 +156,24 @@ def _outline_layer(size: tuple[int, int], shape: str, radius: float, color, widt
     else:
         draw.rectangle(box, outline=color, width=width_px)
     return big.resize(size, Image.Resampling.LANCZOS)
+
+
+def _multiply_mask(mask: Image.Image, alpha: int) -> Image.Image:
+    return mask if alpha >= 255 else mask.point(lambda value: value * alpha // 255)
+
+
+def _colored(mask: Image.Image, color) -> Image.Image:
+    layer = Image.new("RGBA", mask.size, (*color[:3], 255))
+    layer.putalpha(_multiply_mask(mask, color[3] if len(color) > 3 else 255))
+    return layer
+
+
+def inset_shape_paths(shape: str, size: tuple[float, float], radius: float, stroke_width: float) -> list[dict]:
+    """Trazado del contorno de un rectangulo o elipse metido medio grosor hacia adentro."""
+    inset = stroke_width / 2
+    if shape in {"ellipse", "circle"}:
+        return vectors.ellipse_paths(size[0] / 2, size[1] / 2, max(0.25, size[0] / 2 - inset), max(0.25, size[1] / 2 - inset))
+    return vectors.rect_paths(inset, inset, size[0] - inset, size[1] - inset, max(0.0, radius - inset))
 
 
 # --------------------------------------------------------------------------- #
@@ -410,8 +430,7 @@ class CardRenderer:
         card = Image.new("RGBA", self.size, (*background, 255))
         image_id = side.get("background_image")
         if image_id and image_id in self.assets:
-            fitted = ImageOps.fit(self.assets[image_id].convert("RGBA"), self.size, method=Image.Resampling.LANCZOS)
-            card.alpha_composite(fitted)
+            card.alpha_composite(vectors.fit_asset(self.assets[image_id], self.size, "cover"))
         for element in side.get("elements") or []:
             if element.get("hidden") or not condition_matches(element.get("condition"), values):
                 continue
@@ -478,6 +497,13 @@ class CardRenderer:
         return issues
 
     def _render_element(self, card: Image.Image, element: Mapping, values: Mapping[str, str], portrait: Image.Image | None) -> None:
+        placed = self.element_layer(element, values, portrait)
+        if placed is not None:
+            layer, left, top = placed
+            _composite(card, layer, left, top)
+
+    def element_layer(self, element: Mapping, values: Mapping[str, str], portrait: Image.Image | None) -> tuple[Image.Image, int, int] | None:
+        """Capa RGBA del objeto ya girada y su posicion en la tarjeta (pixeles)."""
         width = max(1, round(float(element.get("w", 0.1)) * self.size[0]))
         height = max(1, round(float(element.get("h", 0.1)) * self.size[1]))
         kind = element.get("type")
@@ -490,31 +516,28 @@ class CardRenderer:
             "rect": self._shape_layer,
             "ellipse": self._shape_layer,
             "line": self._line_layer,
+            "path": self._path_layer,
         }.get(kind)
         if painter is None:
-            return
+            return None
         layer = painter(element, (width, height), values, portrait)
         if layer is None:
-            return
+            return None
         layer = _apply_opacity(layer, float(element.get("opacity", 1)))
         center_x = (float(element.get("x", 0)) + float(element.get("w", 0)) / 2) * self.size[0]
         center_y = (float(element.get("y", 0)) + float(element.get("h", 0)) / 2) * self.size[1]
         rotation = float(element.get("rotation") or 0) % 360
         if rotation:
             layer = layer.rotate(-rotation, resample=Image.Resampling.BICUBIC, expand=True)
-        _composite(card, layer, round(center_x - layer.width / 2), round(center_y - layer.height / 2))
+        return layer, round(center_x - layer.width / 2), round(center_y - layer.height / 2)
 
-    def _text_layer(self, element, size, values, _portrait):
+    def text_lines(self, element, size, values) -> tuple[ImageFont.ImageFont, list[tuple[str, float, float, float]]] | None:
+        """Ubicacion de cada linea del texto en la caja: (linea, x, y del medio, ancho)."""
         text = resolve_fields(str(element.get("text") or ""), values)
         if element.get("uppercase"):
             text = text.upper()
-        layer = Image.new("RGBA", size, (0, 0, 0, 0))
-        fill = _rgba(element.get("fill"))
-        if fill:
-            mask = _shape_mask(size, "rect", self.pt(element.get("radius", 0)))
-            layer.paste(Image.new("RGBA", size, fill), (0, 0), mask)
         if not text.strip():
-            return layer if fill else None
+            return None
         padding = self.pt(element.get("padding", 0))
         inner = (max(1, size[0] - padding * 2), max(1, size[1] - padding * 2))
         font, lines, line_px = layout_text(
@@ -528,14 +551,11 @@ class CardRenderer:
             fit=str(element.get("fit") or "shrink"),
             line_height=float(element.get("line_height") or 1.15),
         )
-        draw = ImageDraw.Draw(layer)
-        color = _rgba(element.get("color")) or (23, 32, 43, 255)
-        stroke_width = round(self.pt(element.get("stroke_width", 0))) if element.get("stroke_color") else 0
-        stroke_fill = _rgba(element.get("stroke_color")) if stroke_width else None
         total = line_px * len(lines)
         valign = element.get("valign") or "middle"
         top = padding + (0 if valign == "top" else inner[1] - total if valign == "bottom" else (inner[1] - total) / 2)
         align = element.get("align") or "left"
+        placed = []
         for index, line in enumerate(lines):
             line_width = _text_width(font, line)
             if align == "center":
@@ -544,25 +564,40 @@ class CardRenderer:
                 x = padding + inner[0] - line_width
             else:
                 x = padding
-            y = top + line_px * index + line_px / 2
+            placed.append((line, x, top + line_px * index + line_px / 2, line_width))
+        return font, placed
+
+    @staticmethod
+    def underline_box(font, x: float, y: float, width: float) -> tuple[float, float, float, float]:
+        ascent, descent = font.getmetrics()
+        underline_y = y + (ascent - descent) / 2 + max(1, font.size * 0.08)
+        thickness = max(1, round(font.size * 0.06))
+        return x, underline_y - thickness / 2, x + width, underline_y + thickness / 2
+
+    def _text_layer(self, element, size, values, _portrait):
+        layer = Image.new("RGBA", size, (0, 0, 0, 0))
+        fill = _rgba(element.get("fill"))
+        if fill:
+            mask = _shape_mask(size, "rect", self.pt(element.get("radius", 0)))
+            layer.paste(Image.new("RGBA", size, fill), (0, 0), mask)
+        placement = self.text_lines(element, size, values)
+        if placement is None:
+            return layer if fill else None
+        font, lines = placement
+        draw = ImageDraw.Draw(layer)
+        color = _rgba(element.get("color")) or (23, 32, 43, 255)
+        stroke_width = round(self.pt(element.get("stroke_width", 0))) if element.get("stroke_color") else 0
+        stroke_fill = _rgba(element.get("stroke_color")) if stroke_width else None
+        for line, x, y, line_width in lines:
             draw.text((x, y), line, font=font, fill=color, anchor="lm", stroke_width=stroke_width, stroke_fill=stroke_fill)
             if element.get("underline") and line:
-                ascent, descent = font.getmetrics()
-                underline_y = y + (ascent - descent) / 2 + max(1, font.size * 0.08)
-                thickness = max(1, round(font.size * 0.06))
-                draw.line((x, underline_y, x + line_width, underline_y), fill=color, width=thickness)
+                left, top, right, bottom = self.underline_box(font, x, y, line_width)
+                center = (top + bottom) / 2
+                draw.line((left, center, right, center), fill=color, width=max(1, round(bottom - top)))
         return layer
 
-    def _fit_image(self, source: Image.Image, size: tuple[int, int], mode: str) -> Image.Image:
-        source = source.convert("RGBA")
-        if mode == "stretch":
-            return source.resize(size, Image.Resampling.LANCZOS)
-        if mode == "contain":
-            fitted = ImageOps.contain(source, size, Image.Resampling.LANCZOS)
-            layer = Image.new("RGBA", size, (0, 0, 0, 0))
-            layer.alpha_composite(fitted, ((size[0] - fitted.width) // 2, (size[1] - fitted.height) // 2))
-            return layer
-        return ImageOps.fit(source, size, method=Image.Resampling.LANCZOS)
+    def _fit_image(self, source, size: tuple[int, int], mode: str) -> Image.Image:
+        return vectors.fit_asset(source, size, mode)
 
     def _masked(self, layer: Image.Image, element, shape: str) -> Image.Image:
         radius = self.pt(element.get("radius", 0))
@@ -588,7 +623,13 @@ class CardRenderer:
         if asset is None:
             return None
         layer = self._fit_image(asset, size, str(element.get("image_fit") or "contain"))
-        if element.get("grayscale"):
+        recolor = _rgb(element.get("recolor"))
+        if recolor:
+            # Logo de un solo color (por ejemplo blanco sobre una banda): se conserva la transparencia.
+            alpha = layer.getchannel("A")
+            layer = Image.new("RGBA", layer.size, (*recolor, 255))
+            layer.putalpha(alpha)
+        elif element.get("grayscale"):
             alpha = layer.getchannel("A")
             layer = layer.convert("L").convert("RGBA")
             layer.putalpha(alpha)
@@ -654,22 +695,61 @@ class CardRenderer:
         shape = "ellipse" if element.get("type") == "ellipse" else "rect"
         radius = self.pt(element.get("radius", 0)) if shape == "rect" else 0
         layer = Image.new("RGBA", size, (0, 0, 0, 0))
-        fill = _rgba(element.get("fill"))
-        if fill:
-            layer.paste(Image.new("RGBA", size, fill), (0, 0), _shape_mask(size, shape, radius))
+        paint = vectors.paint_image(size, element.get("gradient"), element.get("fill"))
+        if paint is not None:
+            layer.paste(paint, (0, 0), _shape_mask(size, shape, radius))
         stroke = _rgba(element.get("stroke_color"))
         stroke_width = self.pt(element.get("stroke_width", 0))
         if stroke and stroke_width > 0:
-            layer.alpha_composite(_outline_layer(size, shape, radius, stroke, stroke_width))
+            if str(element.get("dash") or "solid") == "solid":
+                layer.alpha_composite(_outline_layer(size, shape, radius, stroke, stroke_width))
+            else:
+                # Contorno punteado: el trazo va por dentro de la caja, igual que el liso.
+                mask = self._stroke_mask(inset_shape_paths(shape, size, radius, stroke_width), size, (0, 0), stroke_width, element)
+                if mask is not None:
+                    layer.alpha_composite(_colored(mask, stroke))
         return layer
 
-    def _line_layer(self, element, size, _values, _portrait):
-        color = _rgba(element.get("stroke_color")) or (23, 32, 43, 255)
-        thickness = max(1, round(self.pt(element.get("stroke_width", 1))))
-        layer = Image.new("RGBA", size, (0, 0, 0, 0))
-        top = round((size[1] - thickness) / 2)
-        ImageDraw.Draw(layer).rectangle((0, top, size[0] - 1, top + thickness - 1), fill=color)
+    def _stroke_mask(self, paths, size, offset, width, element) -> Image.Image | None:
+        flat = [(subpath["closed"], [(x + offset[0], y + offset[1]) for x, y in vectors.flatten(subpath, 0.15)]) for subpath in paths]
+        geometry = vectors.stroke_geometry(
+            flat, width, cap=str(element.get("line_cap") or "butt"), join=str(element.get("line_join") or "miter"),
+            dash=str(element.get("dash") or "solid"),
+        )
+        if geometry is None:
+            return None
+        return vectors.fill_mask(vectors.geometry_rings(geometry), size, "evenodd")
+
+    def _vector_layer(self, element, size, paths, *, fill: bool, stroke_px: float | None = None) -> Image.Image | None:
+        """Relleno y contorno centrado de trazados en pixeles locales; la capa crece si el trazo sobresale."""
+        stroke = _rgba(element.get("stroke_color"))
+        stroke_width = (stroke_px if stroke_px is not None else self.pt(element.get("stroke_width", 0))) if stroke else 0
+        bounds = vectors.paths_bounds(paths, 0.5) or (0, 0, size[0], size[1])
+        reach = stroke_width / 2 * (vectors.MITER_LIMIT if str(element.get("line_join") or "miter") == "miter" else 1.5) + 2 if stroke_width else 1
+        pad = math.ceil(max(0, -bounds[0], -bounds[1], bounds[2] - size[0], bounds[3] - size[1]) + reach)
+        padded = (size[0] + pad * 2, size[1] + pad * 2)
+        layer = Image.new("RGBA", padded, (0, 0, 0, 0))
+        if fill:
+            paint = vectors.paint_image(padded, element.get("gradient"), element.get("fill"), (pad, pad, size[0], size[1]))
+            if paint is not None:
+                rings = [[(x + pad, y + pad) for x, y in vectors.flatten(subpath, 0.15)] for subpath in paths]
+                layer.paste(paint, (0, 0), vectors.fill_mask(rings, padded, str(element.get("fill_rule") or "evenodd")))
+        if stroke and stroke_width > 0:
+            mask = self._stroke_mask(paths, padded, (pad, pad), stroke_width, element)
+            if mask is not None:
+                layer.alpha_composite(_colored(mask, stroke))
         return layer
+
+    def _path_layer(self, element, size, _values, _portrait):
+        paths = vectors.scale_paths(vectors.normalize_paths(element.get("paths")), size[0], size[1])
+        if not paths:
+            return None
+        return self._vector_layer(element, size, paths, fill=True)
+
+    def _line_layer(self, element, size, _values, _portrait):
+        line = {**element, "stroke_color": element.get("stroke_color") or "#17202b"}
+        paths = [{"closed": False, "nodes": [vectors.node((0, size[1] / 2)), vectors.node((size[0], size[1] / 2))]}]
+        return self._vector_layer(line, size, paths, fill=False, stroke_px=max(1.0, self.pt(element.get("stroke_width", 1) or 1)))
 
     def _error_layer(self, size, message: str) -> Image.Image:
         layer = Image.new("RGBA", size, (255, 235, 235, 255))
@@ -702,8 +782,16 @@ def sheet_grid(card_mm: tuple[float, float], page_mm: tuple[float, float], margi
     return portrait[0], portrait[1], False
 
 
+def _place_face(page, rect, face) -> None:
+    """Inserta una cara: imagen compuesta o documento vectorial de una pagina."""
+    if isinstance(face, Image.Image):
+        page.insert_image(rect, stream=_jpeg_bytes(face))
+    else:
+        page.show_pdf_page(rect, face, 0)
+
+
 def build_pdf(
-    pages: list[list[Image.Image]],
+    pages: list[list],
     card_mm: tuple[float, float],
     *,
     layout: str = "card",
@@ -716,7 +804,8 @@ def build_pdf(
     """Arma el PDF.
 
     ``pages`` es una lista de credenciales; cada credencial es la lista de sus
-    caras a imprimir (frente y, opcionalmente, dorso).
+    caras a imprimir (frente y, opcionalmente, dorso). Cada cara es una imagen
+    o un documento PDF vectorial de una pagina.
     """
     import fitz
 
@@ -727,7 +816,7 @@ def build_pdf(
         for faces in pages:
             for face in faces:
                 page = document.new_page(width=card_w, height=card_h)
-                page.insert_image(page.rect, stream=_jpeg_bytes(face))
+                _place_face(page, page.rect, face)
         return document.tobytes(garbage=3, deflate=True)
 
     page_mm = SHEET_SIZES_MM.get(sheet.upper(), SHEET_SIZES_MM["A4"])
@@ -771,7 +860,7 @@ def build_pdf(
                     column = columns - 1 - column
                 x = origin_x + column * (card_w + gap)
                 y = origin_y + row * (card_h + gap)
-                page.insert_image(fitz.Rect(x, y, x + card_w, y + card_h), stream=_jpeg_bytes(faces[face_index]))
+                _place_face(page, fitz.Rect(x, y, x + card_w, y + card_h), faces[face_index])
             if crop_marks:
                 draw_marks(page)
     return document.tobytes(garbage=3, deflate=True)

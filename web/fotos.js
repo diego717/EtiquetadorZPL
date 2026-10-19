@@ -38,6 +38,8 @@
         backgroundStrengthValue: $('background-strength-value'), matchPrimary: $('match-field-primary'),
         matchSecondary: $('match-field-secondary'), matchButton: $('match-data-btn'), dataNote: $('data-file-note'),
         matchReport: $('match-report'), cardEnabled: $('card-enabled'),
+        enhanceLevel: $('enhance-level'), upscale: $('upscale-toggle'), enhanceSkip: $('enhance-skip'),
+        resolutionNote: $('resolution-note'),
         reviewPdf: $('review-pdf-btn'), saveProject: $('save-project-btn'),
         cardMiniFront: $('card-mini-front'), cardMiniBack: $('card-mini-back'),
     };
@@ -73,7 +75,7 @@
             crop: centeredCrop(data.width, data.height), brightness: 1, contrast: 1,
             rotation: 0, detected: false, faceFound: false, faceBox: null, eyeLine: null,
             issues: [], approved: false, manual: false, metadata: {}, matchStatus: '',
-            printCount: 0, lastPrinted: null,
+            printCount: 0, lastPrinted: null, enhanceOff: false,
         };
         return { ...defaults, ...saved, ...data, image: null };
     }
@@ -256,6 +258,8 @@
         elements.brightnessValue.value = `${elements.brightness.value}%`;
         elements.contrastValue.value = `${elements.contrast.value}%`;
         $('approve-current-btn').textContent = photo.approved ? '↶ Reabrir revisión' : '✓ Marcar revisada';
+        elements.enhanceSkip.checked = Boolean(photo.enhanceOff);
+        renderResolution(photo);
         renderQuality(photo);
         renderBadges(photo);
         designer?.onPhotoChanged();
@@ -267,6 +271,71 @@
             designer?.onPhotoChanged();
         } catch (error) {
             setStatus(error.message, 'error');
+        }
+    }
+
+    function photoBoxPixels(dpi = 300) {
+        // Tamaño en píxeles de la caja de foto más grande de la credencial.
+        if (!elements.cardEnabled.checked || !designer) return null;
+        const card = designer.getDesign();
+        const sides = card.double_sided ? ['front', 'back'] : ['front'];
+        const boxes = sides.flatMap((key) => card[key].elements.filter((item) => item.type === 'photo' && !item.hidden));
+        if (!boxes.length) return null;
+        return {
+            width: Math.ceil(Math.max(...boxes.map((item) => item.w * card.width_mm / 25.4 * dpi))),
+            height: Math.ceil(Math.max(...boxes.map((item) => item.h * card.height_mm / 25.4 * dpi))),
+        };
+    }
+
+    function renderResolution(photo = currentPhoto()) {
+        if (!photo) { elements.resolutionNote.textContent = ''; return; }
+        const width = Math.round(photo.crop[2] - photo.crop[0]);
+        const height = Math.round(photo.crop[3] - photo.crop[1]);
+        const box = photoBoxPixels() || { width: Number(elements.outputWidth.value), height: Number(elements.outputHeight.value) };
+        const missing = Math.max(box.width / width, box.height / height);
+        let text = `Recorte de ${width} × ${height} px`;
+        if (missing > 3) {
+            text += ` · muy baja resolución para ${box.width} × ${box.height} px: conviene pedir otra foto`;
+        } else if (missing > 1.15) {
+            text += elements.upscale.checked && !photo.enhanceOff
+                ? ` · baja resolución para ${box.width} × ${box.height} px: se agranda con IA`
+                : ` · baja resolución para ${box.width} × ${box.height} px: puede verse pixelada`;
+        } else {
+            text += ' · resolución suficiente';
+        }
+        elements.resolutionNote.textContent = text;
+        elements.resolutionNote.classList.toggle('warn', missing > 1.15);
+    }
+
+    async function compareEnhancement() {
+        const photo = currentPhoto();
+        if (!photo || !state.sessionId) return;
+        setBusy(true);
+        setStatus('Calculando la mejora de esta foto…', 'busy', 40);
+        try {
+            const card = elements.cardEnabled.checked && photoBoxPixels() ? designer.getDesign() : null;
+            const body = { item: { ...exportItem(photo), enhance: true }, ...photoOptions(), design: card };
+            if (elements.enhanceLevel.value === 'off') body.enhance = 'normal';
+            if (!card) { body.width = Number(elements.outputWidth.value); body.height = Number(elements.outputHeight.value); }
+            const response = await api(`/sessions/${state.sessionId}/enhance-preview`, {
+                method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),
+            });
+            const url = URL.createObjectURL(await response.blob());
+            const overlay = document.createElement('div');
+            overlay.className = 'enhance-compare';
+            overlay.innerHTML = '<figure><img alt="Comparación antes y después"><figcaption>Clic o Esc para cerrar</figcaption></figure>';
+            overlay.querySelector('img').src = url;
+            const closeOverlay = () => { overlay.remove(); URL.revokeObjectURL(url); document.removeEventListener('keydown', onKey, true); };
+            const onKey = (event) => { if (event.key === 'Escape') { event.stopPropagation(); closeOverlay(); } };
+            overlay.addEventListener('click', closeOverlay);
+            document.addEventListener('keydown', onKey, true);
+            document.body.append(overlay);
+            const level = elements.enhanceLevel.value === 'off' ? 'normal (sólo para comparar)' : elements.enhanceLevel.options[elements.enhanceLevel.selectedIndex].text.toLowerCase();
+            setStatus(`Antes / después con mejora ${level}${response.headers.get('X-Upscaled') === '1' ? ' y agrandada con IA' : ''}.`, 'ok', 100);
+        } catch (error) {
+            setStatus(error.message, 'error', 0);
+        } finally {
+            setBusy(false);
         }
     }
 
@@ -322,6 +391,7 @@
     }
 
     function draw(givenWidth = null, givenHeight = null) {
+        renderResolution();
         const rect = elements.canvasShell.getBoundingClientRect();
         const width = givenWidth || Math.max(1, rect.width);
         const height = givenHeight || Math.max(1, rect.height);
@@ -704,7 +774,7 @@
             photo_id: photo.id, crop: photo.crop, brightness: photo.brightness,
             contrast: photo.contrast, rotation: photo.rotation, approved: photo.approved,
             issues: photo.issues || [], metadata: photo.metadata || {},
-            sequence: state.photos.indexOf(photo) + 1,
+            sequence: state.photos.indexOf(photo) + 1, enhance: !photo.enhanceOff,
         };
     }
 
@@ -712,6 +782,8 @@
         return {
             background_mode: elements.backgroundMode.value,
             background_strength: Number(elements.backgroundStrength.value),
+            enhance: elements.enhanceLevel.value,
+            upscale: elements.upscale.checked,
         };
     }
 
@@ -771,6 +843,7 @@
                 approved: photo.approved, manual: photo.manual, engine: photo.engine,
                 metadata: photo.metadata || {}, matchStatus: photo.matchStatus || '',
                 printCount: photo.printCount || 0, lastPrinted: photo.lastPrinted || null,
+                enhanceOff: Boolean(photo.enhanceOff),
             };
         });
         return {
@@ -779,6 +852,7 @@
                 aspect: elements.aspect.value, width: elements.outputWidth.value, height: elements.outputHeight.value,
                 format: elements.format.value, suffix: elements.suffix.value,
                 backgroundMode: elements.backgroundMode.value, backgroundStrength: elements.backgroundStrength.value,
+                enhanceLevel: elements.enhanceLevel.value, upscale: elements.upscale.checked,
                 cardEnabled: elements.cardEnabled.checked,
                 cardDesign: designer.serialize(),
                 framing: state.framing,
@@ -812,6 +886,8 @@
         elements.backgroundStrength.value = saved.backgroundStrength || 55;
         elements.backgroundStrengthValue.value = `${elements.backgroundStrength.value}%`;
         elements.cardEnabled.checked = Boolean(saved.cardEnabled);
+        elements.enhanceLevel.value = saved.enhanceLevel || 'off';
+        elements.upscale.checked = saved.upscale ?? false;
         state.framing = { faceFill: saved.framing?.faceFill ?? null, eyePosition: saved.framing?.eyePosition ?? 40 };
         populateDataFields(state.data.primary, state.data.secondary);
         designer.restore(saved, resources);
@@ -1027,6 +1103,15 @@
         elements.matchPrimary.addEventListener('change', () => { elements.matchButton.disabled = state.busy || !elements.matchPrimary.value; });
         elements.matchButton.addEventListener('click', matchData);
         elements.backgroundStrength.addEventListener('input', () => { elements.backgroundStrengthValue.value = `${elements.backgroundStrength.value}%`; });
+        elements.enhanceLevel.addEventListener('change', () => setStatus(elements.enhanceLevel.value === 'off' ? 'Mejora de imagen desactivada.' : 'La mejora se aplica al exportar, imprimir y en la vista exacta del editor.'));
+        elements.upscale.addEventListener('change', () => renderResolution());
+        elements.enhanceSkip.addEventListener('change', () => {
+            const photo = currentPhoto();
+            if (!photo) return;
+            photo.enhanceOff = elements.enhanceSkip.checked;
+            renderResolution(photo);
+        });
+        $('enhance-compare-btn').addEventListener('click', compareEnhancement);
         $('open-card-designer-btn').addEventListener('click', () => designer.open());
         $('card-print-current-btn').addEventListener('click', () => designer.openExport('current', { print: true }));
         $('card-print-batch-btn').addEventListener('click', () => designer.openExport('all', { print: true }));

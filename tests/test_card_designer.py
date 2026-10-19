@@ -246,8 +246,9 @@ class FakePrintJob:
     def __exit__(self, *_args):
         return None
 
-    def add_card(self, faces, *, rotate_back=False):
+    def add_card(self, faces, *, rotate_back=False, encode=None):
         self.cards.append((faces, rotate_back))
+        self.encodings = getattr(self, "encodings", []) + [encode]
         self.pages += len(faces)
 
 
