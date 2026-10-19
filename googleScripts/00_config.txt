@@ -21,6 +21,9 @@ const CFG = {
   SECONDARY_CHECKBOX_COL: 13,
   MFG_ID_COL: 18,
   FIRST_DATA_ROW: 4,
+  // Color normal del texto en D:H. crearOrdenFabricacionActiva() pinta esas
+  // columnas de azul; al liberar o reutilizar una fila se vuelve a este color.
+  ROW_FONT_COLOR: "#ffffff",
 };
 
 const MFG_CFG = {

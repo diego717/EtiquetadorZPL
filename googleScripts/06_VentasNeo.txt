@@ -186,6 +186,7 @@ function clearSalesOrderRows_(sheet, rows, reason, logInfo) {
 
     // Limpia los datos operativos sin borrar la fórmula de la columna L.
     sheet.getRange(row, 1, 1, 10).clearContent();
+    resetOperationalRowFontColor_(sheet, row);
     sheet.getRange(row, CFG.LINK_COL).clearNote();
     clearNewRowMarker_(sheet, row);
 
@@ -2248,6 +2249,7 @@ function syncOdooSalesOrdersNeoUnlocked_() {
 
       if (!isExistingRow) {
         markRowAsNew_(sheet, targetRow);
+        resetOperationalRowFontColor_(sheet, targetRow);
         inserted++;
         needsAutoSort = true;
         existingRows.push(targetRow);
@@ -2893,6 +2895,7 @@ function importSpecificNeoSaleOrder_(lookupValue) {
     });
 
     markRowAsNew_(sheet, nextRow);
+    resetOperationalRowFontColor_(sheet, nextRow);
     insertedRows.push(nextRow);
     nextRow++;
     inserted++;

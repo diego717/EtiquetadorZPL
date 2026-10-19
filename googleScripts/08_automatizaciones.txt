@@ -762,6 +762,7 @@ function moverFinalizadosAHistoricoUnlocked_() {
 
 function clearOperationalRowPreservingFormula_(sheet, row) {
   sheet.getRange(row, 1, 1, 10).clearContent().clearNote();
+  resetOperationalRowFontColor_(sheet, row);
   clearNewRowMarker_(sheet, row);
 
   const secondaryCheckboxColumn = getSecondaryOperationalCheckboxColumn_(sheet);

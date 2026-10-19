@@ -1021,6 +1021,7 @@ function syncOdooManufacturingOrdersUnlocked_() {
 
     if (!wasExisting) {
       markRowAsNew_(sheet, targetRow);
+      resetOperationalRowFontColor_(sheet, targetRow);
       inserted++;
       needsAutoSort = true;
       insertedOdooIdsThisRun.push({ odooId, targetRow });
@@ -1762,6 +1763,7 @@ function fetchExistingManufacturingIds_(cfg, uid, ids) {
 
 function clearManufacturingRow_(sheet, row) {
   sheet.getRange(row, 1, 1, 10).clearContent();
+  resetOperationalRowFontColor_(sheet, row);
   sheet.getRange(row, 14, 1, 8).clearContent();
   sheet.getRange(row, CFG.LINK_COL).clearNote();
   sheet.getRange(row, CFG.NEW_ROW_CHECKBOX_COL).setValue(false);
