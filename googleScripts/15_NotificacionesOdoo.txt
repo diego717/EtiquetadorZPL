@@ -22,6 +22,9 @@ const ODOO_NOTIFICATION_CFG = Object.freeze({
   SEARCH_BATCH_SIZE: 100,
   // Frecuencia de consulta del mini-widget. 60000 ms = 1 minuto.
   POLL_INTERVAL_MS: 60000,
+  // Refresco del contador del widget (solo lee la cola local, no consulta
+  // Odoo). Hace que baje poco despues de marcar notificaciones en el modal.
+  COUNT_REFRESH_MS: 5000,
   SHEET_NAME: "TRABAJOS",
   CELL_RANGE: "F1:N1",
 });
@@ -113,6 +116,22 @@ function buildOdooListenerHtml_() {
     "  cursor: pointer;",
     "}",
     ".open-button:disabled { opacity: .55; cursor: default; }",
+    ".badge {",
+    "  flex: 0 0 auto;",
+    "  margin-left: 6px;",
+    "  min-width: 16px;",
+    "  height: 16px;",
+    "  padding: 0 5px;",
+    "  box-sizing: border-box;",
+    "  border-radius: 8px;",
+    "  background: #ea4335;",
+    "  color: #fff;",
+    "  font-size: 10px;",
+    "  font-weight: 700;",
+    "  line-height: 16px;",
+    "  text-align: center;",
+    "}",
+    ".badge[hidden] { display: none; }",
     "@keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: .35; } }",
     "</style>",
     "</head>",
@@ -120,6 +139,7 @@ function buildOdooListenerHtml_() {
     '  <div class="label">',
     '    <span id="status-dot" class="dot"></span>',
     '    <strong id="status-text" class="text">Odoo Notifier</strong>',
+    '    <span id="pending-badge" class="badge" hidden></span>',
     "  </div>",
     '  <button id="open-button" class="open-button" onclick="openPending()">Ver</button>',
     "<script>",
@@ -128,6 +148,21 @@ function buildOdooListenerHtml_() {
     '  var dot = document.getElementById("status-dot");',
     '  document.getElementById("status-text").textContent = text;',
     '  dot.className = "dot" + (state ? " " + state : "");',
+    "}",
+    "function setPending(count) {",
+    '  if (typeof count !== "number" || count < 0) return;',
+    '  var badge = document.getElementById("pending-badge");',
+    "  badge.hidden = count === 0;",
+    '  badge.textContent = count > 99 ? "99+" : String(count);',
+    "  badge.title = count + (count === 1",
+    '    ? " notificacion sin marcar como vista"',
+    '    : " notificaciones sin marcar como vistas");',
+    "}",
+    "function refreshPendingCount() {",
+    "  if (checking) return;",
+    "  google.script.run",
+    "    .withSuccessHandler(setPending)",
+    "    .getOdooNotificationPendingCount();",
     "}",
     "function pollOdoo() {",
     "  if (checking) return;",
@@ -141,6 +176,7 @@ function buildOdooListenerHtml_() {
     "        return;",
     "      }",
     '      setStatus("Odoo Notifier", "");',
+    "      if (response) setPending(response.pendingCount);",
     "      if (response && response.found) {",
     "        google.script.run",
     "          .withFailureHandler(function() {",
@@ -159,8 +195,9 @@ function buildOdooListenerHtml_() {
     '  var button = document.getElementById("open-button");',
     "  button.disabled = true;",
     "  google.script.run",
-    "    .withSuccessHandler(function() {",
+    "    .withSuccessHandler(function(result) {",
     "      button.disabled = false;",
+    "      if (result) setPending(result.pendingCount);",
     "    })",
     "    .withFailureHandler(function() {",
     "      button.disabled = false;",
@@ -170,6 +207,7 @@ function buildOdooListenerHtml_() {
     "}",
     "setTimeout(pollOdoo, 400);",
     "setInterval(pollOdoo, " + ODOO_NOTIFICATION_CFG.POLL_INTERVAL_MS + ");",
+    "setInterval(refreshPendingCount, " + ODOO_NOTIFICATION_CFG.COUNT_REFRESH_MS + ");",
     "</script>",
     "</body>",
     "</html>",
@@ -596,6 +634,16 @@ function showOdooMentionModal(data) {
     htmlOutput,
     "Notificaciones de Odoo"
   );
+}
+
+/**
+ * Cantidad de notificaciones que siguen en la cola. Una notificacion solo sale
+ * de la cola al marcarla como vista: abrir o cerrar el modal no la descuenta.
+ */
+function getOdooNotificationPendingCount() {
+  return readOdooNotificationPendingIds_(
+    PropertiesService.getUserProperties()
+  ).length;
 }
 
 /**
