@@ -40,6 +40,17 @@ function odooLogin_(cfg) {
 }
 
 /**
+ * La API externa de Odoo responde en en_US si no se le pasa idioma, y los
+ * nombres traducibles (productos renombrados desde la interfaz) quedan con
+ * el valor viejo. Se fuerza es_UY salvo que la llamada traiga su propio lang.
+ */
+function withOdooLang_(kwargs) {
+  const result = Object.assign({}, kwargs || {});
+  result.context = Object.assign({ lang: "es_UY" }, result.context || {});
+  return result;
+}
+
+/**
  * Ejecuta un método de un modelo de Odoo mediante execute_kw.
  */
 function executeKw_(cfg, uid, model, method, argsList, kwargs) {
@@ -56,7 +67,7 @@ function executeKw_(cfg, uid, model, method, argsList, kwargs) {
         model,
         method,
         argsList || [],
-        kwargs || {},
+        withOdooLang_(kwargs),
       ],
     },
     id: 2,

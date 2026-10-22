@@ -23,6 +23,9 @@
                 <p id="page-subtitle">Panel de administracion del sistema</p>
             </div>
             <div class="header-actions">
+                <button id="tutorial-btn" class="btn tutorial-launch-btn" type="button" onclick="openAppTutorial()">
+                    <span aria-hidden="true">?</span> Como se usa
+                </button>
                 <button id="toggle-admin-view-btn" class="btn" onclick="toggleAdminOnlyMode()">Mostrar panel completo</button>
                 <button id="theme-toggle-btn" class="btn secondary" onclick="toggleTheme()">Tema claro</button>
                 <a class="btn secondary" href="cloud.html">Panel Cloud</a>
@@ -97,7 +100,7 @@
                     </div>
                 </div>
 
-                <div class="toolbar-primary">
+                <div class="toolbar-primary" id="adm-sync-toolbar">
                     <button id="adm-sync-btn" class="btn btn-lg" onclick="syncAdministradoSales()">Sincronizar desde Administrado</button>
                     <div class="form-group compact">
                         <label for="adm-sync-limit">Ultimos envios con etiqueta</label>
@@ -110,7 +113,7 @@
                     <span id="adm-sync-summary" class="summary-pill is-empty" aria-live="polite">Sin datos</span>
                 </div>
 
-                <div class="seg-tabs" role="tablist" aria-label="Filtrar envios">
+                <div class="seg-tabs" id="adm-filter-tabs" role="tablist" aria-label="Filtrar envios">
                     <button type="button" role="tab" class="seg-tab" data-adm-filter="pending" onclick="setAdministradoFilter('pending')">
                         Pendientes <span class="seg-count" id="adm-count-pending">0</span>
                     </button>
@@ -122,7 +125,7 @@
                     </button>
                 </div>
 
-                <div class="table-scroll">
+                <div class="table-scroll" id="adm-sales-table">
                     <table class="table-clean">
                         <thead>
                         <tr>
@@ -139,17 +142,17 @@
                     </table>
                 </div>
 
-                <div class="card-tools">
+                <div class="card-tools" id="adm-tools">
                     <p class="subsection-title">Herramientas</p>
                     <div class="adm-quick-print">
-                        <div class="form-group compact">
+                        <div class="form-group compact" id="adm-quick-print">
                             <label for="adm-test-envio-id">Envio ID para prueba</label>
                             <input type="text" id="adm-test-envio-id" placeholder="46624465730">
                         </div>
                         <button class="btn secondary" onclick="printAdministradoLabel()">Imprimir solo etiqueta (prueba)</button>
                     </div>
 
-                    <details class="adm-advanced-panel">
+                    <details class="adm-advanced-panel" id="adm-advanced-panel">
                         <summary>Configuracion y diagnostico avanzado</summary>
                         <div class="grid" style="margin-top: 12px;">
                             <div>
@@ -579,7 +582,7 @@
                 Trae los cupones de TotalNet, los cruza contra facturas a contado en Odoo y registra el pago recien al confirmar.
             </p>
 
-            <details class="pos-settings">
+            <details class="pos-settings" id="pos-totalnet-settings">
                 <summary>Configuracion de TotalNet y diarios contables</summary>
             <div class="odoo-grid">
                 <div class="odoo-panel">
@@ -720,7 +723,7 @@
             </details>
 
             <h3 style="margin-top:18px;">Sincronizar y conciliar</h3>
-            <div class="inline-toolbar">
+            <div class="inline-toolbar" id="pos-sync-toolbar">
                 <div class="form-group" style="margin-bottom:0;">
                     <label>Fecha desde:</label>
                     <input type="date" id="pos-sync-date-from">
@@ -736,7 +739,7 @@
 
             <h4>Facturas de Odoo pendientes de pago</h4>
             <p class="odoo-muted">Esta lista viene directamente de Odoo y sigue disponible aunque TotalNet no responda.</p>
-            <div class="table-scroll">
+            <div class="table-scroll" id="pos-pending-invoices-table">
                 <table class="table-clean">
                     <thead>
                         <tr><th>Fecha</th><th>Factura</th><th>Cliente</th><th>Total pendiente</th><th>Moneda</th><th>Origen</th><th>Accion</th></tr>
@@ -860,7 +863,7 @@
             </details>
 
             <h4>Coincidencias pendientes</h4>
-            <div class="table-scroll">
+            <div class="table-scroll" id="pos-matches-table">
                 <table class="table-clean">
                     <thead>
                         <tr>
@@ -875,7 +878,7 @@
             </div>
 
             <h4>Ambiguos (elegir factura)</h4>
-            <div class="table-scroll">
+            <div class="table-scroll" id="pos-ambiguous-table">
                 <table class="table-clean">
                     <thead>
                         <tr>
@@ -890,7 +893,7 @@
             </div>
 
             <h4>Sin match</h4>
-            <div class="table-scroll">
+            <div class="table-scroll" id="pos-nomatch-table">
                 <table class="table-clean">
                     <thead><tr><th></th><th>Fecha</th><th>Importe</th><th>Moneda</th><th>Ticket / Autorizacion</th><th>Sello</th><th>Factura por importe</th></tr></thead>
                     <tbody id="pos-nomatch-body">
@@ -899,7 +902,7 @@
                 </table>
             </div>
 
-            <div class="pos-confirm-grid">
+            <div class="pos-confirm-grid" id="pos-confirm-options">
                 <div class="form-group">
                     <label for="pos-payment-operator">Registrar pagos en Odoo como:</label>
                     <select id="pos-payment-operator" disabled>
@@ -931,7 +934,7 @@
                     </label>
                 </div>
             </div>
-            <div class="pos-confirm-actions">
+            <div class="pos-confirm-actions" id="pos-confirm-actions">
                 <button class="btn success" onclick="confirmPosReconciliation()">Confirmar seleccionados</button>
             </div>
             <div id="pos-confirm-summary" class="odoo-muted" style="margin-top:8px;"></div>
@@ -941,7 +944,7 @@
                 <p class="muted" style="margin-bottom: 12px;">
                     Trae las ventas pagadas de Mercado Libre, las cruza contra la factura de Odoo de la venta (pack) y registra el cobro con el comprobante PDF adjunto.
                 </p>
-                <div class="toolbar-primary">
+                <div class="toolbar-primary" id="meli-payment-toolbar">
                     <button class="btn" onclick="syncMercadoLibrePayments()">Buscar pagos</button>
                     <button type="button" class="btn success" id="meli-register-all" onclick="registerAllMercadoLibrePayments()" disabled>Registrar todos los listos</button>
                     <div class="form-group compact">
@@ -1309,6 +1312,9 @@
     <script src="mercadolibre.js"></script>
     <script src="dispatch-panel.js"></script>
     <script src="pos-reconciliation.js"></script>
+    <script src="guided-tutorial.js"></script>
+    <script src="pos-tutorial.js"></script>
+    <script src="administrado-tutorial.js"></script>
     <script src="config-page.js"></script>
     <script src="mobile.js"></script>
 </body>

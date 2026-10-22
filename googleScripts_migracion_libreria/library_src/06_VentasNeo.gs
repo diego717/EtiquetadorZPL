@@ -768,6 +768,22 @@ function getSalesOrderFields_() {
   ];
 }
 
+function getSalesLastSyncPropertyName_() {
+  const configuredName =
+    typeof SALES_CFG !== "undefined"
+      ? cleanString_(SALES_CFG.LAST_SYNC_PROPERTY)
+      : "";
+  return configuredName || "ODOO_SALES_LAST_SYNC_UTC";
+}
+
+function getSalesLineLastSyncPropertyName_() {
+  const configuredName =
+    typeof SALES_CFG !== "undefined"
+      ? cleanString_(SALES_CFG.LINE_LAST_SYNC_PROPERTY)
+      : "";
+  return configuredName || "ODOO_SALES_LINE_LAST_SYNC_UTC";
+}
+
 function parseCsvList_(rawValue) {
   return cleanString_(rawValue)
     .split(",")
@@ -1712,12 +1728,12 @@ function syncOdooSalesOrdersNeoUnlocked_() {
     `claves=${archivedSalesRowKeys.size}`
   );
   const syncStartedAt = nowUtcString_();
-  const lastSync = properties.getProperty(SALES_CFG.LAST_SYNC_PROPERTY);
+  const lastSync = properties.getProperty(getSalesLastSyncPropertyName_());
   const fromDate = lastSync
     ? shiftUtcString_(lastSync, -SALES_CFG.SYNC_OVERLAP_MINUTES)
     : daysAgoUtcString_(SALES_CFG.INITIAL_LOOKBACK_DAYS);
   const lineLastSync = properties.getProperty(
-    SALES_CFG.LINE_LAST_SYNC_PROPERTY
+    getSalesLineLastSyncPropertyName_()
   );
   const lineFromDate = lineLastSync
     ? shiftUtcString_(lineLastSync, -SALES_CFG.SYNC_OVERLAP_MINUTES)
@@ -2342,8 +2358,8 @@ function syncOdooSalesOrdersNeoUnlocked_() {
   if (salesPausedNotificationsChanged) {
     saveSalesPausedNotifiedKeys_(salesPausedNotifiedKeys);
   }
-  properties.setProperty(SALES_CFG.LAST_SYNC_PROPERTY, syncStartedAt);
-  properties.setProperty(SALES_CFG.LINE_LAST_SYNC_PROPERTY, syncStartedAt);
+  properties.setProperty(getSalesLastSyncPropertyName_(), syncStartedAt);
+  properties.setProperty(getSalesLineLastSyncPropertyName_(), syncStartedAt);
   logSalesSyncStage_(
     "propiedades_guardadas",
     syncStartedAtMs,
@@ -3006,7 +3022,7 @@ function buildNeoSaleOrderDiagnosisReport_(lookupValue) {
   const importedIds = getSalesImportedIds_();
   const existingOrderKeys = getExistingSheetOrderKeys_(getTargetSheet_());
   const orderKey = normalizeOrderNumberKey_(order.name);
-  const lastSync = properties.getProperty(SALES_CFG.LAST_SYNC_PROPERTY);
+  const lastSync = properties.getProperty(getSalesLastSyncPropertyName_());
   const fromDate = lastSync
     ? shiftUtcString_(lastSync, -SALES_CFG.SYNC_OVERLAP_MINUTES)
     : "";
@@ -3169,7 +3185,9 @@ function fetchSaleOrderProductLines_(cfg, uid, orderId) {
       }
     ) || [];
   const productCodeMap = fetchProductCodesByLines_(cfg, uid, lines);
+  const kitProductIds = fetchKitProductIdsByLines_(cfg, uid, lines);
   const productLines = [];
+  let skippedKitLines = 0;
 
   for (const line of lines) {
     if (line.display_type) continue;
@@ -3178,6 +3196,10 @@ function fetchSaleOrderProductLines_(cfg, uid, orderId) {
     if (!productId) continue;
 
     if (!isSaleOrderLineForProduction_(line)) continue;
+    if (kitProductIds.has(Number(productId))) {
+      skippedKitLines++;
+      continue;
+    }
 
     const quantity = normalizeQuantity_(line.product_uom_qty);
     if (quantity === null || quantity <= 0) continue;
@@ -3192,6 +3214,13 @@ function fetchSaleOrderProductLines_(cfg, uid, orderId) {
     });
   }
 
+  if (skippedKitLines) {
+    logDebug_(
+      `Orden ${orderId}: ${skippedKitLines} linea(s) de kit omitida(s); ` +
+        "sus componentes fabricados ingresan por mrp.production."
+    );
+  }
+
   return productLines;
 }
 
@@ -3204,6 +3233,97 @@ function chunkValues_(values, chunkSize) {
   }
 
   return chunks;
+}
+
+/**
+ * Devuelve los product.product que tienen una LdM activa de tipo Kit
+ * (mrp.bom.type = "phantom"). Una LdM sin product_id se aplica a todas las
+ * variantes de su product.template; una LdM con product_id solo a esa variante.
+ *
+ * Las lineas de venta de esos productos se omiten de TRABAJOS. Si el kit
+ * contiene un componente a fabricar, su orden mrp.production entra por la
+ * sincronizacion de Fabricacion; los componentes comprados no generan una fila.
+ */
+function fetchKitProductIdsByLines_(cfg, uid, lines) {
+  const requestedProductIds = Array.from(
+    new Set(
+      (lines || [])
+        .map((line) => Number(getMany2oneId_(line && line.product_id)))
+        .filter((productId) => Number.isInteger(productId) && productId > 0)
+    )
+  );
+  const requestedProductIdSet = new Set(requestedProductIds);
+  const kitProductIds = new Set();
+
+  if (!requestedProductIds.length) return kitProductIds;
+
+  const productIdsByTemplateId = new Map();
+
+  for (const productIdsChunk of chunkValues_(requestedProductIds, 80)) {
+    const products =
+      executeKw_(
+        cfg,
+        uid,
+        "product.product",
+        "search_read",
+        [[['id', 'in', productIdsChunk]]],
+        {
+          fields: ["id", "product_tmpl_id"],
+          limit: productIdsChunk.length,
+        }
+      ) || [];
+
+    for (const product of products) {
+      const productId = Number(product.id);
+      const templateId = Number(getMany2oneId_(product.product_tmpl_id));
+      if (!Number.isInteger(productId) || productId <= 0 || !templateId) {
+        continue;
+      }
+
+      if (!productIdsByTemplateId.has(templateId)) {
+        productIdsByTemplateId.set(templateId, []);
+      }
+      productIdsByTemplateId.get(templateId).push(productId);
+    }
+  }
+
+  const templateIds = Array.from(productIdsByTemplateId.keys());
+
+  for (const templateIdsChunk of chunkValues_(templateIds, 80)) {
+    const kitBoms =
+      executeKw_(
+        cfg,
+        uid,
+        "mrp.bom",
+        "search_read",
+        [[
+          ["type", "=", "phantom"],
+          ["product_tmpl_id", "in", templateIdsChunk],
+        ]],
+        {
+          fields: ["id", "product_id", "product_tmpl_id"],
+          order: "id asc",
+        }
+      ) || [];
+
+    for (const bom of kitBoms) {
+      const variantProductId = Number(getMany2oneId_(bom.product_id));
+      const templateId = Number(getMany2oneId_(bom.product_tmpl_id));
+
+      if (variantProductId) {
+        if (requestedProductIdSet.has(variantProductId)) {
+          kitProductIds.add(variantProductId);
+        }
+        continue;
+      }
+
+      for (const productId of productIdsByTemplateId.get(templateId) || []) {
+        kitProductIds.add(productId);
+      }
+    }
+  }
+
+  return kitProductIds;
 }
 
 function fetchSaleOrderProductLinesMap_(cfg, uid, orderIds) {
@@ -3258,6 +3378,8 @@ function fetchSaleOrderProductLinesMap_(cfg, uid, orderIds) {
   }
 
   const productCodeMap = fetchProductCodesByLines_(cfg, uid, allLines);
+  const kitProductIds = fetchKitProductIdsByLines_(cfg, uid, allLines);
+  let skippedKitLines = 0;
 
   for (const line of allLines) {
     if (line.display_type) continue;
@@ -3267,6 +3389,10 @@ function fetchSaleOrderProductLinesMap_(cfg, uid, orderIds) {
     if (!orderId || !productId) continue;
 
     if (!isSaleOrderLineForProduction_(line)) continue;
+    if (kitProductIds.has(Number(productId))) {
+      skippedKitLines++;
+      continue;
+    }
 
     const quantity = normalizeQuantity_(line.product_uom_qty);
     if (quantity === null || quantity <= 0) continue;
@@ -3287,7 +3413,8 @@ function fetchSaleOrderProductLinesMap_(cfg, uid, orderIds) {
   }
 
   logDebug_(
-    `Precarga de lineas de venta: ${normalizedOrderIds.length} orden(es), ${allLines.length} linea(s) leidas.`
+    `Precarga de lineas de venta: ${normalizedOrderIds.length} orden(es), ` +
+      `${allLines.length} linea(s) leidas, ${skippedKitLines} kit(s) omitido(s).`
   );
 
   return linesByOrderId;

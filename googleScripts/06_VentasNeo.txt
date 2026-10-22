@@ -186,7 +186,7 @@ function clearSalesOrderRows_(sheet, rows, reason, logInfo) {
 
     // Limpia los datos operativos sin borrar la fórmula de la columna L.
     sheet.getRange(row, 1, 1, 10).clearContent();
-    resetOperationalRowFontColor_(sheet, row);
+    resetSalesOperationalRowFontColor_(sheet, row);
     sheet.getRange(row, CFG.LINK_COL).clearNote();
     clearNewRowMarker_(sheet, row);
 
@@ -200,6 +200,24 @@ function clearSalesOrderRows_(sheet, rows, reason, logInfo) {
     clearSalesSyncMetadataForRow_(sheet, row);
     clearSalesRowHiddenMetadata_(sheet, row);
   }
+}
+
+/**
+ * Compatibilidad para planillas que todavia no tienen la version nueva de
+ * 07_utilidades. Cuando el helper compartido existe se usa normalmente; si no,
+ * se restaura D:H aqui para que la sincronizacion de ventas no se interrumpa.
+ */
+function resetSalesOperationalRowFontColor_(sheet, row) {
+  if (typeof resetOperationalRowFontColor_ === "function") {
+    resetOperationalRowFontColor_(sheet, row);
+    return;
+  }
+
+  const normalColor =
+    typeof CFG !== "undefined" && CFG.ROW_FONT_COLOR
+      ? CFG.ROW_FONT_COLOR
+      : "#ffffff";
+  sheet.getRange(row, 4, 1, 5).setFontColor(normalColor);
 }
 
 function logSalesRowRemoval_(sheet, row, reason, logInfo) {
@@ -805,6 +823,35 @@ function getSalesOrderFields_() {
     "user_id",
     "create_uid",
   ];
+}
+
+function getSalesLastSyncPropertyName_() {
+  const configuredName =
+    typeof SALES_CFG !== "undefined"
+      ? cleanString_(SALES_CFG.LAST_SYNC_PROPERTY)
+      : "";
+  return configuredName || "ODOO_SALES_LAST_SYNC_UTC";
+}
+
+function getSalesLineLastSyncPropertyName_() {
+  const configuredName =
+    typeof SALES_CFG !== "undefined"
+      ? cleanString_(SALES_CFG.LINE_LAST_SYNC_PROPERTY)
+      : "";
+  return configuredName || "ODOO_SALES_LINE_LAST_SYNC_UTC";
+}
+
+function consumeSalesPendingAutoSort_() {
+  if (typeof consumePendingAutoSort_ === "function") {
+    return consumePendingAutoSort_();
+  }
+
+  const properties = PropertiesService.getScriptProperties();
+  const propertyName = "PENDING_AUTO_SORT";
+  if (!properties.getProperty(propertyName)) return false;
+
+  properties.deleteProperty(propertyName);
+  return true;
 }
 
 function parseCsvList_(rawValue) {
@@ -1757,12 +1804,12 @@ function syncOdooSalesOrdersNeoUnlocked_() {
     `claves=${archivedSalesRowKeys.size}`
   );
   const syncStartedAt = nowUtcString_();
-  const lastSync = properties.getProperty(SALES_CFG.LAST_SYNC_PROPERTY);
+  const lastSync = properties.getProperty(getSalesLastSyncPropertyName_());
   const fromDate = lastSync
     ? shiftUtcString_(lastSync, -SALES_CFG.SYNC_OVERLAP_MINUTES)
     : daysAgoUtcString_(SALES_CFG.INITIAL_LOOKBACK_DAYS);
   const lineLastSync = properties.getProperty(
-    SALES_CFG.LINE_LAST_SYNC_PROPERTY
+    getSalesLineLastSyncPropertyName_()
   );
   const lineFromDate = lineLastSync
     ? shiftUtcString_(lineLastSync, -SALES_CFG.SYNC_OVERLAP_MINUTES)
@@ -2040,7 +2087,7 @@ function syncOdooSalesOrdersNeoUnlocked_() {
     }
 
     const numericSaleId = Number(saleId);
-    const noteInfo =
+    let noteInfo =
       latestNotesByOrderId.get(saleId) ||
       (
         Number.isInteger(numericSaleId) && numericSaleId > 0
@@ -2053,6 +2100,23 @@ function syncOdooSalesOrdersNeoUnlocked_() {
               authorName: "",
             }
       );
+
+    // Las líneas provenientes de un kit pueden requerir fabricación aunque
+    // la orden no tenga todavía la nota operativa con fecha. En ese caso se
+    // usa la fecha de la orden como fecha inicial del trabajo; las órdenes
+    // normales mantienen la validación histórica de notas.
+    if (
+      !noteInfo.date &&
+      productLines.some((productLine) => productLine.isKitComponent)
+    ) {
+      noteInfo = Object.assign({}, noteInfo, {
+        date: formatDateForSheet_(order.date_order || order.create_date),
+        state: noteInfo.state || "fecha de orden",
+      });
+      logDebug_(
+        `Orden ${orderName}: kit sin fecha en nota; se usa fecha de la orden.`
+      );
+    }
 
     if (!noteInfo.date) {
       if (existingRows.length) {
@@ -2249,7 +2313,7 @@ function syncOdooSalesOrdersNeoUnlocked_() {
 
       if (!isExistingRow) {
         markRowAsNew_(sheet, targetRow);
-        resetOperationalRowFontColor_(sheet, targetRow);
+        resetSalesOperationalRowFontColor_(sheet, targetRow);
         inserted++;
         needsAutoSort = true;
         existingRows.push(targetRow);
@@ -2431,15 +2495,15 @@ function syncOdooSalesOrdersNeoUnlocked_() {
   if (salesPausedNotificationsChanged) {
     saveSalesPausedNotifiedKeys_(salesPausedNotifiedKeys);
   }
-  properties.setProperty(SALES_CFG.LAST_SYNC_PROPERTY, syncStartedAt);
-  properties.setProperty(SALES_CFG.LINE_LAST_SYNC_PROPERTY, syncStartedAt);
+  properties.setProperty(getSalesLastSyncPropertyName_(), syncStartedAt);
+  properties.setProperty(getSalesLineLastSyncPropertyName_(), syncStartedAt);
   logSalesSyncStage_(
     "propiedades_guardadas",
     syncStartedAtMs,
     `importadas=${importedIds.size}; omitidas=${skippedIds.size}`
   );
 
-  if (consumePendingAutoSort_()) {
+  if (consumeSalesPendingAutoSort_()) {
     needsAutoSort = true;
   }
 
@@ -2836,7 +2900,7 @@ function importSpecificNeoSaleOrder_(lookupValue) {
   }
 
   const numericSaleId = Number(cleanString_(order.id));
-  const noteInfo =
+  let noteInfo =
     Number.isInteger(numericSaleId) && numericSaleId > 0
       ? extractLatestSalesNoteSafely_(cfg, uid, numericSaleId)
       : {
@@ -2846,6 +2910,16 @@ function importSpecificNeoSaleOrder_(lookupValue) {
           sourceMessageId: "",
           authorName: "",
         };
+
+  if (
+    !noteInfo.date &&
+    productLines.some((productLine) => productLine.isKitComponent)
+  ) {
+    noteInfo = Object.assign({}, noteInfo, {
+      date: formatDateForSheet_(order.date_order || order.create_date),
+      state: noteInfo.state || "fecha de orden",
+    });
+  }
 
   if (!noteInfo.date) {
     return {
@@ -2895,7 +2969,7 @@ function importSpecificNeoSaleOrder_(lookupValue) {
     });
 
     markRowAsNew_(sheet, nextRow);
-    resetOperationalRowFontColor_(sheet, nextRow);
+    resetSalesOperationalRowFontColor_(sheet, nextRow);
     insertedRows.push(nextRow);
     nextRow++;
     inserted++;
@@ -3118,7 +3192,7 @@ function buildNeoSaleOrderDiagnosisReport_(lookupValue) {
   const importedIds = getSalesImportedIds_();
   const existingOrderKeys = getExistingSheetOrderKeys_(getTargetSheet_());
   const orderKey = normalizeOrderNumberKey_(order.name);
-  const lastSync = properties.getProperty(SALES_CFG.LAST_SYNC_PROPERTY);
+  const lastSync = properties.getProperty(getSalesLastSyncPropertyName_());
   const fromDate = lastSync
     ? shiftUtcString_(lastSync, -SALES_CFG.SYNC_OVERLAP_MINUTES)
     : "";
@@ -3265,7 +3339,6 @@ function fetchSaleOrderProductLines_(cfg, uid, orderId) {
         ["order_id", "=", orderId],
         ["display_type", "=", false],
         ["product_id", "!=", false],
-        ["customer_lead", ">", 0],
         ["product_uom_qty", ">", 0],
       ]],
       {
@@ -3280,31 +3353,7 @@ function fetchSaleOrderProductLines_(cfg, uid, orderId) {
         order: "id asc",
       }
     ) || [];
-  const productCodeMap = fetchProductCodesByLines_(cfg, uid, lines);
-  const productLines = [];
-
-  for (const line of lines) {
-    if (line.display_type) continue;
-
-    const productId = getMany2oneId_(line.product_id);
-    if (!productId) continue;
-
-    if (!isSaleOrderLineForProduction_(line)) continue;
-
-    const quantity = normalizeQuantity_(line.product_uom_qty);
-    if (quantity === null || quantity <= 0) continue;
-
-    productLines.push({
-      code:
-        extractProductCode_(line, productCodeMap) ||
-        `LINE-${cleanString_(line.id)}`,
-      description: extractProductDescription_(line.name),
-      quantity,
-      lineId: cleanString_(line.id),
-    });
-  }
-
-  return productLines;
+  return buildSaleOrderProductLines_(cfg, uid, lines, orderId);
 }
 
 function chunkValues_(values, chunkSize) {
@@ -3316,6 +3365,408 @@ function chunkValues_(values, chunkSize) {
   }
 
   return chunks;
+}
+
+/** Devuelve los kits aplicables a las líneas y sus componentes fabricables. */
+function fetchKitDefinitionsByLines_(cfg, uid, lines) {
+  const requestedProductIds = Array.from(
+    new Set(
+      (lines || [])
+        .map((line) => Number(getMany2oneId_(line && line.product_id)))
+        .filter((productId) => Number.isInteger(productId) && productId > 0)
+    )
+  );
+  const requestedProductIdSet = new Set(requestedProductIds);
+  const definitions = new Map();
+
+  if (!requestedProductIds.length) return definitions;
+
+  const productIdsByTemplateId = new Map();
+
+  for (const productIdsChunk of chunkValues_(requestedProductIds, 80)) {
+    const products =
+      executeKw_(
+        cfg,
+        uid,
+        "product.product",
+        "search_read",
+        [[['id', 'in', productIdsChunk]]],
+        {
+          fields: ["id", "product_tmpl_id"],
+          limit: productIdsChunk.length,
+        }
+      ) || [];
+
+    for (const product of products) {
+      const productId = Number(product.id);
+      const templateId = Number(getMany2oneId_(product.product_tmpl_id));
+      if (!Number.isInteger(productId) || productId <= 0 || !templateId) {
+        continue;
+      }
+
+      if (!productIdsByTemplateId.has(templateId)) {
+        productIdsByTemplateId.set(templateId, []);
+      }
+      productIdsByTemplateId.get(templateId).push(productId);
+    }
+  }
+
+  const templateIds = Array.from(productIdsByTemplateId.keys());
+  const boms = [];
+
+  for (const templateIdsChunk of chunkValues_(templateIds, 80)) {
+    const kitBoms =
+      executeKw_(
+        cfg,
+        uid,
+        "mrp.bom",
+        "search_read",
+        [[
+          ["type", "=", "phantom"],
+          ["product_tmpl_id", "in", templateIdsChunk],
+        ]],
+        {
+          fields: ["id", "product_id", "product_tmpl_id", "product_qty"],
+          order: "id asc",
+        }
+      ) || [];
+    boms.push(...kitBoms);
+  }
+
+  const selectedBoms = new Map();
+  for (const productId of requestedProductIds) {
+    const templateId = Array.from(productIdsByTemplateId.entries()).find(
+      (entry) => entry[1].indexOf(productId) !== -1
+    );
+    const templateBoms = boms.filter(
+      (bom) =>
+        Number(getMany2oneId_(bom.product_tmpl_id)) ===
+        (templateId ? templateId[0] : 0)
+    );
+    const exactBom = templateBoms.find(
+      (bom) => Number(getMany2oneId_(bom.product_id)) === productId
+    );
+    const genericBom = templateBoms.find(
+      (bom) => !Number(getMany2oneId_(bom.product_id))
+    );
+    const selectedBom = exactBom || genericBom;
+    if (selectedBom) selectedBoms.set(productId, selectedBom);
+  }
+
+  if (!selectedBoms.size) return definitions;
+
+  const bomIds = Array.from(selectedBoms.values()).map((bom) => Number(bom.id));
+  const bomLines = [];
+  for (const bomIdsChunk of chunkValues_(bomIds, 80)) {
+    const chunkLines =
+      executeKw_(
+        cfg,
+        uid,
+        "mrp.bom.line",
+        "search_read",
+        [[["bom_id", "in", bomIdsChunk]]],
+        {
+          fields: ["id", "bom_id", "product_id", "product_qty"],
+          order: "bom_id asc, id asc",
+        }
+      ) || [];
+    bomLines.push(...chunkLines);
+  }
+
+  const componentIds = Array.from(
+    new Set(
+      bomLines
+        .map((line) => Number(getMany2oneId_(line.product_id)))
+        .filter((productId) => Number.isInteger(productId) && productId > 0)
+    )
+  );
+  if (!componentIds.length) return definitions;
+
+  const componentProducts = [];
+  for (const componentIdsChunk of chunkValues_(componentIds, 80)) {
+    const products =
+      executeKw_(
+        cfg,
+        uid,
+        "product.product",
+        "search_read",
+        [[['id', 'in', componentIdsChunk]]],
+        {
+          // route_ids permite detectar componentes configurados para fabricar
+          // aunque todavía no tengan una LdM normal propia.
+          fields: ["id", "product_tmpl_id", "default_code", "display_name", "route_ids"],
+          limit: componentIdsChunk.length,
+        }
+      ) || [];
+    componentProducts.push(...products);
+  }
+
+  const componentIdsByTemplateId = new Map();
+  const componentInfoById = new Map();
+  const componentRouteIds = new Set();
+  for (const product of componentProducts) {
+    const productId = Number(product.id);
+    const templateId = Number(getMany2oneId_(product.product_tmpl_id));
+    if (!productId || !templateId) continue;
+    componentInfoById.set(productId, product);
+    (Array.isArray(product.route_ids) ? product.route_ids : []).forEach((routeId) => {
+      const numericRouteId = Number(routeId);
+      if (Number.isInteger(numericRouteId) && numericRouteId > 0) {
+        componentRouteIds.add(numericRouteId);
+      }
+    });
+    if (!componentIdsByTemplateId.has(templateId)) {
+      componentIdsByTemplateId.set(templateId, []);
+    }
+    componentIdsByTemplateId.get(templateId).push(productId);
+  }
+
+  // En varias versiones de Odoo las rutas se exponen en product.template y
+  // no en product.product. Completar la información de variante con la del
+  // template evita perder tarjetas configuradas sin ruta propia.
+  const componentTemplateIdsForRoutes = Array.from(componentIdsByTemplateId.keys());
+  for (const templateIdsChunk of chunkValues_(componentTemplateIdsForRoutes, 80)) {
+    try {
+      const templates =
+        executeKw_(
+          cfg,
+          uid,
+          "product.template",
+          "search_read",
+          [[["id", "in", templateIdsChunk]]],
+          { fields: ["id", "route_ids"], limit: templateIdsChunk.length }
+        ) || [];
+      for (const template of templates) {
+        const templateId = Number(template.id);
+        const templateRouteIds = Array.isArray(template.route_ids)
+          ? template.route_ids
+          : [];
+        const productIds = componentIdsByTemplateId.get(templateId) || [];
+        productIds.forEach((productId) => {
+          const product = componentInfoById.get(productId);
+          if (!product || (Array.isArray(product.route_ids) && product.route_ids.length)) {
+            return;
+          }
+          product.route_ids = templateRouteIds;
+        });
+      }
+    } catch (error) {
+      logDebug_("No se pudo consultar rutas en product.template para componentes del kit: " + error);
+    }
+  }
+
+  componentInfoById.forEach((product) => {
+    (Array.isArray(product.route_ids) ? product.route_ids : []).forEach((routeId) => {
+      const numericRouteId = Number(routeId);
+      if (Number.isInteger(numericRouteId) && numericRouteId > 0) {
+        componentRouteIds.add(numericRouteId);
+      }
+    });
+  });
+
+  const componentTemplateIds = Array.from(componentIdsByTemplateId.keys());
+  const manufacturingBoms = [];
+  for (const templateIdsChunk of chunkValues_(componentTemplateIds, 80)) {
+    const chunkBoms =
+      executeKw_(
+        cfg,
+        uid,
+        "mrp.bom",
+        "search_read",
+        [[
+          ["type", "=", "normal"],
+          ["product_tmpl_id", "in", templateIdsChunk],
+        ]],
+        {
+          fields: ["id", "product_id", "product_tmpl_id"],
+          order: "id asc",
+        }
+      ) || [];
+    manufacturingBoms.push(...chunkBoms);
+  }
+
+  const manufacturedComponentIds = new Set();
+  for (const bom of manufacturingBoms) {
+    const variantProductId = Number(getMany2oneId_(bom.product_id));
+    const templateId = Number(getMany2oneId_(bom.product_tmpl_id));
+    if (variantProductId && componentInfoById.has(variantProductId)) {
+      manufacturedComponentIds.add(variantProductId);
+      continue;
+    }
+    for (const productId of componentIdsByTemplateId.get(templateId) || []) {
+      manufacturedComponentIds.add(productId);
+    }
+  }
+
+  // Una tarjeta puede tener una OF manual y no tener una LdM normal asociada.
+  // En ese caso la ruta "Fabricar" de Odoo es la señal de que sigue siendo un
+  // componente fabricable del kit. La consulta es opcional para mantener
+  // compatibilidad con bases donde route_ids no esté expuesto por la API.
+  if (componentRouteIds.size) {
+    try {
+      const routes = executeKw_(
+        cfg,
+        uid,
+        "stock.route",
+        "search_read",
+        [[["id", "in", Array.from(componentRouteIds)]]],
+        { fields: ["id", "name"], limit: componentRouteIds.size }
+      ) || [];
+      const manufacturingRouteIds = new Set(
+        routes
+          .filter((route) => {
+            const routeName = cleanString_(route.name).toLowerCase();
+            return routeName.indexOf("fabric") !== -1 || routeName.indexOf("manufact") !== -1;
+          })
+          .map((route) => Number(route.id))
+      );
+      const purchaseRouteIds = new Set(
+        routes
+          .filter((route) => {
+            const routeName = cleanString_(route.name).toLowerCase();
+            return (
+              routeName.indexOf("compr") !== -1 ||
+              routeName.indexOf("buy") !== -1 ||
+              routeName.indexOf("purchase") !== -1
+            );
+          })
+          .map((route) => Number(route.id))
+      );
+      for (const product of componentProducts) {
+        const productRouteIds = Array.isArray(product.route_ids) ? product.route_ids : [];
+        if (productRouteIds.some((routeId) => manufacturingRouteIds.has(Number(routeId)))) {
+          manufacturedComponentIds.add(Number(product.id));
+          continue;
+        }
+
+        // En una OF manual es habitual que el componente fabricado no tenga
+        // ruta ni LdM propia. Si no tiene ruta de compra, se considera el
+        // componente fabricable del kit; el ribbon queda excluido porque sí
+        // tiene la ruta Comprar.
+        const hasPurchaseRoute = productRouteIds.some((routeId) =>
+          purchaseRouteIds.has(Number(routeId))
+        );
+        if (!productRouteIds.length && !hasPurchaseRoute) {
+          manufacturedComponentIds.add(Number(product.id));
+        }
+      }
+    } catch (error) {
+      logDebug_("No se pudo consultar la ruta de fabricación de componentes del kit: " + error);
+      componentProducts.forEach((product) => {
+        if (!Array.isArray(product.route_ids) || !product.route_ids.length) {
+          manufacturedComponentIds.add(Number(product.id));
+        }
+      });
+    }
+  }
+
+  const linesByBomId = new Map();
+  for (const bomLine of bomLines) {
+    const bomId = Number(getMany2oneId_(bomLine.bom_id));
+    if (!linesByBomId.has(bomId)) linesByBomId.set(bomId, []);
+    linesByBomId.get(bomId).push(bomLine);
+  }
+
+  for (const [productId, bom] of selectedBoms.entries()) {
+    const bomQuantity = normalizeQuantity_(bom.product_qty) || 1;
+    const components = [];
+    for (const bomLine of linesByBomId.get(Number(bom.id)) || []) {
+      const componentId = Number(getMany2oneId_(bomLine.product_id));
+      const componentQuantity = normalizeQuantity_(bomLine.product_qty);
+      const productInfo = componentInfoById.get(componentId) || {};
+      const componentLabel = (
+        cleanString_(productInfo.default_code) + " " +
+        cleanString_(productInfo.display_name) + " " +
+        getMany2oneName_(bomLine.product_id)
+      ).toLowerCase();
+      const isPreprintedCard =
+        componentLabel.indexOf("tarjeta") !== -1 ||
+        componentLabel.indexOf("preimpresa") !== -1 ||
+        componentLabel.indexOf("preimpreso") !== -1;
+      if (
+        (!manufacturedComponentIds.has(componentId) && !isPreprintedCard) ||
+        componentQuantity === null ||
+        componentQuantity <= 0
+      ) {
+        continue;
+      }
+      components.push({
+        bomLineId: cleanString_(bomLine.id),
+        productId: componentId,
+        quantity: componentQuantity,
+        code: cleanString_(productInfo.default_code),
+        name:
+          cleanString_(productInfo.display_name) ||
+          getMany2oneName_(bomLine.product_id),
+      });
+    }
+    if (!components.length) {
+      logDebug_(
+        "Kit sin componentes fabricables detectados | producto=" + productId +
+          " | bom=" + cleanString_(bom.id)
+      );
+    }
+    definitions.set(productId, { bomQuantity, components });
+  }
+
+  return definitions;
+}
+
+function buildSaleOrderProductLines_(cfg, uid, lines, orderId) {
+  const productCodeMap = fetchProductCodesByLines_(cfg, uid, lines);
+  const kitDefinitions = fetchKitDefinitionsByLines_(cfg, uid, lines);
+  const productLines = [];
+  let kitLines = 0;
+  let expandedComponents = 0;
+
+  for (const line of lines || []) {
+    if (line.display_type) continue;
+    const productId = Number(getMany2oneId_(line.product_id));
+    if (!productId) continue;
+    const quantity = normalizeQuantity_(line.product_uom_qty);
+    if (quantity === null || quantity <= 0) continue;
+
+    const definition = kitDefinitions.get(productId);
+    if (!definition && !isSaleOrderLineForProduction_(line)) continue;
+    if (definition) {
+      kitLines++;
+      for (const component of definition.components) {
+        const componentQuantity =
+          (quantity * component.quantity) / definition.bomQuantity;
+        if (componentQuantity <= 0) continue;
+        productLines.push({
+          orderId: cleanString_(getMany2oneId_(line.order_id)),
+          code: component.code || `LINE-${component.productId}`,
+          description: extractProductDescription_(component.name),
+          quantity: componentQuantity,
+          isKitComponent: true,
+          lineId:
+            `${cleanString_(line.id)}:kit:${component.bomLineId || component.productId}`,
+        });
+        expandedComponents++;
+      }
+      continue;
+    }
+
+    productLines.push({
+      orderId: cleanString_(getMany2oneId_(line.order_id)),
+      code:
+        extractProductCode_(line, productCodeMap) ||
+        `LINE-${cleanString_(line.id)}`,
+      description: extractProductDescription_(line.name),
+      quantity,
+      isKitComponent: false,
+      lineId: cleanString_(line.id),
+    });
+  }
+
+  if (kitLines) {
+    logDebug_(
+      `Orden ${orderId || "(lote)"}: ${kitLines} kit(s) expandido(s), ` +
+        `${expandedComponents} componente(s) fabricable(s) incorporado(s).`
+    );
+  }
+  return productLines;
 }
 
 function fetchSaleOrderProductLinesMap_(cfg, uid, orderIds) {
@@ -3349,7 +3800,6 @@ function fetchSaleOrderProductLinesMap_(cfg, uid, orderIds) {
           ["order_id", "in", orderIdsChunk],
           ["display_type", "=", false],
           ["product_id", "!=", false],
-          ["customer_lead", ">", 0],
           ["product_uom_qty", ">", 0],
         ]],
         {
@@ -3369,37 +3819,27 @@ function fetchSaleOrderProductLinesMap_(cfg, uid, orderIds) {
     allLines.push(...chunkLines);
   }
 
-  const productCodeMap = fetchProductCodesByLines_(cfg, uid, allLines);
-
-  for (const line of allLines) {
-    if (line.display_type) continue;
-
-    const orderId = getMany2oneId_(line.order_id);
-    const productId = getMany2oneId_(line.product_id);
-    if (!orderId || !productId) continue;
-
-    if (!isSaleOrderLineForProduction_(line)) continue;
-
-    const quantity = normalizeQuantity_(line.product_uom_qty);
-    if (quantity === null || quantity <= 0) continue;
-
+  const expandedLines = buildSaleOrderProductLines_(cfg, uid, allLines);
+  for (const line of expandedLines) {
+    const orderId = cleanString_(line.orderId);
+    if (!orderId) continue;
     const orderIdKey = String(orderId);
     if (!linesByOrderId.has(orderIdKey)) {
       linesByOrderId.set(orderIdKey, []);
     }
 
     linesByOrderId.get(orderIdKey).push({
-      code:
-        extractProductCode_(line, productCodeMap) ||
-        `LINE-${cleanString_(line.id)}`,
-      description: extractProductDescription_(line.name),
-      quantity,
-      lineId: cleanString_(line.id),
+      code: line.code,
+      description: line.description,
+      quantity: line.quantity,
+      isKitComponent: Boolean(line.isKitComponent),
+      lineId: line.lineId,
     });
   }
 
   logDebug_(
-    `Precarga de lineas de venta: ${normalizedOrderIds.length} orden(es), ${allLines.length} linea(s) leidas.`
+    `Precarga de lineas de venta: ${normalizedOrderIds.length} orden(es), ` +
+      `${allLines.length} linea(s) leidas, ${expandedLines.length} trabajo(s) resultante(s).`
   );
 
   return linesByOrderId;
